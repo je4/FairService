@@ -1,13 +1,12 @@
 package dcmi
 
 type DCMI struct {
-	OAI_DCNS          string `xml:"xmlns:oai_dc,attr"`
-	DCNS              string `xml:"xmlns:dc"`
-	XsiType           string `xml:"xmlns:xsi,attr"`
-	XsiSchemaLocation string `xml:"xsi:schemaLocation,attr"`
-	Title             string `xml:"dc:title"`
-
-	Type DCMIType `xml:"dc:type"`
+	OAI_DCNS          string   `xml:"xmlns:oai_dc,attr"`
+	DCNS              string   `xml:"xmlns:dc"`
+	XsiType           string   `xml:"xmlns:xsi,attr"`
+	XsiSchemaLocation string   `xml:"xsi:schemaLocation,attr"`
+	Title             string   `xml:"dc:title"`
+	Type              DCMIType `xml:"dc:type"`
 }
 
 func (dcmi *DCMI) InitNamespace() {

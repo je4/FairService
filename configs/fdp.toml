@@ -1,0 +1,13 @@
+logfile = "" # log file location
+loglevel = "DEBUG" # CRITICAL|ERROR|WARNING|NOTICE|INFO|DEBUG
+logformat = "%{time:2006-01-02T15:04:05.000} %{module}::%{shortfunc} [%{shortfile}] > %{level:.5s} - %{message}"
+accesslog = "" # http access log file
+addr = "localhost:443"
+#addrext = "https://mediathek.hgk.fhnw.ch/amp/"
+addrext = "https://localhost:443/"
+certpem = "auto"
+#certpem = "cert/server.crt" # tls client certificate file in PEM format
+#keypem = "cert/server.key" # tls client key file in PEM format
+jwtkey = "geheim"
+jwtalg = ["HS256","HS384","HS512"]
+linktokenexp = "1h"
