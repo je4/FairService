@@ -3,7 +3,7 @@ package re3data
 import "encoding/xml"
 
 type StringLang struct {
-	Language string `xml:"lang,attr"`
+	Language string `xml:"lang,attr,omitempty"`
 	Value    string `xml:",chardata"`
 }
 
@@ -39,7 +39,7 @@ type RepositoryDataLicense struct {
 type RepositoryDataUpload struct {
 	Type RE3DataAccessType `xml:"r3d:dataUploadType"`
 	// optional
-	Restriction []RE3DataAccessRestrictions `xml:"r3d:dataUploadRestriction"` // All existing restrictions to the data upload (required if restricted is chosen).
+	Restriction []RE3DataAccessRestrictions `xml:"r3d:dataUploadRestriction,omitempty"` // All existing restrictions to the data upload (required if restricted is chosen).
 }
 
 type RepositoryIdentifiers struct {
@@ -73,11 +73,11 @@ type Repository struct {
 	LastUpdate          string                   `xml:"r3d:lastUpdate"`          // The date the metadata of the RDR was updated
 
 	// optional fields
-	AdditionalName        StringLang             `xml:"r3d:additionalName"`       // The full name of the RDR
-	RepositoryIdentifiers []RepositoryIdentifier `xml:"r3d:repositoryIdentifier"` // An identifier provisioned for the website of the RDR (wrapper element).
-	Description           StringLang             `xml:"r3d:description"`          // A textual description providing additional information about the RDR (primary language is English).
-	Contact               []StringLang           `xml:"r3d:repositoryContact"`    // Email address of the contact or an URL of an online contact form of the RDR.
-	Keyword               []string               `xml:"r3d:keyword"`              // English keyword(s) describing the subject focus of the RDR
+	AdditionalName        StringLang             `xml:"r3d:additionalName,omitempty"`       // The full name of the RDR
+	RepositoryIdentifiers []RepositoryIdentifier `xml:"r3d:repositoryIdentifier,omitempty"` // An identifier provisioned for the website of the RDR (wrapper element).
+	Description           StringLang             `xml:"r3d:description,omitempty"`          // A textual description providing additional information about the RDR (primary language is English).
+	Contact               []StringLang           `xml:"r3d:repositoryContact,omitempty"`    // Email address of the contact or an URL of an online contact form of the RDR.
+	Keyword               []string               `xml:"r3d:keyword,omitempty"`              // English keyword(s) describing the subject focus of the RDR
 }
 
 func (repository Repository) InitNamespace() {
