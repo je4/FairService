@@ -1,11 +1,9 @@
 package myfair
 
-type CoreTitleType string
-
-const TitleTypeAlternativeTitle CoreTitleType = "AlternativeTitle"
-const TitleTypeSubTitle CoreTitleType = "Subtitle"
-const TitleTypeTranslatedTitle CoreTitleType = "TranslatedTitle"
-const TitleTypeOther CoreTitleType = "Other"
+import (
+	"github.com/je4/FairService/v2/pkg/model/zsearch"
+	"github.com/je4/zsearch/pkg/search"
+)
 
 type Name struct {
 	Value string   `json:"value"`
@@ -20,21 +18,13 @@ type NameIdentifier struct {
 	NameIdentifierScheme string `json:"nameIdentifierScheme,omitempty"`
 }
 
-type Creator struct {
-	CreatorName    Name           `json:"creatorName"`
+type Person struct {
+	PersonType     PersonType     `json:"PersonType,attr"`
+	PersonName     Name           `json:"PersonName"`
 	GivenName      string         `json:"givenName,omitempty"`
 	FamilyName     string         `json:"familyName,omitempty"`
 	Affiliation    string         `json:"affiliation,omitempty"`
 	NameIdentifier NameIdentifier `json:"nameIdentifier,omitempty"`
-}
-
-type Contributor struct {
-	ContributorType ContributorType `xml:"contributorType,attr"`
-	ContributorName Name            `xml:"contributorName"`
-	GivenName       string          `xml:"givenName,omitempty"`
-	FamilyName      string          `xml:"familyName,omitempty"`
-	Affiliation     string          `xml:"affiliation,omitempty"`
-	NameIdentifier  NameIdentifier  `xml:"nameIdentifier,omitempty"`
 }
 
 type Identifier struct {
@@ -51,11 +41,9 @@ type Core struct {
 	// DataCite: #1 Identifier (with mandatory type sub-property)
 	Identifier []Identifier
 
-	// DataCite: #2 Creator (with optional given name, family name, name identifier
+	// DataCite: #2 Person (with optional given name, family name, name identifier
 	//              and affiliation sub-properties)
-	Creator []Creator `json:"creator"`
-
-	Contributor []Contributor `json:"contributor,omitempty"`
+	Person []Person `json:"Person"`
 
 	// DataCite: #3 Title (with optional type sub-properties
 	Title []Title
@@ -68,4 +56,25 @@ type Core struct {
 
 	// DataCite: #10 ResourceType (with mandatory general type description subproperty)
 	ResourceType ResourceType
+}
+
+func (core *Core) FromSearch(src *search.SourceData) error {
+	if zit, err := zsearch.ItemTypeFromString(src.Type); err != nil {
+		core.ResourceType = ResourceTypeOther
+	} else {
+		core.ResourceType = ZSearchItemTypeMap(zit)
+	}
+
+	for _, p := range src.Persons {
+		ct, err := zsearch.PersonRoleFromString(p.Role)
+		if err != nil {
+			ct = zsearch.PersonRoleArtist
+		}
+		core.Person = append(core.Person, Person{
+			PersonName: Name{Value: p.Name},
+			PersonType: ct,
+		})
+	}
+
+	return nil
 }

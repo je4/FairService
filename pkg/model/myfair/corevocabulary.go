@@ -1,10 +1,21 @@
 package myfair
 
+type CoreTitleType string
+
+const (
+	TitleTypeAlternativeTitle CoreTitleType = "AlternativeTitle"
+	TitleTypeSubTitle         CoreTitleType = "Subtitle"
+	TitleTypeTranslatedTitle  CoreTitleType = "TranslatedTitle"
+	TitleTypeOther            CoreTitleType = "Other"
+)
+
 type NameType string
 
-const NameTypeDefault NameType = ""
-const NameTypeOrganizational NameType = "Organizational"
-const NameTypePersonal NameType = "Personal"
+const (
+	NameTypeDefault        NameType = ""
+	NameTypeOrganizational NameType = "Organizational"
+	NameTypePersonal       NameType = "Personal"
+)
 
 var NameTypeReverse = map[string]NameType{
 	"":               NameTypeDefault,
@@ -12,54 +23,58 @@ var NameTypeReverse = map[string]NameType{
 	"Personal":       NameTypePersonal,
 }
 
-type ContributorType string
+type PersonType string
 
 const (
-	ContributorTypeContactPerson         ContributorType = "ContactPerson"
-	ContributorTypeDataCollector         ContributorType = "DataCollector"
-	ContributorTypeDataCurator           ContributorType = "DataCurator"
-	ContributorTypeDataManager           ContributorType = "DataManager"
-	ContributorTypeDistributor           ContributorType = "Distributor"
-	ContributorTypeEditor                ContributorType = "Editor"
-	ContributorTypeHostingInstitution    ContributorType = "HostingInstitution"
-	ContributorTypeOther                 ContributorType = "Other"
-	ContributorTypeProducer              ContributorType = "Producer"
-	ContributorTypeProjectLeader         ContributorType = "ProjectLeader"
-	ContributorTypeProjectManager        ContributorType = "ProjectManager"
-	ContributorTypeProjectMember         ContributorType = "ProjectMember"
-	ContributorTypeRegistrationAgency    ContributorType = "RegistrationAgency"
-	ContributorTypeRegistrationAuthority ContributorType = "RegistrationAuthority"
-	ContributorTypeRelatedPerson         ContributorType = "RelatedPerson"
-	ContributorTypeResearchGroup         ContributorType = "ResearchGroup"
-	ContributorTypeRightsHolder          ContributorType = "RightsHolder"
-	ContributorTypeResearcher            ContributorType = "Researcher"
-	ContributorTypeSponsor               ContributorType = "Sponsor"
-	ContributorTypeSupervisor            ContributorType = "Supervisor"
-	ContributorTypeWorkPackageLeader     ContributorType = "WorkPackageLeader"
+	PersonTypeAuthor                PersonType = "Author"
+	PersonTypeArtist                PersonType = "Artist"
+	PersonTypeContactPerson         PersonType = "ContactPerson"
+	PersonTypeDataCollector         PersonType = "DataCollector"
+	PersonTypeDataCurator           PersonType = "DataCurator"
+	PersonTypeDataManager           PersonType = "DataManager"
+	PersonTypeDistributor           PersonType = "Distributor"
+	PersonTypeEditor                PersonType = "Editor"
+	PersonTypeHostingInstitution    PersonType = "HostingInstitution"
+	PersonTypeOther                 PersonType = "Other"
+	PersonTypeProducer              PersonType = "Producer"
+	PersonTypeProjectLeader         PersonType = "ProjectLeader"
+	PersonTypeProjectManager        PersonType = "ProjectManager"
+	PersonTypeProjectMember         PersonType = "ProjectMember"
+	PersonTypeRegistrationAgency    PersonType = "RegistrationAgency"
+	PersonTypeRegistrationAuthority PersonType = "RegistrationAuthority"
+	PersonTypeRelatedPerson         PersonType = "RelatedPerson"
+	PersonTypeResearchGroup         PersonType = "ResearchGroup"
+	PersonTypeRightsHolder          PersonType = "RightsHolder"
+	PersonTypeResearcher            PersonType = "Researcher"
+	PersonTypeSponsor               PersonType = "Sponsor"
+	PersonTypeSupervisor            PersonType = "Supervisor"
+	PersonTypeWorkPackageLeader     PersonType = "WorkPackageLeader"
 )
 
-var ContributorTypeReverse = map[string]ContributorType{
-	"ContactPerson":         ContributorTypeContactPerson,
-	"DataCollector":         ContributorTypeDataCollector,
-	"DataCurator":           ContributorTypeDataCurator,
-	"DataManager":           ContributorTypeDataManager,
-	"Distributor":           ContributorTypeDistributor,
-	"Editor":                ContributorTypeEditor,
-	"HostingInstitution":    ContributorTypeHostingInstitution,
-	"Other":                 ContributorTypeOther,
-	"Producer":              ContributorTypeProducer,
-	"ProjectLeader":         ContributorTypeProjectLeader,
-	"ProjectManager":        ContributorTypeProjectManager,
-	"ProjectMember":         ContributorTypeProjectMember,
-	"RegistrationAgency":    ContributorTypeRegistrationAgency,
-	"RegistrationAuthority": ContributorTypeRegistrationAuthority,
-	"RelatedPerson":         ContributorTypeRelatedPerson,
-	"ResearchGroup":         ContributorTypeResearchGroup,
-	"RightsHolder":          ContributorTypeRightsHolder,
-	"Researcher":            ContributorTypeResearcher,
-	"Sponsor":               ContributorTypeSponsor,
-	"Supervisor":            ContributorTypeSupervisor,
-	"WorkPackageLeader":     ContributorTypeWorkPackageLeader,
+var PersonTypeReverse = map[string]PersonType{
+	string(PersonTypeAuthor):                PersonTypeAuthor,
+	string(PersonTypeArtist):                PersonTypeArtist,
+	string(PersonTypeContactPerson):         PersonTypeContactPerson,
+	string(PersonTypeDataCollector):         PersonTypeDataCollector,
+	string(PersonTypeDataCurator):           PersonTypeDataCurator,
+	string(PersonTypeDataManager):           PersonTypeDataManager,
+	string(PersonTypeDistributor):           PersonTypeDistributor,
+	string(PersonTypeEditor):                PersonTypeEditor,
+	string(PersonTypeHostingInstitution):    PersonTypeHostingInstitution,
+	string(PersonTypeOther):                 PersonTypeOther,
+	string(PersonTypeProducer):              PersonTypeProducer,
+	string(PersonTypeProjectLeader):         PersonTypeProjectLeader,
+	string(PersonTypeProjectManager):        PersonTypeProjectManager,
+	string(PersonTypeProjectMember):         PersonTypeProjectMember,
+	string(PersonTypeRegistrationAgency):    PersonTypeRegistrationAgency,
+	string(PersonTypeRegistrationAuthority): PersonTypeRegistrationAuthority,
+	string(PersonTypeRelatedPerson):         PersonTypeRelatedPerson,
+	string(PersonTypeResearchGroup):         PersonTypeResearchGroup,
+	string(PersonTypeRightsHolder):          PersonTypeRightsHolder,
+	string(PersonTypeResearcher):            PersonTypeResearcher,
+	string(PersonTypeSponsor):               PersonTypeSponsor,
+	string(PersonTypeSupervisor):            PersonTypeSupervisor,
+	string(PersonTypeWorkPackageLeader):     PersonTypeWorkPackageLeader,
 }
 
 type RelatedIdentifierType string
@@ -111,75 +126,75 @@ var RelatedIdentifierTypeReverse = map[string]RelatedIdentifierType{
 type ResourceType string
 
 const (
-	TypeBook                ResourceType = "book"
-	TypeBookSection         ResourceType = "bookSection"
-	TypeThesis              ResourceType = "thesis"
-	TypeJournalArticle      ResourceType = "journalArticle"
-	TypeMagazineArticle     ResourceType = "magazineArticle"
-	TypeOnlineResource      ResourceType = "onlineResource"
-	TypeReport              ResourceType = "report"
-	TypeWebpage             ResourceType = "webpage"
-	TypeConferencePaper     ResourceType = "conferencePaper"
-	TypePatent              ResourceType = "patent"
-	TypeNote                ResourceType = "note"
-	TypeArtisticPerformance ResourceType = "artisticPerformance"
-	TypeDataset             ResourceType = "dataset"
-	TypePresentation        ResourceType = "presentation"
-	TypePhysicalObject      ResourceType = "physicalObject"
-	TypeComputerProgram     ResourceType = "computerProgram"
-	TypeOther               ResourceType = "other"
-	TypeArtwork             ResourceType = "artwork"
-	TypeAttachment          ResourceType = "attachment"
-	TypeAudioRecording      ResourceType = "audioRecording"
-	TypeDocument            ResourceType = "document"
-	TypeEmail               ResourceType = "email"
-	TypeEncyclopediaArticle ResourceType = "encyclopediaArticle"
-	TypeFilm                ResourceType = "film"
-	TypeInstantMessage      ResourceType = "instantMessage"
-	TypeInterview           ResourceType = "interview"
-	TypeLetter              ResourceType = "letter"
-	TypeManuscript          ResourceType = "manuscript"
-	TypeMap                 ResourceType = "map"
-	TypeNewspaperArticle    ResourceType = "newspaperArticle"
-	TypePodcast             ResourceType = "podcast"
-	TypeRadioBroadcast      ResourceType = "radioBroadcast"
-	TypeTvBroadcast         ResourceType = "tvBroadcast"
-	TypeVideoRecording      ResourceType = "videoRecording"
+	ResourceTypeBook                ResourceType = "book"
+	ResourceTypeBookSection         ResourceType = "bookSection"
+	ResourceTypeThesis              ResourceType = "thesis"
+	ResourceTypeJournalArticle      ResourceType = "journalArticle"
+	ResourceTypeMagazineArticle     ResourceType = "magazineArticle"
+	ResourceTypeOnlineResource      ResourceType = "onlineResource"
+	ResourceTypeReport              ResourceType = "report"
+	ResourceTypeWebpage             ResourceType = "webpage"
+	ResourceTypeConferencePaper     ResourceType = "conferencePaper"
+	ResourceTypePatent              ResourceType = "patent"
+	ResourceTypeNote                ResourceType = "note"
+	ResourceTypeArtisticPerformance ResourceType = "artisticPerformance"
+	ResourceTypeDataset             ResourceType = "dataset"
+	ResourceTypePresentation        ResourceType = "presentation"
+	ResourceTypePhysicalObject      ResourceType = "physicalObject"
+	ResourceTypeComputerProgram     ResourceType = "computerProgram"
+	ResourceTypeOther               ResourceType = "other"
+	ResourceTypeArtwork             ResourceType = "artwork"
+	ResourceTypeAttachment          ResourceType = "attachment"
+	ResourceTypeAudioRecording      ResourceType = "audioRecording"
+	ResourceTypeDocument            ResourceType = "document"
+	ResourceTypeEmail               ResourceType = "email"
+	ResourceTypeEncyclopediaArticle ResourceType = "encyclopediaArticle"
+	ResourceTypeFilm                ResourceType = "film"
+	ResourceTypeInstantMessage      ResourceType = "instantMessage"
+	ResourceTypeInterview           ResourceType = "interview"
+	ResourceTypeLetter              ResourceType = "letter"
+	ResourceTypeManuscript          ResourceType = "manuscript"
+	ResourceTypeMap                 ResourceType = "map"
+	ResourceTypeNewspaperArticle    ResourceType = "newspaperArticle"
+	ResourceTypePodcast             ResourceType = "podcast"
+	ResourceTypeRadioBroadcast      ResourceType = "radioBroadcast"
+	ResourceTypeTvBroadcast         ResourceType = "tvBroadcast"
+	ResourceTypeVideoRecording      ResourceType = "videoRecording"
 )
 
-var TypeReverse = map[string]ResourceType{
-	string(TypeBook):                TypeBook,
-	string(TypeBookSection):         TypeBookSection,
-	string(TypeThesis):              TypeThesis,
-	string(TypeJournalArticle):      TypeJournalArticle,
-	string(TypeMagazineArticle):     TypeMagazineArticle,
-	string(TypeOnlineResource):      TypeOnlineResource,
-	string(TypeReport):              TypeReport,
-	string(TypeWebpage):             TypeWebpage,
-	string(TypeConferencePaper):     TypeConferencePaper,
-	string(TypePatent):              TypePatent,
-	string(TypeNote):                TypeNote,
-	string(TypeArtisticPerformance): TypeArtisticPerformance,
-	string(TypeDataset):             TypeDataset,
-	string(TypePresentation):        TypePresentation,
-	string(TypePhysicalObject):      TypePhysicalObject,
-	string(TypeComputerProgram):     TypeComputerProgram,
-	string(TypeOther):               TypeOther,
-	string(TypeArtwork):             TypeArtwork,
-	string(TypeAttachment):          TypeAttachment,
-	string(TypeAudioRecording):      TypeAudioRecording,
-	string(TypeDocument):            TypeDocument,
-	string(TypeEmail):               TypeEmail,
-	string(TypeEncyclopediaArticle): TypeEncyclopediaArticle,
-	string(TypeFilm):                TypeFilm,
-	string(TypeInstantMessage):      TypeInstantMessage,
-	string(TypeInterview):           TypeInterview,
-	string(TypeLetter):              TypeLetter,
-	string(TypeManuscript):          TypeManuscript,
-	string(TypeMap):                 TypeMap,
-	string(TypeNewspaperArticle):    TypeNewspaperArticle,
-	string(TypePodcast):             TypePodcast,
-	string(TypeRadioBroadcast):      TypeRadioBroadcast,
-	string(TypeTvBroadcast):         TypeTvBroadcast,
-	string(TypeVideoRecording):      TypeVideoRecording,
+var ResourceTypeReverse = map[string]ResourceType{
+	string(ResourceTypeBook):                ResourceTypeBook,
+	string(ResourceTypeBookSection):         ResourceTypeBookSection,
+	string(ResourceTypeThesis):              ResourceTypeThesis,
+	string(ResourceTypeJournalArticle):      ResourceTypeJournalArticle,
+	string(ResourceTypeMagazineArticle):     ResourceTypeMagazineArticle,
+	string(ResourceTypeOnlineResource):      ResourceTypeOnlineResource,
+	string(ResourceTypeReport):              ResourceTypeReport,
+	string(ResourceTypeWebpage):             ResourceTypeWebpage,
+	string(ResourceTypeConferencePaper):     ResourceTypeConferencePaper,
+	string(ResourceTypePatent):              ResourceTypePatent,
+	string(ResourceTypeNote):                ResourceTypeNote,
+	string(ResourceTypeArtisticPerformance): ResourceTypeArtisticPerformance,
+	string(ResourceTypeDataset):             ResourceTypeDataset,
+	string(ResourceTypePresentation):        ResourceTypePresentation,
+	string(ResourceTypePhysicalObject):      ResourceTypePhysicalObject,
+	string(ResourceTypeComputerProgram):     ResourceTypeComputerProgram,
+	string(ResourceTypeOther):               ResourceTypeOther,
+	string(ResourceTypeArtwork):             ResourceTypeArtwork,
+	string(ResourceTypeAttachment):          ResourceTypeAttachment,
+	string(ResourceTypeAudioRecording):      ResourceTypeAudioRecording,
+	string(ResourceTypeDocument):            ResourceTypeDocument,
+	string(ResourceTypeEmail):               ResourceTypeEmail,
+	string(ResourceTypeEncyclopediaArticle): ResourceTypeEncyclopediaArticle,
+	string(ResourceTypeFilm):                ResourceTypeFilm,
+	string(ResourceTypeInstantMessage):      ResourceTypeInstantMessage,
+	string(ResourceTypeInterview):           ResourceTypeInterview,
+	string(ResourceTypeLetter):              ResourceTypeLetter,
+	string(ResourceTypeManuscript):          ResourceTypeManuscript,
+	string(ResourceTypeMap):                 ResourceTypeMap,
+	string(ResourceTypeNewspaperArticle):    ResourceTypeNewspaperArticle,
+	string(ResourceTypePodcast):             ResourceTypePodcast,
+	string(ResourceTypeRadioBroadcast):      ResourceTypeRadioBroadcast,
+	string(ResourceTypeTvBroadcast):         ResourceTypeTvBroadcast,
+	string(ResourceTypeVideoRecording):      ResourceTypeVideoRecording,
 }
