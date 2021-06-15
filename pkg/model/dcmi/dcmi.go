@@ -1,11 +1,11 @@
 package dcmi
 
 type DCMI struct {
-	OAI_DCNS          string   `xml:"xmlns:oai_dc,attr"`
-	DCNS              string   `xml:"xmlns:dc"`
-	XsiType           string   `xml:"xmlns:xsi,attr"`
-	XsiSchemaLocation string   `xml:"xsi:schemaLocation,attr"`
-	Type              DCMIType `xml:"dc:type"`
+	OAI_DCNS          string `xml:"xmlns:oai_dc,attr"`
+	DCNS              string `xml:"xmlns:dc"`
+	XsiType           string `xml:"xmlns:xsi,attr"`
+	XsiSchemaLocation string `xml:"xsi:schemaLocation,attr"`
+	Type              Type   `xml:"dc:type"`
 
 	Title       []string `xml:"dc:title"`
 	Creator     []string `xml:"dc:creator"`

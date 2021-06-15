@@ -8,21 +8,21 @@ import (
 
 func TestDataciteExample(t *testing.T) {
 	dataCiteCore := &DataCite{
-		Identifier: DataCiteIdentifier{
+		Identifier: Identifier{
 			Value:          "10.5072/example-full",
 			IdentifierType: DataCiteRelatedIdentifierTypeDOI,
 		},
 		Creators: Creators{
-			Creator: []DataCiteCreator{
+			Creator: []Creator{
 				{
-					CreatorName: DataCiteName{
+					CreatorName: Name{
 						Value: "Miller, Elizabeth",
 						Type:  DataCiteNameTypePersonal,
 					},
 					GivenName:   "Elizabeth",
 					FamilyName:  "Miller",
 					Affiliation: "DataCite",
-					NameIdentifier: DataCiteNameIdentifier{
+					NameIdentifier: NameIdentifier{
 						Value:                "0000-0001-5000-0007",
 						SchemeURI:            "http://orcid.org/",
 						NameIdentifierScheme: "ORCID",
@@ -31,16 +31,16 @@ func TestDataciteExample(t *testing.T) {
 			},
 		},
 		Contributors: Contributors{
-			Contributor: []DataCiteContributor{
+			Contributor: []Contributor{
 				{
-					ContributorName: DataCiteName{
+					ContributorName: Name{
 						Value: "Miller, Elizabeth",
 						Type:  DataCiteNameTypePersonal,
 					},
 					GivenName:   "Elizabeth",
 					FamilyName:  "Miller",
 					Affiliation: "DataCite",
-					NameIdentifier: DataCiteNameIdentifier{
+					NameIdentifier: NameIdentifier{
 						Value:                "0000-0001-5000-0007",
 						SchemeURI:            "http://orcid.org/",
 						NameIdentifierScheme: "ORCID",
@@ -49,7 +49,7 @@ func TestDataciteExample(t *testing.T) {
 			},
 		},
 		Titles: Titles{
-			Title: []DataCiteTitle{
+			Title: []Title{
 				{
 					Value: "Full DataCite XML Example",
 					Type:  DataCiteTitleTypeDefaultTitle,
@@ -64,7 +64,7 @@ func TestDataciteExample(t *testing.T) {
 		},
 		Publisher:       "DataCite",
 		PublicationYear: 2014,
-		ResourceType: DataCiteResourceType{
+		ResourceType: ResourceType{
 			Value:          "XML",
 			IdentifierType: DataCiteResourceTypeGeneralSoftware,
 		},

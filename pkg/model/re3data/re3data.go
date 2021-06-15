@@ -26,9 +26,9 @@ type RepositoryInstitution struct {
 }
 
 type RepositoryDatabaseAccess struct {
-	DatabaseAccessType RE3DataAccessType `xml:"r3d:databaseAccessType"` // The type of access to the RDR
+	DatabaseAccessType AccessType `xml:"r3d:databaseAccessType"` // The type of access to the RDR
 	// optional
-	DatabaseAccessRestrictions []RE3DataAccessRestrictions `xml:"databaseAccessRestriction"` // All existing access restrictions to the RDR (required if restricted is chosen).
+	DatabaseAccessRestrictions []AccessRestrictions `xml:"databaseAccessRestriction"` // All existing access restrictions to the RDR (required if restricted is chosen).
 }
 
 type RepositoryDataLicense struct {
@@ -37,9 +37,9 @@ type RepositoryDataLicense struct {
 }
 
 type RepositoryDataUpload struct {
-	Type RE3DataAccessType `xml:"r3d:dataUploadType"`
+	Type AccessType `xml:"r3d:dataUploadType"`
 	// optional
-	Restriction []RE3DataAccessRestrictions `xml:"r3d:dataUploadRestriction,omitempty"` // All existing restrictions to the data upload (required if restricted is chosen).
+	Restriction []AccessRestrictions `xml:"r3d:dataUploadRestriction,omitempty"` // All existing restrictions to the data upload (required if restricted is chosen).
 }
 
 type RepositoryIdentifiers struct {
@@ -61,14 +61,14 @@ type Repository struct {
 	Updated             string                   `xml:"r3d:updated"`             // The date of the last update of the RDR size
 	Language            []string                 `xml:"r3d:repositoryLanguage"`  // The user interface language of the RDR
 	Subject             []RepositorySubject      `xml:"r3d:subject"`             // The disciplinary focus of the RDR (wrapper element).
-	ProviderType        []RE3DataProviderType    `xml:"r3d:providerType"`        // 1-2 The type of provider.
+	ProviderType        []ProviderType           `xml:"r3d:providerType"`        // 1-2 The type of provider.
 	Institution         []RepositoryInstitution  `xml:"r3d:institution"`         // All institutions being responsible for funding, creating and/or running the RDR (wrapper element).
 	DataAccess          RepositoryDatabaseAccess `xml:"r3d:databaseAccess"`      // The access regulation to the RDR (wrapper element).
 	DataLicense         RepositoryDataLicense    `xml:"r3d:dataLicense"`         // The license of the research data, existing in the RDR (wrapper element).
 	DataUpload          []RepositoryDataUpload   `xml:"r3d:dataUpload"`          // The regulation for submitting research data to the RDR (wrapper element)
-	Versioning          RE3DataYesNoUn           `xml:"r3d:versioning"`          // The RDR supports versioning of research data
-	EnhancedPublication RE3DataYesNoUn           `xml:"r3d:enhancedPublication"` // The RDR offers the interlinking between publications and research data
-	QualityManagement   RE3DataYesNoUn           `xml:"r3d:qualityManagement"`   // Any form of quality management concerning the research data or metadata of the RDR
+	Versioning          YesNoUn                  `xml:"r3d:versioning"`          // The RDR supports versioning of research data
+	EnhancedPublication YesNoUn                  `xml:"r3d:enhancedPublication"` // The RDR offers the interlinking between publications and research data
+	QualityManagement   YesNoUn                  `xml:"r3d:qualityManagement"`   // Any form of quality management concerning the research data or metadata of the RDR
 	EntryDate           string                   `xml:"r3d:entryData"`           // The date the RDR was indexed in re3data.org
 	LastUpdate          string                   `xml:"r3d:lastUpdate"`          // The date the metadata of the RDR was updated
 
