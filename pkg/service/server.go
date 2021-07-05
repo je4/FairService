@@ -63,6 +63,9 @@ func NewServer(addr, addrExt string, log *logging.Logger, db *sql.DB, dbschema s
 		linkTokenExp: linkTokenExp,
 		sourcesMutex: sync.RWMutex{},
 	}
+	if err := srv.LoadSources(); err != nil {
+		return nil, errors.Wrap(err, "cannot load sources")
+	}
 
 	return srv, nil
 }

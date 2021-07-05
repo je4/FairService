@@ -68,9 +68,9 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	sqlstr := fmt.Sprintf("SELECT uuidStr, metadata, setspec, catalog, public FROM %s.oai WHERE source=$1 AND signature=$2", s.dbschema)
+	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, public FROM %s.oai WHERE source=$1 AND signature=$2", s.dbschema)
 	params := []interface{}{src.ID, data.Signature}
-	row := s.db.QueryRow(sqlstr, params)
+	row := s.db.QueryRow(sqlstr, params...)
 
 	var metaStr string
 	var uuidStr string
@@ -109,7 +109,7 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 			pq.Array(data.Catalog), // catalog
 			// seq
 		}
-		ret, err := s.db.Exec(sqlstr, params)
+		ret, err := s.db.Exec(sqlstr, params...)
 		if err != nil {
 			sendResult("error", fmt.Sprintf("cannot execute query [%s] - [%v]: %v", sqlstr, params, err), "")
 			return
@@ -155,7 +155,7 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 			data.Public,
 			pq.Array(data.Catalog),
 			uuidStr}
-		if _, err := s.db.Exec(sqlstr, params); err != nil {
+		if _, err := s.db.Exec(sqlstr, params...); err != nil {
 			sendResult("error", fmt.Sprintf("cannot update [%s] - [%v]: %v", sqlstr, params, err), uuidStr)
 			return
 		}
