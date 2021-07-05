@@ -84,7 +84,7 @@ func main() {
 		defer f.Close()
 		accesslog = f
 	}
-	srv, err := service.NewServer(config.Addr, config.AddrExt, logger, db, accesslog, config.JWTKey, config.JWTAlg, config.LinkTokenExp.Duration)
+	srv, err := service.NewServer(config.Addr, config.AddrExt, logger, db, config.DB.Schema, accesslog, config.JWTKey, config.JWTAlg, config.LinkTokenExp.Duration)
 	if err != nil {
 		logger.Panicf("cannot initialize server: %v", err)
 	}
