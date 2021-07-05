@@ -28,6 +28,7 @@ const (
 	ItemTypePresentation        ItemType = "presentation"
 	ItemTypeComputerProgram     ItemType = "computerProgram"
 	ItemTypeArtwork             ItemType = "artwork"
+	ItemTypePerformance         ItemType = "performance"
 	ItemTypeAttachment          ItemType = "attachment"
 	ItemTypeAudioRecording      ItemType = "audioRecording"
 	ItemTypeBill                ItemType = "bill"
@@ -68,6 +69,7 @@ var ItemTypeReverse = map[string]ItemType{
 	string(ItemTypePresentation):        ItemTypePresentation,
 	string(ItemTypeComputerProgram):     ItemTypeComputerProgram,
 	string(ItemTypeArtwork):             ItemTypeArtwork,
+	string(ItemTypePerformance):         ItemTypePerformance,
 	string(ItemTypeAttachment):          ItemTypeAttachment,
 	string(ItemTypeAudioRecording):      ItemTypeAudioRecording,
 	string(ItemTypeBill):                ItemTypeBill,
