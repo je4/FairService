@@ -50,7 +50,11 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	vars := mux.Vars(req)
-	s.log.Infof("vars: %v", vars)
+	partition, ok := s.Partitions[vars["partition"]]
+	if !ok {
+		sendResult("error", fmt.Sprintf("invalid partition %s", partition), "")
+		return
+	}
 
 	decoder := json.NewDecoder(req.Body)
 	var data CreateData
@@ -68,8 +72,10 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, public FROM %s.oai WHERE source=$1 AND signature=$2", s.dbschema)
-	params := []interface{}{src.ID, data.Signature}
+	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, public "+
+		"FROM %s.oai "+
+		"WHERE partition=$1 AND source=$2 AND signature=$3", s.dbschema)
+	params := []interface{}{partition.Name, src.ID, data.Signature}
 	row := s.db.QueryRow(sqlstr, params...)
 
 	var metaStr string
@@ -95,10 +101,11 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		sqlstr := fmt.Sprintf("INSERT INTO %s.oai "+
-			"(uuid, datestamp, setspec, metadata, dirty, signature, source, public, catalog, seq) "+
-			"VALUES($1, NOW(), $2, $3, false, $4, $5, $6, $7, NEXTVAL('lastchange'))", s.dbschema)
+			"(uuid, partition, datestamp, setspec, metadata, dirty, signature, source, public, catalog, seq) "+
+			"VALUES($1, $2, NOW(), $3, $4, false, $5, $6, $7, $8, NEXTVAL('lastchange'))", s.dbschema)
 		params := []interface{}{
-			uuidStr, // uuid
+			uuidStr,        // uuid
+			partition.Name, // partition
 			// datestamp
 			pq.Array(data.Set), // setspec
 			string(coreBytes),  // metadata
@@ -146,7 +153,7 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		sqlstr = fmt.Sprintf("UPDATE %s.data "+
+		sqlstr = fmt.Sprintf("UPDATE %s.oai "+
 			"SET datestamp=NOW(), setspec=$1, metadata=$2, dirty=FALSE, public=$3, catalog=$4, seq=NEXTVAL('lastchange') "+
 			"WHERE uuidStr=$5", s.dbschema)
 		params := []interface{}{

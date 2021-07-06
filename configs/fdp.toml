@@ -25,10 +25,22 @@ linktokenexp = "1h"
     port = 22
     host = "ba14ns21403.fhnw.ch"
 
-    [sshtunnel.localendpoint]
-    port = 5434
-    host = "localhost"
+    [[sshtunnel.tunnel]]
+        name = "postgres"
+        [sshtunnel.tunnel.localendpoint]
+        port = 5434
+        host = "localhost"
 
-    [sshtunnel.remoteendpoint]
-    port = 5432
-    host = "v000306.adm.ds.fhnw.ch"
+        [sshtunnel.tunnel.remoteendpoint]
+        port = 5432
+        host = "v000306.adm.ds.fhnw.ch"
+
+    [[sshtunnel.tunnel]]
+        name = "elasticsearch"
+        [sshtunnel.tunnel.localendpoint]
+        port = 5434
+        host = "localhost"
+
+        [sshtunnel.tunnel.remoteendpoint]
+        port = 5432
+        host = "v000306.adm.ds.fhnw.ch"

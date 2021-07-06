@@ -3,7 +3,6 @@ package main
 import (
 	"github.com/BurntSushi/toml"
 	"log"
-	"strings"
 	"time"
 )
 
@@ -29,12 +28,24 @@ type Endpoint struct {
 	Port int    `toml:"port"`
 }
 
+type Tunnel struct {
+	Name           string   `toml:"name"`
+	LocalEndpoint  Endpoint `toml:"localendpoint"`
+	RemoteEndpoint Endpoint `toml:"remoteendpoint"`
+}
+
 type SSHTunnel struct {
 	User           string   `toml:"user"`
 	PrivateKey     string   `toml:"privatekey"`
-	LocalEndpoint  Endpoint `toml:"localendpoint"`
 	ServerEndpoint Endpoint `toml:"serverendpoint"`
-	RemoteEndpoint Endpoint `toml:"remoteendpoint"`
+	Tunnel         []Tunnel `toml:"tunnel"`
+}
+
+type Partition struct {
+	Name    string   `toml:"name"`
+	AddrExt string   `toml:"addrext"`
+	JWTKey  string   `toml:"jwtkey"`
+	JWTAlg  []string `toml:"jwtalg"`
 }
 
 type Config struct {
@@ -43,14 +54,12 @@ type Config struct {
 	Logformat    string      `toml:"logformat"`
 	AccessLog    string      `toml:"accesslog"`
 	Addr         string      `toml:"addr"`
-	AddrExt      string      `toml:"addrext"`
 	CertPEM      string      `toml:"certpem"`
 	KeyPEM       string      `toml:"keypem"`
-	JWTKey       string      `toml:"jwtkey"`
-	JWTAlg       []string    `toml:"jwtalg"`
 	LinkTokenExp duration    `toml:"linktokenexp"`
 	DB           CfgDatabase `toml:"database"`
 	SSHTunnel    SSHTunnel   `toml:"sshtunnel"`
+	Partition    []Partition `toml:"partition"`
 }
 
 func LoadConfig(filepath string) Config {
@@ -59,7 +68,7 @@ func LoadConfig(filepath string) Config {
 	if err != nil {
 		log.Fatalln("Error on loading config: ", err)
 	}
-	conf.AddrExt = strings.TrimRight(conf.AddrExt, "/")
+	//	conf.AddrExt = strings.TrimRight(conf.AddrExt, "/")
 
 	return conf
 }

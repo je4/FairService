@@ -27,15 +27,17 @@ func main() {
 
 	if config.SSHTunnel.User != "" && config.SSHTunnel.PrivateKey != "" {
 		tunnels := map[string]*ssh.SourceDestination{}
-		tunnels["postgres"] = &ssh.SourceDestination{
-			Local: &ssh.Endpoint{
-				Host: config.SSHTunnel.LocalEndpoint.Host,
-				Port: config.SSHTunnel.LocalEndpoint.Port,
-			},
-			Remote: &ssh.Endpoint{
-				Host: config.SSHTunnel.RemoteEndpoint.Host,
-				Port: config.SSHTunnel.RemoteEndpoint.Port,
-			},
+		for _, t := range config.SSHTunnel.Tunnel {
+			tunnels[t.Name] = &ssh.SourceDestination{
+				Local: &ssh.Endpoint{
+					Host: t.LocalEndpoint.Host,
+					Port: t.LocalEndpoint.Port,
+				},
+				Remote: &ssh.Endpoint{
+					Host: t.RemoteEndpoint.Host,
+					Port: t.RemoteEndpoint.Port,
+				},
+			}
 		}
 		tunnel, err := ssh.NewSSHTunnel(
 			config.SSHTunnel.User,
@@ -84,7 +86,18 @@ func main() {
 		defer f.Close()
 		accesslog = f
 	}
-	srv, err := service.NewServer(config.Addr, config.AddrExt, logger, db, config.DB.Schema, accesslog, config.JWTKey, config.JWTAlg, config.LinkTokenExp.Duration)
+
+	var partitions []*service.Partition
+	for _, pconf := range config.Partition {
+		p, err := service.NewPartition(pconf.Name, pconf.AddrExt, pconf.JWTKey, pconf.JWTAlg)
+		if err != nil {
+			logger.Panicf("cannot create partition %s: %v", pconf.Name, err)
+			return
+		}
+		partitions = append(partitions, p)
+	}
+
+	srv, err := service.NewServer(config.Addr, logger, db, config.DB.Schema, accesslog, partitions, config.LinkTokenExp.Duration)
 	if err != nil {
 		logger.Panicf("cannot initialize server: %v", err)
 	}

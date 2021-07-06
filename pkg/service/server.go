@@ -13,7 +13,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"sync"
 	"time"
 )
@@ -27,7 +26,6 @@ type Source struct {
 
 type Server struct {
 	host, port   string
-	addrExt      *url.URL
 	srv          *http.Server
 	jwtKey       string
 	jwtAlg       []string
@@ -38,36 +36,43 @@ type Server struct {
 	dbschema     string
 	sourcesMutex sync.RWMutex
 	sources      map[int64]*Source
+	Partitions   map[string]*Partition
 }
 
-func NewServer(addr, addrExt string, log *logging.Logger, db *sql.DB, dbschema string, accessLog io.Writer, jwtKey string, jwtAlg []string, linkTokenExp time.Duration) (*Server, error) {
+func NewServer(addr string, log *logging.Logger, db *sql.DB, dbschema string, accessLog io.Writer, linkTokenExp time.Duration) (*Server, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot split address %s", addr)
 	}
-	extUrl, err := url.Parse(addrExt)
-	if err != nil {
-		return nil, errors.Wrapf(err, "cannot parse external address %s", addrExt)
-	}
+	/*
+		extUrl, err := url.Parse(addrExt)
+		if err != nil {
+			return nil, errors.Wrapf(err, "cannot parse external address %s", addrExt)
+		}
+	*/
 
 	srv := &Server{
 		host:         host,
 		port:         port,
-		addrExt:      extUrl,
 		log:          log,
 		db:           db,
 		dbschema:     dbschema,
 		accessLog:    accessLog,
-		jwtKey:       jwtKey,
-		jwtAlg:       jwtAlg,
+		Partitions:   make(map[string]*Partition),
 		linkTokenExp: linkTokenExp,
 		sourcesMutex: sync.RWMutex{},
 	}
+
 	if err := srv.LoadSources(); err != nil {
 		return nil, errors.Wrap(err, "cannot load sources")
 	}
 
 	return srv, nil
+}
+
+func (s *Server) AddPartition(p *Partition) {
+	p.s = s
+	s.Partitions[p.Name] = p
 }
 
 func (s *Server) LoadSources() error {
@@ -115,7 +120,7 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 	router := mux.NewRouter()
 
 	router.Handle(
-		"/item",
+		"/{partition}/item",
 		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.createHandler) }()),
 	).Methods("POST")
 
@@ -125,12 +130,7 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 		Handler: loggedRouter,
 		Addr:    addr,
 	}
-	if s.addrExt == nil {
-		s.addrExt, err = url.Parse(addr)
-		if err != nil {
-			return errors.Wrapf(err, "cannot parse addr %s", addr)
-		}
-	}
+
 	if cert == "auto" || key == "auto" {
 		s.log.Info("generating new certificate")
 		cert, err := dcert.DefaultCertificate()
