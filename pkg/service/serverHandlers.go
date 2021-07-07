@@ -19,13 +19,21 @@ type CreateResultStatus struct {
 	UUID    string `json:"uuid,omitempty"`
 }
 
+type DataAccess string
+
+const (
+	DataAccessPublic     DataAccess = "public"
+	DataAccessClosed     DataAccess = "closed"
+	DataAccessClosedData DataAccess = "closed_data"
+)
+
 type CreateData struct {
 	Source    string      `json:"source"`
 	Signature string      `json:"signature"`
 	Metadata  myfair.Core `json:"metadata"`
 	Set       []string    `json:"set"`
 	Catalog   []string    `json:"catalog"`
-	Public    string      `json:"public"`
+	Access    DataAccess  `json:"access"`
 }
 
 func equalStrings(a, b []string) bool {
@@ -77,7 +85,7 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, public "+
+	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access "+
 		"FROM %s.oai "+
 		"WHERE partition=$1 AND source=$2 AND signature=$3", s.dbschema)
 	params := []interface{}{partition.Name, src.ID, data.Signature}
@@ -86,8 +94,8 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 	var metaStr string
 	var uuidStr string
 	var set, catalog []string
-	var public string
-	if err := row.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &public); err != nil {
+	var access DataAccess
+	if err := row.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &access); err != nil {
 		if err != sql.ErrNoRows {
 			sendResult("error", fmt.Sprintf("cannot execute query [%s] - [%v]: %v", sqlstr, params, err), "")
 			return
@@ -106,7 +114,7 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		sqlstr := fmt.Sprintf("INSERT INTO %s.oai "+
-			"(uuid, partition, datestamp, setspec, metadata, dirty, signature, source, public, catalog, seq) "+
+			"(uuid, partition, datestamp, setspec, metadata, dirty, signature, source, access, catalog, seq) "+
 			"VALUES($1, $2, NOW(), $3, $4, false, $5, $6, $7, $8, NEXTVAL('lastchange'))", s.dbschema)
 		params := []interface{}{
 			uuidStr,        // uuid
@@ -117,7 +125,7 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 			// dirty
 			data.Signature,         // signature
 			src.ID,                 // source
-			data.Public,            // public
+			data.Access,            // access
 			pq.Array(data.Catalog), // catalog
 			// seq
 		}
@@ -147,7 +155,7 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 		if reflect.DeepEqual(oldMeta, data.Metadata) &&
 			equalStrings(set, data.Set) &&
 			equalStrings(catalog, data.Catalog) &&
-			public == data.Public {
+			access == data.Access {
 			sendResult("ok", "no update", uuidStr)
 			return
 		}
@@ -159,12 +167,12 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 		}
 
 		sqlstr = fmt.Sprintf("UPDATE %s.oai "+
-			"SET datestamp=NOW(), setspec=$1, metadata=$2, dirty=FALSE, public=$3, catalog=$4, seq=NEXTVAL('lastchange') "+
+			"SET datestamp=NOW(), setspec=$1, metadata=$2, dirty=FALSE, access=$3, catalog=$4, seq=NEXTVAL('lastchange') "+
 			"WHERE uuidStr=$5", s.dbschema)
 		params := []interface{}{
 			pq.Array(data.Set),
 			string(dataMetaBytes),
-			data.Public,
+			data.Access,
 			pq.Array(data.Catalog),
 			uuidStr}
 		if _, err := s.db.Exec(sqlstr, params...); err != nil {
