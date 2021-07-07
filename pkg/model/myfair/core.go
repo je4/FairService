@@ -32,6 +32,18 @@ type Title struct {
 	Type CoreTitleType `json:"type"`
 }
 
+type Media struct {
+	Name        string `json:"name"`
+	Mimetype    string `json:"mimetype"`
+	Type        string `json:"type"`
+	Uri         string `json:"uri"`
+	Width       int64  `json:"width,omitempty"`
+	Height      int64  `json:"height,omitempty"`
+	Orientation int64  `json:"orientation,omitempty"`
+	Duration    int64  `json:"duration,omitempty"`
+	Fulltext    string `json:"fulltext,omitempty"`
+}
+
 type Core struct {
 	// DataCite: #1 Identifier (with mandatory type sub-property)
 	Identifier []Identifier `json:"identifier"`
@@ -51,4 +63,7 @@ type Core struct {
 
 	// DataCite: #10 ResourceType (with mandatory general type description subproperty)
 	ResourceType ResourceType `json:"resourceType"`
+
+	Media  []Media `json:"media"`
+	Poster Media   `json:"poster"`
 }

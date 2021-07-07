@@ -27,6 +27,12 @@ const (
 	DataAccessClosedData DataAccess = "closed_data"
 )
 
+var DataAccessReverse = map[string]DataAccess{
+	string(DataAccessPublic):     DataAccessPublic,
+	string(DataAccessClosed):     DataAccessClosed,
+	string(DataAccessClosedData): DataAccessClosedData,
+}
+
 type CreateData struct {
 	Source    string      `json:"source"`
 	Signature string      `json:"signature"`
@@ -56,7 +62,7 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 			s.log.Error(fmt.Sprintf("%s: %s", message, uuid))
 		}
 		w.Header().Set("Content-type", "text/json")
-		data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message}, "", "  ")
+		data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message, UUID: uuid}, "", "  ")
 		w.Write(data)
 
 	}
@@ -94,8 +100,8 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 	var metaStr string
 	var uuidStr string
 	var set, catalog []string
-	var access DataAccess
-	if err := row.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &access); err != nil {
+	var accessStr string
+	if err := row.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr); err != nil {
 		if err != sql.ErrNoRows {
 			sendResult("error", fmt.Sprintf("cannot execute query [%s] - [%v]: %v", sqlstr, params, err), "")
 			return
@@ -143,7 +149,15 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 			sendResult("error", fmt.Sprintf("no affected rows"), uuidStr)
 			return
 		}
+		sendResult("ok", fmt.Sprintf("item created"), uuidStr)
+		return
+
 	} else {
+		access, ok := DataAccessReverse[accessStr]
+		if !ok {
+			sendResult("error", fmt.Sprintf("invalid access type: %s", accessStr), uuidStr)
+			return
+		}
 		sort.Strings(catalog)
 		sort.Strings(set)
 		// do update here
