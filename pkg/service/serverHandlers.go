@@ -25,7 +25,7 @@ type CreateData struct {
 	Metadata  myfair.Core `json:"metadata"`
 	Set       []string    `json:"set"`
 	Catalog   []string    `json:"catalog"`
-	Public    bool        `json:"public"`
+	Public    string      `json:"public"`
 }
 
 func equalStrings(a, b []string) bool {
@@ -42,7 +42,11 @@ func equalStrings(a, b []string) bool {
 
 func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 	sendResult := func(t string, message string, uuid string) {
-		s.log.Error(message)
+		if t == "ok" {
+			s.log.Infof(fmt.Sprintf("%s: %s", message, uuid))
+		} else {
+			s.log.Error(fmt.Sprintf("%s: %s", message, uuid))
+		}
 		w.Header().Set("Content-type", "text/json")
 		data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message}, "", "  ")
 		w.Write(data)
@@ -50,9 +54,10 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	vars := mux.Vars(req)
-	partition, ok := s.Partitions[vars["partition"]]
+	pName := vars["partition"]
+	partition, ok := s.Partitions[pName]
 	if !ok {
-		sendResult("error", fmt.Sprintf("invalid partition %s", partition), "")
+		sendResult("error", fmt.Sprintf("invalid partition %s", partition.Name), "")
 		return
 	}
 
@@ -81,7 +86,7 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 	var metaStr string
 	var uuidStr string
 	var set, catalog []string
-	var public bool
+	var public string
 	if err := row.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &public); err != nil {
 		if err != sql.ErrNoRows {
 			sendResult("error", fmt.Sprintf("cannot execute query [%s] - [%v]: %v", sqlstr, params, err), "")

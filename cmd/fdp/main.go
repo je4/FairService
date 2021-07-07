@@ -97,11 +97,13 @@ func main() {
 		partitions = append(partitions, p)
 	}
 
-	srv, err := service.NewServer(config.Addr, logger, db, config.DB.Schema, accesslog, partitions, config.LinkTokenExp.Duration)
+	srv, err := service.NewServer(config.Addr, logger, db, config.DB.Schema, accesslog, config.LinkTokenExp.Duration)
 	if err != nil {
 		logger.Panicf("cannot initialize server: %v", err)
 	}
-
+	for _, p := range partitions {
+		srv.AddPartition(p)
+	}
 	go func() {
 		if err := srv.ListenAndServe(config.CertPEM, config.KeyPEM); err != nil {
 			log.Fatalf("server died: %v", err)
