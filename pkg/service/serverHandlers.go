@@ -182,7 +182,7 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 
 		sqlstr = fmt.Sprintf("UPDATE %s.oai "+
 			"SET datestamp=NOW(), setspec=$1, metadata=$2, dirty=FALSE, access=$3, catalog=$4, seq=NEXTVAL('lastchange') "+
-			"WHERE uuidStr=$5", s.dbschema)
+			"WHERE uuid=$5", s.dbschema)
 		params := []interface{}{
 			pq.Array(data.Set),
 			string(dataMetaBytes),
