@@ -64,6 +64,6 @@ type Core struct {
 	// DataCite: #10 ResourceType (with mandatory general type description subproperty)
 	ResourceType ResourceType `json:"resourceType"`
 
-	Media  []Media `json:"media"`
-	Poster Media   `json:"poster"`
+	Media  []*Media `json:"media"`
+	Poster *Media   `json:"poster"`
 }
