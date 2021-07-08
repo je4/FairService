@@ -1,4 +1,4 @@
-package service
+package fair
 
 import (
 	"strings"
@@ -9,7 +9,6 @@ type Partition struct {
 	AddrExt string
 	JWTKey  string
 	JWTAlg  []string
-	s       *Server
 }
 
 func NewPartition(Name, AddrExt, JWTKey string, JWTAlg []string) (*Partition, error) {

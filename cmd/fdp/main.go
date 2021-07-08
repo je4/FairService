@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"flag"
+	"github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/FairService/v2/pkg/service"
 	lm "github.com/je4/utils/v2/pkg/logger"
 	"github.com/je4/utils/v2/pkg/ssh"
@@ -87,9 +88,9 @@ func main() {
 		accesslog = f
 	}
 
-	var partitions []*service.Partition
+	var partitions []*fair.Partition
 	for _, pconf := range config.Partition {
-		p, err := service.NewPartition(pconf.Name, pconf.AddrExt, pconf.JWTKey, pconf.JWTAlg)
+		p, err := fair.NewPartition(pconf.Name, pconf.AddrExt, pconf.JWTKey, pconf.JWTAlg)
 		if err != nil {
 			logger.Panicf("cannot create partition %s: %v", pconf.Name, err)
 			return
@@ -97,12 +98,17 @@ func main() {
 		partitions = append(partitions, p)
 	}
 
-	srv, err := service.NewServer(config.Addr, logger, db, config.DB.Schema, accesslog, config.LinkTokenExp.Duration)
+	fair, err := fair.NewFair(db, config.DB.Schema, logger)
 	if err != nil {
-		logger.Panicf("cannot initialize server: %v", err)
+		logger.Panicf("cannot initialize fair: %v", err)
 	}
 	for _, p := range partitions {
-		srv.AddPartition(p)
+		fair.AddPartition(p)
+	}
+
+	srv, err := service.NewServer(config.Addr, logger, fair, accesslog, config.LinkTokenExp.Duration)
+	if err != nil {
+		logger.Panicf("cannot initialize server: %v", err)
 	}
 	go func() {
 		if err := srv.ListenAndServe(config.CertPEM, config.KeyPEM); err != nil {
