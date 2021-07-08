@@ -42,7 +42,6 @@ type Media struct {
 	Orientation int64  `json:"orientation,omitempty"`
 	Duration    int64  `json:"duration,omitempty"`
 	Fulltext    string `json:"fulltext,omitempty"`
-	Rights      string `json:"rights,omitempty"`
 }
 
 type Core struct {
@@ -64,6 +63,8 @@ type Core struct {
 
 	// DataCite: #10 ResourceType (with mandatory general type description subproperty)
 	ResourceType ResourceType `json:"resourceType"`
+
+	Rights string `json:"rights,omitempty"`
 
 	Media  []*Media `json:"media"`
 	Poster *Media   `json:"poster"`
