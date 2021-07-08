@@ -2,9 +2,11 @@ package service
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/je4/FairService/v2/pkg/fair"
+	"github.com/je4/FairService/v2/pkg/model/dcmi"
 	"net/http"
 )
 
@@ -52,6 +54,19 @@ func (s *Server) itemHandler(w http.ResponseWriter, req *http.Request) {
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(data); err != nil {
+			sendResult("error", fmt.Sprintf("cannot marshal data"), uuidStr)
+			return
+		}
+		return
+	case "dcmi":
+		dcmiData := &dcmi.DCMI{}
+		dcmiData.InitNamespace()
+		dcmiData.FromCore(data.Metadata)
+		w.Header().Set("Content-type", "text/xml")
+		enc := xml.NewEncoder(w)
+		enc.Indent("", "  ")
+		w.Header().Set("Content-type", "text/json")
+		if err := enc.Encode(dcmiData); err != nil {
 			sendResult("error", fmt.Sprintf("cannot marshal data"), uuidStr)
 			return
 		}

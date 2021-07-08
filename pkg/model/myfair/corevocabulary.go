@@ -3,11 +3,20 @@ package myfair
 type CoreTitleType string
 
 const (
+	TitleTypeMain             CoreTitleType = ""
 	TitleTypeAlternativeTitle CoreTitleType = "AlternativeTitle"
 	TitleTypeSubTitle         CoreTitleType = "Subtitle"
 	TitleTypeTranslatedTitle  CoreTitleType = "TranslatedTitle"
 	TitleTypeOther            CoreTitleType = "Other"
 )
+
+var CoreTitleTypeReverse = map[string]CoreTitleType{
+	string(TitleTypeMain):             TitleTypeMain,
+	string(TitleTypeAlternativeTitle): TitleTypeAlternativeTitle,
+	string(TitleTypeOther):            TitleTypeOther,
+	string(TitleTypeSubTitle):         TitleTypeSubTitle,
+	string(TitleTypeTranslatedTitle):  TitleTypeTranslatedTitle,
+}
 
 type NameType string
 
