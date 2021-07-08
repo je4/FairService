@@ -42,6 +42,7 @@ type Media struct {
 	Orientation int64  `json:"orientation,omitempty"`
 	Duration    int64  `json:"duration,omitempty"`
 	Fulltext    string `json:"fulltext,omitempty"`
+	Rights      string `json:"rights"`
 }
 
 type Core struct {
