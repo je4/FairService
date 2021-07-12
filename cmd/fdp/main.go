@@ -67,6 +67,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("error opening database: %v", err)
 	}
+	// close on shutdown
 	defer db.Close()
 
 	// Open doesn't open a connection. Validate DSN data:
