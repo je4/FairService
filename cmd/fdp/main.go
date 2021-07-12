@@ -18,7 +18,7 @@ import (
 )
 
 func main() {
-	cfgfile := flag.String("cfg", "./fdp.toml", "locations of config file")
+	cfgfile := flag.String("cfg", "/etc/fdp.toml", "locations of config file")
 	flag.Parse()
 	config := LoadConfig(*cfgfile)
 
