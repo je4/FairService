@@ -274,7 +274,7 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 			pq.Array(data.Catalog),
 			uuidStr}
 		if _, err := f.db.Exec(sqlstr, params...); err != nil {
-			return "", errors.Wrapf(err, "[%s] cannot update [%s] - [%v]: %v", uuidStr, sqlstr, params)
+			return "", errors.Wrapf(err, "[%s] cannot update [%s] - [%v]", uuidStr, sqlstr, params)
 		}
 		f.log.Infof("item [%s] updated", uuidStr)
 		return uuidStr, nil
