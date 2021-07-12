@@ -14,7 +14,7 @@ const (
 	TypeSoftware            Type = "Software"
 	TypeSound               Type = "Sound"
 	TypeText                Type = "Text"
-	PhysicalObject          Type = "PhysicalObject"
+	TypePhysicalObject      Type = "PhysicalObject"
 )
 
 var DCMITypeReverse = map[string]Type{
@@ -29,5 +29,5 @@ var DCMITypeReverse = map[string]Type{
 	"Software":            TypeSoftware,
 	"Sound":               TypeSound,
 	"Text":                TypeText,
-	"PhysicalObject":      PhysicalObject,
+	"PhysicalObject":      TypePhysicalObject,
 }

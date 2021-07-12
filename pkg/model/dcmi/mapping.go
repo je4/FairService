@@ -5,8 +5,54 @@ import (
 	"github.com/je4/FairService/v2/pkg/model/myfair"
 )
 
+var MyfairResource = map[myfair.ResourceType]Type{
+	myfair.ResourceTypeBook:                TypeText,
+	myfair.ResourceTypeBookSection:         TypeText,
+	myfair.ResourceTypeThesis:              TypeText,
+	myfair.ResourceTypeJournalArticle:      TypeText,
+	myfair.ResourceTypeMagazineArticle:     TypeText,
+	myfair.ResourceTypeOnlineResource:      TypeText,
+	myfair.ResourceTypeReport:              TypeText,
+	myfair.ResourceTypeWebpage:             TypeText,
+	myfair.ResourceTypeConferencePaper:     TypeText,
+	myfair.ResourceTypePatent:              TypeText,
+	myfair.ResourceTypeNote:                TypeText,
+	myfair.ResourceTypeArtisticPerformance: TypeEvent,
+	myfair.ResourceTypeDataset:             TypeDataset,
+	myfair.ResourceTypePresentation:        TypeEvent,
+	myfair.ResourceTypePhysicalObject:      TypePhysicalObject,
+	myfair.ResourceTypeComputerProgram:     TypeSoftware,
+	myfair.ResourceTypeOther:               TypeText,
+	myfair.ResourceTypeArtwork:             TypeText,
+	myfair.ResourceTypeAttachment:          TypeText,
+	myfair.ResourceTypeAudioRecording:      TypeSound,
+	myfair.ResourceTypeDocument:            TypeText,
+	myfair.ResourceTypeEmail:               TypeText,
+	myfair.ResourceTypeEncyclopediaArticle: TypeText,
+	myfair.ResourceTypeFilm:                TypeMovingImage,
+	myfair.ResourceTypeInstantMessage:      TypeText,
+	myfair.ResourceTypeInterview:           TypeText,
+	myfair.ResourceTypeLetter:              TypeText,
+	myfair.ResourceTypeManuscript:          TypeText,
+	myfair.ResourceTypeMap:                 TypeText,
+	myfair.ResourceTypeNewspaperArticle:    TypeText,
+	myfair.ResourceTypePodcast:             TypeSound,
+	myfair.ResourceTypeRadioBroadcast:      TypeSound,
+	myfair.ResourceTypeTvBroadcast:         TypeMovingImage,
+	myfair.ResourceTypeVideoRecording:      TypeMovingImage,
+}
+
+func resourceTypeFromCore(rt myfair.ResourceType) Type {
+	t, ok := MyfairResource[rt]
+	if !ok {
+		return TypeText
+	}
+	return t
+}
+
 func (dcmi *DCMI) FromCore(core myfair.Core) error {
 
+	dcmi.Type = resourceTypeFromCore(core.ResourceType)
 	// Title
 	dcmi.Title = []string{}
 	for _, t := range core.Title {
