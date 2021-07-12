@@ -33,7 +33,7 @@ compile:
   stage: build
   script:
     - go mod download
-    - CGO_ENABLED=0 go build -o $CI_PROJECT_DIR/fairservice cmd/fdp
+    - CGO_ENABLED=0 go build -o $CI_PROJECT_DIR/fairservice ./cmd/fdp
   artifacts:
     paths:
       - fairservice
