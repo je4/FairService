@@ -293,7 +293,7 @@ func (f *Fair) StartUpdate(partitionName string, source string) error {
 	}
 	sqlstr := fmt.Sprintf("UPDATE %s.oai SET dirty=TRUE WHERE deleted=FALSE AND partition=$1 AND source=$2", f.dbschema)
 	params := []interface{}{partitionName, src.ID}
-	if _, err := f.db.Exec(sqlstr, params); err != nil {
+	if _, err := f.db.Exec(sqlstr, params...); err != nil {
 		return errors.Wrapf(err, "cannot execute dirty update - %s - %v", sqlstr, params)
 	}
 	return nil
@@ -306,7 +306,7 @@ func (f *Fair) AbortUpdate(partitionName string, source string) error {
 	}
 	sqlstr := fmt.Sprintf("UPDATE %s.oai SET dirty=FALSE WHERE deleted=FALSE AND partition=$1 AND source=$2", f.dbschema)
 	params := []interface{}{partitionName, src.ID}
-	if _, err := f.db.Exec(sqlstr, params); err != nil {
+	if _, err := f.db.Exec(sqlstr, params...); err != nil {
 		return errors.Wrapf(err, "cannot execute dirty reset update - %s - %v", sqlstr, params)
 	}
 	return nil
@@ -319,7 +319,7 @@ func (f *Fair) EndUpdate(partitionName string, source string) error {
 	}
 	sqlstr := fmt.Sprintf("UPDATE %s.oai SET deleted=TRUE, dirty=FALSE WHERE dirty=TRUE AND partition=$1 AND source=$2", f.dbschema)
 	params := []interface{}{partitionName, src.ID}
-	if _, err := f.db.Exec(sqlstr, params); err != nil {
+	if _, err := f.db.Exec(sqlstr, params...); err != nil {
 		return errors.Wrapf(err, "cannot execute dirty update - %s - %v", sqlstr, params)
 	}
 	return nil
