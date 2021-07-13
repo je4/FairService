@@ -78,14 +78,14 @@ func (s *Server) itemHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Server) startUpdateHandler(w http.ResponseWriter, req *http.Request) {
-	sendResult := func(t string, message string, uuid string) {
+	sendResult := func(t string, message string) {
 		if t == "ok" {
-			s.log.Infof(fmt.Sprintf("%s: %s", message, uuid))
+			s.log.Infof(fmt.Sprintf("%s", message))
 		} else {
-			s.log.Error(fmt.Sprintf("%s: %s", message, uuid))
+			s.log.Error(fmt.Sprintf("%s", message))
 		}
 		w.Header().Set("Content-type", "text/json")
-		data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message, UUID: uuid}, "", "  ")
+		data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message, UUID: ""}, "", "  ")
 		w.Write(data)
 	}
 
@@ -96,25 +96,26 @@ func (s *Server) startUpdateHandler(w http.ResponseWriter, req *http.Request) {
 	var data fair.SourceData
 	err := decoder.Decode(&data)
 	if err != nil {
-		sendResult("error", fmt.Sprintf("cannot parse request body: %v", err), "")
+		sendResult("error", fmt.Sprintf("cannot parse request body: %v", err))
 		return
 	}
 
 	if err := s.fair.StartUpdate(pName, data.Source); err != nil {
-		sendResult("error", fmt.Sprintf("cannot start update for %s on %s: %v", data.Source, pName, err), "")
+		sendResult("error", fmt.Sprintf("cannot start update for %s on %s: %v", data.Source, pName, err))
 		return
 	}
+	sendResult("ok", fmt.Sprintf("starting update for %s on %s", data.Source, pName))
 }
 
 func (s *Server) endUpdateHandler(w http.ResponseWriter, req *http.Request) {
-	sendResult := func(t string, message string, uuid string) {
+	sendResult := func(t string, message string) {
 		if t == "ok" {
-			s.log.Infof(fmt.Sprintf("%s: %s", message, uuid))
+			s.log.Infof(fmt.Sprintf("%s", message))
 		} else {
-			s.log.Error(fmt.Sprintf("%s: %s", message, uuid))
+			s.log.Error(fmt.Sprintf("%s", message))
 		}
 		w.Header().Set("Content-type", "text/json")
-		data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message, UUID: uuid}, "", "  ")
+		data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message, UUID: ""}, "", "  ")
 		w.Write(data)
 	}
 
@@ -125,25 +126,26 @@ func (s *Server) endUpdateHandler(w http.ResponseWriter, req *http.Request) {
 	var data fair.SourceData
 	err := decoder.Decode(&data)
 	if err != nil {
-		sendResult("error", fmt.Sprintf("cannot parse request body: %v", err), "")
+		sendResult("error", fmt.Sprintf("cannot parse request body: %v", err))
 		return
 	}
 
 	if err := s.fair.EndUpdate(pName, data.Source); err != nil {
-		sendResult("error", fmt.Sprintf("cannot end update for %s on %s: %v", data.Source, pName, err), "")
+		sendResult("error", fmt.Sprintf("cannot end update for %s on %s: %v", data.Source, pName, err))
 		return
 	}
+	sendResult("ok", fmt.Sprintf("end update for %s on %s", data.Source, pName))
 }
 
 func (s *Server) abortUpdateHandler(w http.ResponseWriter, req *http.Request) {
-	sendResult := func(t string, message string, uuid string) {
+	sendResult := func(t string, message string) {
 		if t == "ok" {
-			s.log.Infof(fmt.Sprintf("%s: %s", message, uuid))
+			s.log.Infof(fmt.Sprintf("%s", message))
 		} else {
-			s.log.Error(fmt.Sprintf("%s: %s", message, uuid))
+			s.log.Error(fmt.Sprintf("%s", message))
 		}
 		w.Header().Set("Content-type", "text/json")
-		data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message, UUID: uuid}, "", "  ")
+		data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message, UUID: ""}, "", "  ")
 		w.Write(data)
 	}
 
@@ -154,14 +156,15 @@ func (s *Server) abortUpdateHandler(w http.ResponseWriter, req *http.Request) {
 	var data fair.SourceData
 	err := decoder.Decode(&data)
 	if err != nil {
-		sendResult("error", fmt.Sprintf("cannot parse request body: %v", err), "")
+		sendResult("error", fmt.Sprintf("cannot parse request body: %v", err))
 		return
 	}
 
 	if err := s.fair.AbortUpdate(pName, data.Source); err != nil {
-		sendResult("error", fmt.Sprintf("cannot end update for %s on %s: %v", data.Source, pName, err), "")
+		sendResult("error", fmt.Sprintf("cannot end update for %s on %s: %v", data.Source, pName, err))
 		return
 	}
+	sendResult("ok", fmt.Sprintf("abort update for %s on %s", data.Source, pName))
 }
 
 func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
