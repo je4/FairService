@@ -77,6 +77,93 @@ func (s *Server) itemHandler(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func (s *Server) startUpdateHandler(w http.ResponseWriter, req *http.Request) {
+	sendResult := func(t string, message string, uuid string) {
+		if t == "ok" {
+			s.log.Infof(fmt.Sprintf("%s: %s", message, uuid))
+		} else {
+			s.log.Error(fmt.Sprintf("%s: %s", message, uuid))
+		}
+		w.Header().Set("Content-type", "text/json")
+		data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message, UUID: uuid}, "", "  ")
+		w.Write(data)
+	}
+
+	vars := mux.Vars(req)
+	pName := vars["partition"]
+
+	decoder := json.NewDecoder(req.Body)
+	var data fair.SourceData
+	err := decoder.Decode(&data)
+	if err != nil {
+		sendResult("error", fmt.Sprintf("cannot parse request body: %v", err), "")
+		return
+	}
+
+	if err := s.fair.StartUpdate(pName, data.Source); err != nil {
+		sendResult("error", fmt.Sprintf("cannot start update for %s on %s: %v", data.Source, pName, err), "")
+		return
+	}
+}
+
+func (s *Server) endUpdateHandler(w http.ResponseWriter, req *http.Request) {
+	sendResult := func(t string, message string, uuid string) {
+		if t == "ok" {
+			s.log.Infof(fmt.Sprintf("%s: %s", message, uuid))
+		} else {
+			s.log.Error(fmt.Sprintf("%s: %s", message, uuid))
+		}
+		w.Header().Set("Content-type", "text/json")
+		data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message, UUID: uuid}, "", "  ")
+		w.Write(data)
+	}
+
+	vars := mux.Vars(req)
+	pName := vars["partition"]
+
+	decoder := json.NewDecoder(req.Body)
+	var data fair.SourceData
+	err := decoder.Decode(&data)
+	if err != nil {
+		sendResult("error", fmt.Sprintf("cannot parse request body: %v", err), "")
+		return
+	}
+
+	if err := s.fair.EndUpdate(pName, data.Source); err != nil {
+		sendResult("error", fmt.Sprintf("cannot end update for %s on %s: %v", data.Source, pName, err), "")
+		return
+	}
+}
+
+func (s *Server) abortUpdateHandler(w http.ResponseWriter, req *http.Request) {
+	sendResult := func(t string, message string, uuid string) {
+		if t == "ok" {
+			s.log.Infof(fmt.Sprintf("%s: %s", message, uuid))
+		} else {
+			s.log.Error(fmt.Sprintf("%s: %s", message, uuid))
+		}
+		w.Header().Set("Content-type", "text/json")
+		data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message, UUID: uuid}, "", "  ")
+		w.Write(data)
+	}
+
+	vars := mux.Vars(req)
+	pName := vars["partition"]
+
+	decoder := json.NewDecoder(req.Body)
+	var data fair.SourceData
+	err := decoder.Decode(&data)
+	if err != nil {
+		sendResult("error", fmt.Sprintf("cannot parse request body: %v", err), "")
+		return
+	}
+
+	if err := s.fair.AbortUpdate(pName, data.Source); err != nil {
+		sendResult("error", fmt.Sprintf("cannot end update for %s on %s: %v", data.Source, pName, err), "")
+		return
+	}
+}
+
 func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 	sendResult := func(t string, message string, uuid string) {
 		if t == "ok" {
@@ -87,7 +174,6 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-type", "text/json")
 		data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message, UUID: uuid}, "", "  ")
 		w.Write(data)
-
 	}
 
 	vars := mux.Vars(req)

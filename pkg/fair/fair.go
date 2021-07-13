@@ -45,6 +45,10 @@ type ItemData struct {
 	Deleted   bool        `json:"deleted"`
 }
 
+type SourceData struct {
+	Source string `json:"source"`
+}
+
 func equalStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
@@ -265,7 +269,7 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 		}
 
 		sqlstr = fmt.Sprintf("UPDATE %s.oai"+
-			" SET datestamp=NOW(), setspec=$1, metadata=$2, dirty=FALSE, access=$3, catalog=$4, seq=NEXTVAL('lastchange'), deleted=false"+
+			" SET setspec=$1, metadata=$2, dirty=FALSE, access=$3, catalog=$4, deleted=false"+
 			" WHERE uuid=$5", f.dbschema)
 		params := []interface{}{
 			pq.Array(data.Set),
@@ -279,5 +283,45 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 		f.log.Infof("item [%s] updated", uuidStr)
 		return uuidStr, nil
 	}
+
+}
+
+func (f *Fair) StartUpdate(partitionName string, source string) error {
+	src, err := f.GetSourceByName(source)
+	if err != nil {
+		return errors.Wrapf(err, "cannot get source %s", source)
+	}
+	sqlstr := fmt.Sprintf("UPDATE %s.oai SET dirty=TRUE WHERE deleted=FALSE AND partition=$1 AND source=$2", f.dbschema)
+	params := []interface{}{partitionName, src.ID}
+	if _, err := f.db.Exec(sqlstr, params); err != nil {
+		return errors.Wrapf(err, "cannot execute dirty update - %s - %v", sqlstr, params)
+	}
+	return nil
+}
+
+func (f *Fair) AbortUpdate(partitionName string, source string) error {
+	src, err := f.GetSourceByName(source)
+	if err != nil {
+		return errors.Wrapf(err, "cannot get source %s", source)
+	}
+	sqlstr := fmt.Sprintf("UPDATE %s.oai SET dirty=FALSE WHERE deleted=FALSE AND partition=$1 AND source=$2", f.dbschema)
+	params := []interface{}{partitionName, src.ID}
+	if _, err := f.db.Exec(sqlstr, params); err != nil {
+		return errors.Wrapf(err, "cannot execute dirty reset update - %s - %v", sqlstr, params)
+	}
+	return nil
+}
+
+func (f *Fair) EndUpdate(partitionName string, source string) error {
+	src, err := f.GetSourceByName(source)
+	if err != nil {
+		return errors.Wrapf(err, "cannot get source %s", source)
+	}
+	sqlstr := fmt.Sprintf("UPDATE %s.oai SET deleted=TRUE, dirty=FALSE WHERE dirty=TRUE AND partition=$1 AND source=$2", f.dbschema)
+	params := []interface{}{partitionName, src.ID}
+	if _, err := f.db.Exec(sqlstr, params); err != nil {
+		return errors.Wrapf(err, "cannot execute dirty update - %s - %v", sqlstr, params)
+	}
+	return nil
 
 }

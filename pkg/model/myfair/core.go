@@ -7,7 +7,7 @@ type Name struct {
 }
 
 type NameIdentifier struct {
-	Value                string `json:"value"`
+	Value                string `json:"value,omitempty"`
 	Lang                 string `json:"lang,omitempty"`
 	SchemeURI            string `json:"schemeURI,omitempty"`
 	NameIdentifierScheme string `json:"nameIdentifierScheme,omitempty"`

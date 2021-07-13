@@ -56,6 +56,18 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.createHandler) }()),
 	).Methods("POST")
 	router.Handle(
+		"/{partition}/startupdate",
+		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.startUpdateHandler) }()),
+	).Methods("POST")
+	router.Handle(
+		"/{partition}/endupdate",
+		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.endUpdateHandler) }()),
+	).Methods("POST")
+	router.Handle(
+		"/{partition}/abortupdate",
+		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.abortUpdateHandler) }()),
+	).Methods("POST")
+	router.Handle(
 		"/{partition}/item/{uuid}/{outputType}",
 		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.itemHandler) }()),
 	).Methods("GET")
