@@ -137,7 +137,7 @@ func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 	}
 
 	sqlstr := fmt.Sprintf("SELECT metadata, setspec, catalog, access, signature, source, deleted"+
-		" FROM %s.oai"+
+		" FROM %s.core"+
 		" WHERE partition=$1 AND uuid=$2", f.dbschema)
 	params := []interface{}{partition.Name, uuidStr}
 	row := f.db.QueryRow(sqlstr, params...)
@@ -187,7 +187,7 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 	}
 
 	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, deleted"+
-		" FROM %s.oai "+
+		" FROM %s.core "+
 		" WHERE partition=$1 AND source=$2 AND signature=$3", f.dbschema)
 	params := []interface{}{partition.Name, src.ID, data.Signature}
 	row := f.db.QueryRow(sqlstr, params...)
@@ -212,9 +212,9 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 		if err != nil {
 			return "", errors.Wrapf(err, "cannot marshal core data [%v]", data.Metadata)
 		}
-		sqlstr := fmt.Sprintf("INSERT INTO %s.oai"+
-			" (uuid, partition, datestamp, setspec, metadata, dirty, signature, source, access, catalog, seq)"+
-			" VALUES($1, $2, NOW(), $3, $4, false, $5, $6, $7, $8, NEXTVAL('lastchange'))", f.dbschema)
+		sqlstr := fmt.Sprintf("INSERT INTO %s.core"+
+			" (uuid, partition, datestamp, setspec, metadata, signature, source, access, catalog, seq)"+
+			" VALUES($1, $2, NOW(), $3, $4, $5, $6, $7, $8, NEXTVAL('lastchange'))", f.dbschema)
 		params := []interface{}{
 			uuidStr,        // uuid
 			partition.Name, // partition
@@ -239,6 +239,15 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 		if num == 0 {
 			return "", errors.Wrap(err, "no affected rows")
 		}
+		sqlstr = fmt.Sprintf("INSERT INTO %s.core_dirty"+
+			" (uuid)"+
+			" VALUES($1)", f.dbschema)
+		params = []interface{}{
+			uuidStr, // uuid
+		}
+		if _, err = f.db.Exec(sqlstr, params...); err != nil {
+			return "", errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
+		}
 		f.log.Infof("new item [%s] inserted", uuidStr)
 		return uuidStr, nil
 
@@ -260,6 +269,15 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 			equalStrings(catalog, data.Catalog) &&
 			access == data.Access {
 			f.log.Infof("no update needed for item [%v]", uuidStr)
+			sqlstr = fmt.Sprintf("INSERT INTO %s.core_dirty"+
+				" (uuid)"+
+				" VALUES($1)", f.dbschema)
+			params = []interface{}{
+				uuidStr, // uuid
+			}
+			if _, err = f.db.Exec(sqlstr, params...); err != nil {
+				return "", errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
+			}
 			return uuidStr, nil
 		}
 
@@ -268,8 +286,8 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 			return "", errors.Wrapf(err, "[%s] cannot unmarshal data core", uuidStr)
 		}
 
-		sqlstr = fmt.Sprintf("UPDATE %s.oai"+
-			" SET setspec=$1, metadata=$2, dirty=FALSE, access=$3, catalog=$4, deleted=false"+
+		sqlstr = fmt.Sprintf("UPDATE %s.core"+
+			" SET setspec=$1, metadata=$2, access=$3, catalog=$4, deleted=false"+
 			" WHERE uuid=$5", f.dbschema)
 		params := []interface{}{
 			pq.Array(data.Set),
@@ -279,6 +297,15 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 			uuidStr}
 		if _, err := f.db.Exec(sqlstr, params...); err != nil {
 			return "", errors.Wrapf(err, "[%s] cannot update [%s] - [%v]", uuidStr, sqlstr, params)
+		}
+		sqlstr = fmt.Sprintf("INSERT INTO %s.core_dirty"+
+			" (uuid)"+
+			" VALUES($1)", f.dbschema)
+		params = []interface{}{
+			uuidStr, // uuid
+		}
+		if _, err = f.db.Exec(sqlstr, params...); err != nil {
+			return "", errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
 		f.log.Infof("item [%s] updated", uuidStr)
 		return uuidStr, nil
@@ -291,7 +318,7 @@ func (f *Fair) StartUpdate(partitionName string, source string) error {
 	if err != nil {
 		return errors.Wrapf(err, "cannot get source %s", source)
 	}
-	sqlstr := fmt.Sprintf("UPDATE %s.oai SET dirty=TRUE WHERE deleted=FALSE AND partition=$1 AND source=$2", f.dbschema)
+	sqlstr := fmt.Sprintf("DELETE FROM %s.core_dirty WHERE uuid IN (SELECT uuid FROM %s.core WHERE partition=$1 AND source=$2)", f.dbschema, f.dbschema)
 	params := []interface{}{partitionName, src.ID}
 	if _, err := f.db.Exec(sqlstr, params...); err != nil {
 		return errors.Wrapf(err, "cannot execute dirty update - %s - %v", sqlstr, params)
@@ -300,16 +327,19 @@ func (f *Fair) StartUpdate(partitionName string, source string) error {
 }
 
 func (f *Fair) AbortUpdate(partitionName string, source string) error {
-	src, err := f.GetSourceByName(source)
-	if err != nil {
-		return errors.Wrapf(err, "cannot get source %s", source)
-	}
-	sqlstr := fmt.Sprintf("UPDATE %s.oai SET dirty=FALSE WHERE deleted=FALSE AND partition=$1 AND source=$2", f.dbschema)
-	params := []interface{}{partitionName, src.ID}
-	if _, err := f.db.Exec(sqlstr, params...); err != nil {
-		return errors.Wrapf(err, "cannot execute dirty reset update - %s - %v", sqlstr, params)
-	}
-	return nil
+	return f.StartUpdate(partitionName, source)
+	/*
+		src, err := f.GetSourceByName(source)
+		if err != nil {
+			return errors.Wrapf(err, "cannot get source %s", source)
+		}
+		sqlstr := fmt.Sprintf("UPDATE %s.core SET dirty=FALSE WHERE deleted=FALSE AND partition=$1 AND source=$2", f.dbschema)
+		params := []interface{}{partitionName, src.ID}
+		if _, err := f.db.Exec(sqlstr, params...); err != nil {
+			return errors.Wrapf(err, "cannot execute dirty reset update - %s - %v", sqlstr, params)
+		}
+		return nil
+	*/
 }
 
 func (f *Fair) EndUpdate(partitionName string, source string) error {
@@ -317,11 +347,10 @@ func (f *Fair) EndUpdate(partitionName string, source string) error {
 	if err != nil {
 		return errors.Wrapf(err, "cannot get source %s", source)
 	}
-	sqlstr := fmt.Sprintf("UPDATE %s.oai SET deleted=TRUE, dirty=FALSE WHERE dirty=TRUE AND partition=$1 AND source=$2", f.dbschema)
+	sqlstr := fmt.Sprintf("UPDATE %s.core SET deleted=TRUE WHERE partition=$1 AND source=$2 AND uuid NOT IN (SELECT uuid FROM %s.core_dirty)", f.dbschema, f.dbschema)
 	params := []interface{}{partitionName, src.ID}
 	if _, err := f.db.Exec(sqlstr, params...); err != nil {
 		return errors.Wrapf(err, "cannot execute dirty update - %s - %v", sqlstr, params)
 	}
-	return nil
-
+	return f.StartUpdate(partitionName, source)
 }
