@@ -41,9 +41,17 @@ type SSHTunnel struct {
 	Tunnel         []Tunnel `toml:"tunnel"`
 }
 
+type OAI struct {
+	SignatureDomain string   `toml:"signaturedomain"`
+	RepositoryName  string   `toml:"repositoryname"`
+	AdminEmail      []string `toml:"adminemail"`
+	Description     string   `toml:"description"`
+}
+
 type Partition struct {
 	Name    string   `toml:"name"`
 	AddrExt string   `toml:"addrext"`
+	OAI     OAI      `toml:"oai"`
 	JWTKey  string   `toml:"jwtkey"`
 	JWTAlg  []string `toml:"jwtalg"`
 }

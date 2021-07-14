@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"sort"
 	"sync"
+	"time"
 )
 
 type Source struct {
@@ -19,6 +20,7 @@ type Source struct {
 	Name        string
 	DetailURL   string
 	Description string
+	OAIDomain   string
 }
 
 type DataAccess string
@@ -43,6 +45,9 @@ type ItemData struct {
 	Catalog   []string    `json:"catalog"`
 	Access    DataAccess  `json:"access"`
 	Deleted   bool        `json:"deleted"`
+	Seq       int64
+	UUID      string
+	Datestamp time.Time
 }
 
 type SourceData struct {
@@ -89,8 +94,16 @@ func (f *Fair) AddPartition(p *Partition) {
 	f.partitions[p.Name] = p
 }
 
+func (f *Fair) GetPartition(name string) (*Partition, error) {
+	p, ok := f.partitions[name]
+	if !ok {
+		return nil, errors.New(fmt.Sprintf("cannot find partition %s", name))
+	}
+	return p, nil
+}
+
 func (f *Fair) LoadSources() error {
-	sqlstr := fmt.Sprintf("SELECT sourceid, name, detailurl, description FROM %s.source", f.dbschema)
+	sqlstr := fmt.Sprintf("SELECT sourceid, name, detailurl, description, oai_domain FROM %s.source", f.dbschema)
 	rows, err := f.db.Query(sqlstr)
 	if err != nil {
 		return errors.Wrapf(err, "cannot execute %s", sqlstr)
@@ -101,7 +114,7 @@ func (f *Fair) LoadSources() error {
 	f.sources = make(map[int64]*Source)
 	for rows.Next() {
 		src := &Source{}
-		if err := rows.Scan(&src.ID, &src.Name, &src.DetailURL, &src.Description); err != nil {
+		if err := rows.Scan(&src.ID, &src.Name, &src.DetailURL, &src.Description, &src.OAIDomain); err != nil {
 			return errors.Wrap(err, "cannot scan values")
 		}
 		f.sources[src.ID] = src
@@ -130,13 +143,124 @@ func (f *Fair) GetSourceByName(name string) (*Source, error) {
 	return nil, errors.New(fmt.Sprintf("source %s not found", name))
 }
 
+func (f *Fair) GetSourceByOAIDomain(name string) (*Source, error) {
+	f.sourcesMutex.RLock()
+	defer f.sourcesMutex.RUnlock()
+	for _, src := range f.sources {
+		if src.OAIDomain == name {
+			return src, nil
+		}
+	}
+	return nil, errors.New(fmt.Sprintf("source %s not found", name))
+}
+
+func (f *Fair) GetMinimumDatestamp(partitionName string) (time.Time, error) {
+	partition, ok := f.partitions[partitionName]
+	if !ok {
+		return time.Time{}, errors.New(fmt.Sprintf("partition %s not found", partitionName))
+	}
+	sqlstr := fmt.Sprintf("SELECT MIN(datestamp) AS mindate"+
+		" FROM %s.core"+
+		" WHERE partition=$1", f.dbschema)
+	params := []interface{}{partition.Name}
+	var datestamp time.Time
+	if err := f.db.QueryRow(sqlstr, params...).Scan(&datestamp); err != nil {
+		if err != sql.ErrNoRows {
+			return time.Time{}, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
+		}
+		return time.Now(), nil
+	}
+	return datestamp, nil
+}
+
+func (f *Fair) getItems(sqlstr string, params []interface{}, limit, offset int64, fn func(item *ItemData) error) error {
+	if limit > 0 {
+		sqlstr += fmt.Sprintf(" LIMIT %v", limit)
+	}
+	if offset > 0 {
+		sqlstr += fmt.Sprintf(" OFFSET %v", offset)
+	}
+	rows, err := f.db.Query(sqlstr, params...)
+	if err != nil {
+		if err != sql.ErrNoRows {
+			return errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
+		}
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var uuidStr string
+		var metaStr string
+		var set, catalog []string
+		var accessStr string
+		var signature string
+		var sourceStr string
+		var deleted bool
+		var seq int64
+		var datestamp time.Time
+		if err := rows.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &sourceStr, &deleted, &seq, &datestamp); err != nil {
+			return errors.Wrapf(err, "cannot scan result of [%s] - [%v]", sqlstr, params)
+		}
+		data := &ItemData{
+			UUID:      uuidStr,
+			Source:    sourceStr,
+			Signature: signature,
+			Metadata:  myfair.Core{},
+			Set:       set,
+			Catalog:   catalog,
+			Deleted:   deleted,
+			Seq:       seq,
+		}
+		var ok bool
+		data.Access, ok = DataAccessReverse[accessStr]
+		if !ok {
+			return errors.New(fmt.Sprintf("[%s] invalid access type %s", uuidStr, accessStr))
+		}
+		if err := json.Unmarshal([]byte(metaStr), &data.Metadata); err != nil {
+			return errors.Wrapf(err, "[%s] cannot unmarshal core [%s]", uuidStr, metaStr)
+		}
+		if err := fn(data); err != nil {
+			return errors.Wrap(err, "error calling fn")
+		}
+	}
+	return nil
+
+}
+
+func (f *Fair) GetItemsDatestamp(partitionName string, datestamp time.Time, limit, offset int64, fn func(item *ItemData) error) error {
+	partition, ok := f.partitions[partitionName]
+	if !ok {
+		return errors.New(fmt.Sprintf("partition %s not found", partitionName))
+	}
+
+	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, signature, source, deleted, seq, datestamp"+
+		" FROM %s.core"+
+		" WHERE partition=$1 AND datestamp>=$2"+
+		" ORDER BY seq ASC", f.dbschema)
+	params := []interface{}{partition.Name, datestamp}
+	return f.getItems(sqlstr, params, limit, offset, fn)
+}
+
+func (f *Fair) GetItemsSeq(partitionName string, seq int64, limit, offset int64, fn func(item *ItemData) error) error {
+	partition, ok := f.partitions[partitionName]
+	if !ok {
+		return errors.New(fmt.Sprintf("partition %s not found", partitionName))
+	}
+
+	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, signature, source, deleted, seq, datestamp"+
+		" FROM %s.core"+
+		" WHERE partition=$1 AND seq>$2"+
+		" ORDER BY seq ASC", f.dbschema)
+	params := []interface{}{partition.Name, seq}
+	return f.getItems(sqlstr, params, limit, offset, fn)
+}
+
 func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 	partition, ok := f.partitions[partitionName]
 	if !ok {
 		return nil, errors.New(fmt.Sprintf("partition %s not found", partitionName))
 	}
 
-	sqlstr := fmt.Sprintf("SELECT metadata, setspec, catalog, access, signature, source, deleted"+
+	sqlstr := fmt.Sprintf("SELECT metadata, setspec, catalog, access, signature, source, deleted, seq, datestamp"+
 		" FROM %s.core"+
 		" WHERE partition=$1 AND uuid=$2", f.dbschema)
 	params := []interface{}{partition.Name, uuidStr}
@@ -148,19 +272,24 @@ func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 	var signature string
 	var sourceStr string
 	var deleted bool
-	if err := row.Scan(&metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &sourceStr, &deleted); err != nil {
+	var seq int64
+	var datestamp time.Time
+	if err := row.Scan(&metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &sourceStr, &deleted, &seq, &datestamp); err != nil {
 		if err != sql.ErrNoRows {
 			return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
 		return nil, nil
 	}
 	data := &ItemData{
+		UUID:      uuidStr,
 		Source:    sourceStr,
 		Signature: signature,
 		Metadata:  myfair.Core{},
 		Set:       set,
 		Catalog:   catalog,
 		Deleted:   deleted,
+		Seq:       seq,
+		Datestamp: datestamp,
 	}
 	data.Access, ok = DataAccessReverse[accessStr]
 	if !ok {

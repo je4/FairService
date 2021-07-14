@@ -15,6 +15,11 @@ linktokenexp = "1h"
     addrext = "https://localhost:8443/mediathek"
     jwtkey = "geheim"
     jwtalg = ["HS256","HS384","HS512"]
+    [partition.oai]
+        signaturedomain = "mediathek.hgk.fhnw.ch"
+        repositoryname = "Repository of Mediathek HGK FHNW"
+        adminemail = ["tabea.lurk@fhnw.ch"]
+        description = "This repository contains researchdata and OER created at Basel University of Art and Design FHNW"
 
 [database]
     servertype = "postgres"

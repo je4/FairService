@@ -52,6 +52,10 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 	router := mux.NewRouter()
 
 	router.Handle(
+		"/{partition}/oai2",
+		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.oaiHandler) }()),
+	).Methods("GET")
+	router.Handle(
 		"/{partition}/item",
 		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.createHandler) }()),
 	).Methods("POST")
