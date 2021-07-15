@@ -227,7 +227,7 @@ func (f *Fair) getItems(sqlstr string, params []interface{}, limit, offset int64
 
 }
 
-func (f *Fair) GetItemsDatestamp(partitionName string, datestamp time.Time, access []DataAccess, limit, offset int64, fn func(item *ItemData) error) error {
+func (f *Fair) GetItemsDatestamp(partitionName string, datestamp, until time.Time, access []DataAccess, limit, offset int64, fn func(item *ItemData) error) error {
 	partition, ok := f.partitions[partitionName]
 	if !ok {
 		return errors.New(fmt.Sprintf("partition %s not found", partitionName))
@@ -240,16 +240,20 @@ func (f *Fair) GetItemsDatestamp(partitionName string, datestamp time.Time, acce
 	if len(access) > 0 {
 		var accessList []string
 		for key, acc := range access {
-			accessList = append(accessList, fmt.Sprintf("$%v=%s", key+3, acc))
+			accessList = append(accessList, fmt.Sprintf("access=$%v", key+3))
 			params = append(params, acc)
 		}
 		sqlstr += fmt.Sprintf(" AND (%s)", strings.Join(accessList, " OR "))
+	}
+	if !until.Equal(time.Time{}) {
+		params = append(params, until)
+		sqlstr += fmt.Sprintf(" AND datestamp<=$%v", len(params))
 	}
 	sqlstr += " ORDER BY seq ASC"
 	return f.getItems(sqlstr, params, limit, offset, fn)
 }
 
-func (f *Fair) GetItemsSeq(partitionName string, seq int64, access []DataAccess, limit, offset int64, fn func(item *ItemData) error) error {
+func (f *Fair) GetItemsSeq(partitionName string, seq int64, until time.Time, access []DataAccess, limit, offset int64, fn func(item *ItemData) error) error {
 	partition, ok := f.partitions[partitionName]
 	if !ok {
 		return errors.New(fmt.Sprintf("partition %s not found", partitionName))
@@ -266,6 +270,10 @@ func (f *Fair) GetItemsSeq(partitionName string, seq int64, access []DataAccess,
 			params = append(params, acc)
 		}
 		sqlstr += fmt.Sprintf(" AND (%s)", strings.Join(accessList, " OR "))
+	}
+	if !until.Equal(time.Time{}) {
+		params = append(params, until)
+		sqlstr += fmt.Sprintf(" AND datestamp<=$%v", len(params))
 	}
 	sqlstr += " ORDER BY seq ASC"
 	return f.getItems(sqlstr, params, limit, offset, fn)

@@ -8,6 +8,7 @@ import (
 	"github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/FairService/v2/pkg/model/dcmi"
 	"github.com/je4/FairService/v2/pkg/service/oai"
+	"github.com/pkg/errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -61,7 +62,7 @@ func (s *Server) oaiHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	switch verb {
-	case "ListIdentifier":
+	case "ListIdentifiers":
 		var fromStr, untilStr, set, resumptionToken, metadataPrefix string
 		for key, vals := range values {
 			if len(vals) < 1 {
@@ -99,7 +100,7 @@ func (s *Server) oaiHandler(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 		}
-		s.oaiHandlerListIdentifier(w, req, partition, from, until, set, resumptionToken, metadataPrefix)
+		s.oaiHandlerListIdentifiers(w, req, partition, from, until, set, resumptionToken, metadataPrefix)
 	case "GetRecord":
 		var identifier, metadataPrefix string
 		for key, vals := range values {
@@ -228,7 +229,7 @@ type resumptionData struct {
 	seq            int64
 }
 
-func (s *Server) oaiHandlerListIdentifier(w http.ResponseWriter, req *http.Request, partition *fair.Partition, from, until time.Time, set, resumptionToken, metadataPrefix string) {
+func (s *Server) oaiHandlerListIdentifiers(w http.ResponseWriter, req *http.Request, partition *fair.Partition, from, until time.Time, set, resumptionToken, metadataPrefix string) {
 	var rData *resumptionData
 	if resumptionToken != "" {
 		data, err := s.resumptionTokenCache.Get(resumptionToken)
@@ -242,6 +243,7 @@ func (s *Server) oaiHandlerListIdentifier(w http.ResponseWriter, req *http.Reque
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(fmt.Sprintf("invalid resumption data: %v", data)))
 			s.log.Errorf("invalid resumption data: %v", data)
+			s.resumptionTokenCache.Remove(resumptionToken)
 			return
 		}
 		s.resumptionTokenCache.Remove(resumptionToken)
@@ -255,25 +257,81 @@ func (s *Server) oaiHandlerListIdentifier(w http.ResponseWriter, req *http.Reque
 		}
 	}
 
+	listIdentifiers := &oai.ListIdentifiers{
+		Header:          []*oai.RecordHeader{},
+		ResumptionToken: nil,
+	}
+
+	var count int64
+
+	itemFunc := func(item *fair.ItemData) error {
+		if count < partition.OAIPagesize {
+			header := &oai.RecordHeader{
+				Identifier: fmt.Sprintf("oai:%s:%s", partition.OAISignatureDomain, item.UUID),
+				Datestamp:  item.Datestamp.Format("2006-01-02T15:04:05Z"),
+				SetSpec:    item.Set,
+			}
+			listIdentifiers.Header = append(listIdentifiers.Header, header)
+		} else {
+			rData.seq = item.Seq
+			uuidData, err := uuid.NewUUID()
+			if err != nil {
+				return errors.Wrapf(err, "cannot create uuid")
+			}
+			uuidStr := uuidData.String()
+			listIdentifiers.ResumptionToken = &oai.ResumptionToken{
+				ExpirationDate: time.Now().Add(partition.ResumptionTokenTimeout).Format("2006-01-02T15:04:05Z"),
+				Value:          uuidStr,
+			}
+			if err := s.resumptionTokenCache.SetWithExpire(uuidStr, rData, partition.ResumptionTokenTimeout); err != nil {
+				return errors.Wrapf(err, "cannot store resumption data")
+			}
+
+		}
+		count++
+		return nil
+	}
+
 	if rData.seq > 0 {
-		s.fair.GetItemsSeq(partition.Name,
+		if err := s.fair.GetItemsSeq(partition.Name,
 			rData.seq,
+			until,
 			[]fair.DataAccess{fair.DataAccessPublic, fair.DataAccessPublic},
 			partition.OAIPagesize+1,
 			0,
-			func(item *fair.ItemData) error {
+			itemFunc); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(fmt.Sprintf("cannot read content from database: %v", err)))
+			return
+		}
 
-				return nil
-			},
-		)
+	} else {
+		if err := s.fair.GetItemsDatestamp(partition.Name,
+			rData.from,
+			rData.until,
+			[]fair.DataAccess{fair.DataAccessPublic, fair.DataAccessClosedData},
+			partition.OAIPagesize+1,
+			0,
+			itemFunc); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(fmt.Sprintf("cannot read content from database: %v", err)))
+			return
+		}
 	}
 
-	token, err := uuid.NewUUID()
-	if err != nil {
-		sendError(w, oai.ErrorCodeBadVerb, fmt.Sprintf("cannot create resumption token: %v", err), "ListenIdentifier", "", "", partition.AddrExt+"/"+oai.APIPATH)
-		return
+	pmh := &oai.OAIPMH{}
+	pmh.InitNamespace()
+	pmh.ResponseDate = time.Now().Format("2006-01-02T15:04:05Z")
+	pmh.Request = &oai.Request{
+		Verb:           "ListIdentifiers",
+		MetadataPrefix: metadataPrefix,
+		Value:          partition.AddrExt + "/" + oai.APIPATH,
 	}
-	resumptionToken = token.String()
-	s.resumptionTokenCache.SetWithExpire(resumptionToken, rData, partition.ResumptionTokenTimeout)
+	pmh.ListIdentifiers = listIdentifiers
+	enc := xml.NewEncoder(w)
+	enc.Indent("", "  ")
+	if err := enc.Encode(pmh); err != nil {
+		s.log.Error("cannot encode pmh - %v: %v", pmh, err)
+	}
 
 }
