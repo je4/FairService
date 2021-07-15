@@ -11,6 +11,7 @@ import (
 	"github.com/op/go-logging"
 	"reflect"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -226,7 +227,7 @@ func (f *Fair) getItems(sqlstr string, params []interface{}, limit, offset int64
 
 }
 
-func (f *Fair) GetItemsDatestamp(partitionName string, datestamp time.Time, limit, offset int64, fn func(item *ItemData) error) error {
+func (f *Fair) GetItemsDatestamp(partitionName string, datestamp time.Time, access []DataAccess, limit, offset int64, fn func(item *ItemData) error) error {
 	partition, ok := f.partitions[partitionName]
 	if !ok {
 		return errors.New(fmt.Sprintf("partition %s not found", partitionName))
@@ -234,13 +235,21 @@ func (f *Fair) GetItemsDatestamp(partitionName string, datestamp time.Time, limi
 
 	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, signature, source, deleted, seq, datestamp"+
 		" FROM %s.core"+
-		" WHERE partition=$1 AND datestamp>=$2"+
-		" ORDER BY seq ASC", f.dbschema)
+		" WHERE partition=$1 AND datestamp>=$2", f.dbschema)
 	params := []interface{}{partition.Name, datestamp}
+	if len(access) > 0 {
+		var accessList []string
+		for key, acc := range access {
+			accessList = append(accessList, fmt.Sprintf("$%v=%s", key+3, acc))
+			params = append(params, acc)
+		}
+		sqlstr += fmt.Sprintf(" AND (%s)", strings.Join(accessList, " OR "))
+	}
+	sqlstr += " ORDER BY seq ASC"
 	return f.getItems(sqlstr, params, limit, offset, fn)
 }
 
-func (f *Fair) GetItemsSeq(partitionName string, seq int64, limit, offset int64, fn func(item *ItemData) error) error {
+func (f *Fair) GetItemsSeq(partitionName string, seq int64, access []DataAccess, limit, offset int64, fn func(item *ItemData) error) error {
 	partition, ok := f.partitions[partitionName]
 	if !ok {
 		return errors.New(fmt.Sprintf("partition %s not found", partitionName))
@@ -248,9 +257,17 @@ func (f *Fair) GetItemsSeq(partitionName string, seq int64, limit, offset int64,
 
 	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, signature, source, deleted, seq, datestamp"+
 		" FROM %s.core"+
-		" WHERE partition=$1 AND seq>$2"+
-		" ORDER BY seq ASC", f.dbschema)
+		" WHERE partition=$1 AND seq>=$2", f.dbschema)
 	params := []interface{}{partition.Name, seq}
+	if len(access) > 0 {
+		var accessList []string
+		for key, acc := range access {
+			accessList = append(accessList, fmt.Sprintf("$%v=%s", key+3, acc))
+			params = append(params, acc)
+		}
+		sqlstr += fmt.Sprintf(" AND (%s)", strings.Join(accessList, " OR "))
+	}
+	sqlstr += " ORDER BY seq ASC"
 	return f.getItems(sqlstr, params, limit, offset, fn)
 }
 

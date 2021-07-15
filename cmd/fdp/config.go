@@ -42,10 +42,12 @@ type SSHTunnel struct {
 }
 
 type OAI struct {
-	SignatureDomain string   `toml:"signaturedomain"`
-	RepositoryName  string   `toml:"repositoryname"`
-	AdminEmail      []string `toml:"adminemail"`
-	Description     string   `toml:"description"`
+	SignatureDomain        string   `toml:"signaturedomain"`
+	RepositoryName         string   `toml:"repositoryname"`
+	AdminEmail             []string `toml:"adminemail"`
+	Description            string   `toml:"description"`
+	Pagesize               int64    `toml:"pagesize"`
+	ResumptionTokenTimeout duration `toml:"resumptiontokentimeout"`
 }
 
 type Partition struct {
