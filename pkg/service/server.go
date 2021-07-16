@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/tls"
+	"github.com/bluele/gcache"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	fair "github.com/je4/FairService/v2/pkg/fair"
@@ -22,6 +23,8 @@ type Server struct {
 	log          *logging.Logger
 	accessLog    io.Writer
 	fair         *fair.Fair
+
+	resumptionTokenCache gcache.Cache
 }
 
 func NewServer(addr string, log *logging.Logger, fair *fair.Fair, accessLog io.Writer, linkTokenExp time.Duration) (*Server, error) {
@@ -37,12 +40,13 @@ func NewServer(addr string, log *logging.Logger, fair *fair.Fair, accessLog io.W
 	*/
 
 	srv := &Server{
-		host:         host,
-		port:         port,
-		log:          log,
-		accessLog:    accessLog,
-		linkTokenExp: linkTokenExp,
-		fair:         fair,
+		host:                 host,
+		port:                 port,
+		log:                  log,
+		accessLog:            accessLog,
+		linkTokenExp:         linkTokenExp,
+		fair:                 fair,
+		resumptionTokenCache: gcache.New(500).ARC().Build(),
 	}
 
 	return srv, nil

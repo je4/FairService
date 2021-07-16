@@ -12,15 +12,19 @@ type Request struct {
 }
 
 type OAIPMH struct {
-	XMLName           xml.Name   `xml:"OAI-PMH"`
-	NS                string     `xml:"xmlns,attr"`
-	XsiType           string     `xml:"xmlns:xsi,attr"`
-	XsiSchemaLocation string     `xml:"xsi:schemaLocation,attr"`
-	ResponseDate      string     `xml:"responseDate"`
-	Request           *Request   `xml:"request"`
-	Error             *Error     `xml:"error,omitempty"`
-	GetRecord         *GetRecord `xml:"GetRecord,omitempty"`
-	Identify          *Identify  `xml:"Identify,omitempty"`
+	XMLName             xml.Name             `xml:"OAI-PMH"`
+	NS                  string               `xml:"xmlns,attr"`
+	XsiType             string               `xml:"xmlns:xsi,attr"`
+	XsiSchemaLocation   string               `xml:"xsi:schemaLocation,attr"`
+	ResponseDate        string               `xml:"responseDate"`
+	Request             *Request             `xml:"request"`
+	Error               *Error               `xml:"error,omitempty"`
+	GetRecord           *GetRecord           `xml:"GetRecord,omitempty"`
+	Identify            *Identify            `xml:"Identify,omitempty"`
+	ListIdentifiers     *ListIdentifiers     `xml:"ListIdentifiers,omitempty"`
+	ListRecords         *ListRecords         `xml:"ListRecords,omitempty"`
+	ListSets            *ListSets            `xml:"ListSets,omitempty"`
+	ListMetadataFormats *ListMetadataFormats `xml:"ListMetadataFormats,omitempty"`
 }
 
 func (pmh *OAIPMH) InitNamespace() {

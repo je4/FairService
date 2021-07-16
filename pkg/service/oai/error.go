@@ -1,17 +1,22 @@
 package oai
 
-type ErrorCode string
+type ErrorCodeType string
 
 const (
-	ErrorCodeCannotDisseminateFormat ErrorCode = "cannotDisseminateFormat"
-	ErrorCodeIdDoesNotExist          ErrorCode = "idDoesNotExist"
-	ErrorCodeBadArgument             ErrorCode = "badArgument"
-	ErrorCodeBadVerb                 ErrorCode = "badVerb"
-	ErrorCodeNoMetadataFormats       ErrorCode = "noMetadataFormats"
-	ErrorCodeNoRecordsMatch          ErrorCode = "noRecordsMatch"
-	ErrorCodeBadResumptionToken      ErrorCode = "badResumptionToken"
-	ErrorCodeNoSetHierarchy          ErrorCode = "noSetHierarchy"
+	ErrorCodeCannotDisseminateFormat ErrorCodeType = "cannotDisseminateFormat"
+	ErrorCodeIdDoesNotExist          ErrorCodeType = "idDoesNotExist"
+	ErrorCodeBadArgument             ErrorCodeType = "badArgument"
+	ErrorCodeBadVerb                 ErrorCodeType = "badVerb"
+	ErrorCodeNoMetadataFormats       ErrorCodeType = "noMetadataFormats"
+	ErrorCodeNoRecordsMatch          ErrorCodeType = "noRecordsMatch"
+	ErrorCodeBadResumptionToken      ErrorCodeType = "badResumptionToken"
+	ErrorCodeNoSetHierarchy          ErrorCodeType = "noSetHierarchy"
 )
+
+type ErrorCode struct {
+	Code  ErrorCodeType `xml:"code,attr"`
+	Value string        `xml:",chardata"`
+}
 
 type Error struct {
 	Code ErrorCode `xml:"code"`

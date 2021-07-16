@@ -20,6 +20,8 @@ linktokenexp = "1h"
         repositoryname = "Repository of Mediathek HGK FHNW"
         adminemail = ["tabea.lurk@fhnw.ch"]
         description = "This repository contains researchdata and OER created at Basel University of Art and Design FHNW"
+        pagesize = 80
+        resumptiontokentimeout = "3m"
 
 [database]
     servertype = "postgres"

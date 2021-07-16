@@ -91,7 +91,7 @@ func main() {
 
 	var partitions []*fair.Partition
 	for _, pconf := range config.Partition {
-		p, err := fair.NewPartition(pconf.Name, pconf.AddrExt, pconf.OAI.SignatureDomain, pconf.OAI.RepositoryName, pconf.OAI.AdminEmail, pconf.OAI.Description, pconf.JWTKey, pconf.JWTAlg)
+		p, err := fair.NewPartition(pconf.Name, pconf.AddrExt, pconf.OAI.SignatureDomain, pconf.OAI.RepositoryName, pconf.OAI.AdminEmail, pconf.OAI.Description, pconf.OAI.Pagesize, pconf.OAI.ResumptionTokenTimeout.Duration, pconf.JWTKey, pconf.JWTAlg)
 		if err != nil {
 			logger.Panicf("cannot create partition %s: %v", pconf.Name, err)
 			return

@@ -1,10 +1,17 @@
 package oai
 
+type RecordHeaderStatusType string
+
+const (
+	RecordHeaderStatusOK      RecordHeaderStatusType = ""
+	RecordHeaderStatusDeleted RecordHeaderStatusType = "deleted"
+)
+
 type RecordHeader struct {
-	Status     string   `xml:"status,attr,omitempty"`
-	Identifier string   `xml:"identifier"`
-	Datestamp  string   `xml:"datestamp"`
-	SetSpec    []string `xml:"setSpec"`
+	Status     RecordHeaderStatusType `xml:"status,attr,omitempty"`
+	Identifier string                 `xml:"identifier"`
+	Datestamp  string                 `xml:"datestamp"`
+	SetSpec    []string               `xml:"setSpec"`
 }
 
 type RecordAboutProvenanceOriginDescription struct {
