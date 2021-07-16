@@ -28,7 +28,7 @@ type OAIPMH struct {
 }
 
 func (pmh *OAIPMH) InitNamespace() {
-	pmh.NS = "https://www.openarchives.org/OAI/2.0/"
-	pmh.XsiType = "https://www.w3.org/2001/XMLSchema-instance"
-	pmh.XsiSchemaLocation = "https://www.openarchives.org/OAI/2.0/ https://www.openarchives.org/OAI/2.0/OAI-PMH.xsd"
+	pmh.NS = "http://www.openarchives.org/OAI/2.0/"
+	pmh.XsiType = "http://www.w3.org/2001/XMLSchema-instance"
+	pmh.XsiSchemaLocation = "http://www.openarchives.org/OAI/2.0/ http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd"
 }

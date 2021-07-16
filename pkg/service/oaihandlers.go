@@ -30,6 +30,7 @@ func sendError(w http.ResponseWriter, code oai.ErrorCodeType, message, verb, ide
 		MetadataPrefix: metadataPrefix,
 		Value:          baseURL,
 	}
+	w.Write([]byte("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"../../static/oai2.xsl\"?>"))
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	enc.Encode(pmh)
@@ -58,8 +59,7 @@ func (s *Server) oaiHandler(w http.ResponseWriter, req *http.Request) {
 	values := req.URL.Query()
 	verb, ok := getVar("verb", values)
 	if !ok {
-		sendError(w, oai.ErrorCodeBadVerb, fmt.Sprintf("no verb parameter"), "", "", "", partition.AddrExt+"/"+oai.APIPATH)
-		return
+		verb = "Identify"
 	}
 	switch verb {
 	case "ListIdentifiers":
@@ -211,6 +211,7 @@ func (s *Server) oaiHandlerListMetadataFormats(w http.ResponseWriter, req *http.
 		},
 		},
 	}
+	w.Write([]byte("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"../../static/oai2.xsl\"?>"))
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(pmh); err != nil {
@@ -243,6 +244,7 @@ func (s *Server) oaiHandlerIdentify(w http.ResponseWriter, req *http.Request, pa
 		Granularity:       "YYYY-MM-DDThh:mm:ssZ",
 		Compression:       []string{"gzip", "deflate"},
 	}
+	w.Write([]byte("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"../../static/oai2.xsl\"?>"))
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(pmh); err != nil {
@@ -269,6 +271,9 @@ func (s *Server) oaiHandlerGetRecord(w http.ResponseWriter, req *http.Request, p
 		return
 	}
 	metadata := &oai.Metadata{}
+	if metadataPrefix == "" {
+		metadataPrefix = "oai_dc"
+	}
 	switch metadataPrefix {
 	case "oai_dc":
 		dcmiData := &dcmi.DCMI{}
@@ -277,7 +282,7 @@ func (s *Server) oaiHandlerGetRecord(w http.ResponseWriter, req *http.Request, p
 		metadata.OAIDC = dcmiData
 	default:
 		s.log.Infof("invalid metadataPrefix %s", metadataPrefix)
-		sendError(w, oai.ErrorCodeCannotDisseminateFormat, "", "GetRecord", identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
+		sendError(w, oai.ErrorCodeCannotDisseminateFormat, fmt.Sprintf("invalid metadataPrefix %s", metadataPrefix), "GetRecord", identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
 		return
 	}
 	pmh := &oai.OAIPMH{}
@@ -298,6 +303,7 @@ func (s *Server) oaiHandlerGetRecord(w http.ResponseWriter, req *http.Request, p
 		Metadata: metadata,
 		About:    nil,
 	}}}
+	w.Write([]byte("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"../../static/oai2.xsl\"?>"))
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(pmh); err != nil {
@@ -444,6 +450,7 @@ func (s *Server) oaiHandlerListIdentifiers(w http.ResponseWriter, req *http.Requ
 		Value:          partition.AddrExt + "/" + oai.APIPATH,
 	}
 	pmh.ListIdentifiers = listIdentifiers
+	w.Write([]byte("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"../../static/oai2.xsl\"?>"))
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(pmh); err != nil {
@@ -453,7 +460,9 @@ func (s *Server) oaiHandlerListIdentifiers(w http.ResponseWriter, req *http.Requ
 }
 
 func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request, partition *fair.Partition, from, until time.Time, set, resumptionToken, metadataPrefix string) {
-
+	if metadataPrefix == "" {
+		metadataPrefix = "oai_dc"
+	}
 	switch metadataPrefix {
 	case "oai_dc":
 	default:
@@ -604,6 +613,7 @@ func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request,
 		Value:          partition.AddrExt + "/" + oai.APIPATH,
 	}
 	pmh.ListRecords = listRecords
+	w.Write([]byte("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"../../static/oai2.xsl\"?>"))
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(pmh); err != nil {
@@ -639,6 +649,7 @@ func (s *Server) oaiHandlerListSets(w http.ResponseWriter, req *http.Request, pa
 		Value: partition.AddrExt + "/" + oai.APIPATH,
 	}
 	pmh.ListSets = listSets
+	w.Write([]byte("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"../../static/oai2.xsl\"?>"))
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(pmh); err != nil {

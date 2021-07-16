@@ -2,7 +2,7 @@ package dcmi
 
 type DCMI struct {
 	OAI_DCNS          string `xml:"xmlns:oai_dc,attr"`
-	DCNS              string `xml:"xmlns:dc"`
+	DCNS              string `xml:"xmlns:dc,attr"`
 	XsiType           string `xml:"xmlns:xsi,attr"`
 	XsiSchemaLocation string `xml:"xsi:schemaLocation,attr"`
 	Type              Type   `xml:"dc:type"`
@@ -65,10 +65,10 @@ type DCMI struct {
 }
 
 func (dcmi *DCMI) InitNamespace() {
-	dcmi.OAI_DCNS = "https://www.openarchives.org/OAI/2.0/oai_dc/"
-	dcmi.DCNS = "https://purl.org/dc/elements/1.1/"
-	dcmi.XsiType = "https://www.w3.org/2001/XMLSchema-instance"
-	dcmi.XsiSchemaLocation = "https://www.openarchives.org/OAI/2.0/oai_dc/ https://www.openarchives.org/OAI/2.0/oai_dc.xsd"
+	dcmi.OAI_DCNS = "http://www.openarchives.org/OAI/2.0/oai_dc/"
+	dcmi.DCNS = "http://purl.org/dc/elements/1.1/"
+	dcmi.XsiType = "http://www.w3.org/2001/XMLSchema-instance"
+	dcmi.XsiSchemaLocation = "http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd"
 }
 
 /*
