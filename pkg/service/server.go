@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/tls"
+	"embed"
 	"github.com/bluele/gcache"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -11,10 +12,14 @@ import (
 	"github.com/op/go-logging"
 	"github.com/pkg/errors"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"time"
 )
+
+//go:embed static
+var staticFS embed.FS
 
 type Server struct {
 	host, port   string
@@ -54,6 +59,15 @@ func NewServer(addr string, log *logging.Logger, fair *fair.Fair, accessLog io.W
 
 func (s *Server) ListenAndServe(cert, key string) (err error) {
 	router := mux.NewRouter()
+
+	fsys, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		return errors.Wrap(err, "cannot get subtree of embedded static")
+	}
+	httpStaticServer := http.FileServer(http.FS(fsys))
+	router.PathPrefix("/static").Handler(
+		handlers.CompressHandler(http.StripPrefix("/static", httpStaticServer)),
+	).Methods("GET")
 
 	router.Handle(
 		"/{partition}/oai2",
