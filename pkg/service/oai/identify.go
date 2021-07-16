@@ -8,4 +8,5 @@ type Identify struct {
 	AdminEmail        []string `xml:"adminEmail"`
 	DeletedRecord     string   `xml:"deletedRecord"`
 	Granularity       string   `xml:"granularity"`
+	Compression       []string `xml:"compression,omitempty"`
 }

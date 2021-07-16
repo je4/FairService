@@ -174,7 +174,19 @@ func (f *Fair) GetMinimumDatestamp(partitionName string) (time.Time, error) {
 	return datestamp, nil
 }
 
-func (f *Fair) getItems(sqlstr string, params []interface{}, limit, offset int64, fn func(item *ItemData) error) error {
+func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int64, completeListSize *int64, fn func(item *ItemData) error) error {
+	if completeListSize != nil {
+		sqlstr := fmt.Sprintf("SELECT COUNT(*) AS num"+
+			" FROM %s.core"+
+			" WHERE %s", f.dbschema, sqlWhere)
+		if err := f.db.QueryRow(sqlstr, params...).Scan(completeListSize); err != nil {
+			return errors.Wrapf(err, "cannot get number of result items [%s] - [%v]", sqlstr, params)
+		}
+	}
+	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, signature, source, deleted, seq, datestamp"+
+		" FROM %s.core"+
+		" WHERE %s"+
+		" ORDER BY seq ASC", f.dbschema, sqlWhere)
 	if limit > 0 {
 		sqlstr += fmt.Sprintf(" LIMIT %v", limit)
 	}
@@ -210,6 +222,7 @@ func (f *Fair) getItems(sqlstr string, params []interface{}, limit, offset int64
 			Catalog:   catalog,
 			Deleted:   deleted,
 			Seq:       seq,
+			Datestamp: datestamp,
 		}
 		var ok bool
 		data.Access, ok = DataAccessReverse[accessStr]
@@ -227,15 +240,13 @@ func (f *Fair) getItems(sqlstr string, params []interface{}, limit, offset int64
 
 }
 
-func (f *Fair) GetItemsDatestamp(partitionName string, datestamp, until time.Time, access []DataAccess, limit, offset int64, fn func(item *ItemData) error) error {
+func (f *Fair) GetItemsDatestamp(partitionName string, datestamp, until time.Time, access []DataAccess, limit, offset int64, completeListSize *int64, fn func(item *ItemData) error) error {
 	partition, ok := f.partitions[partitionName]
 	if !ok {
 		return errors.New(fmt.Sprintf("partition %s not found", partitionName))
 	}
 
-	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, signature, source, deleted, seq, datestamp"+
-		" FROM %s.core"+
-		" WHERE partition=$1 AND datestamp>=$2", f.dbschema)
+	sqlWhere := "partition=$1 AND datestamp>=$2"
 	params := []interface{}{partition.Name, datestamp}
 	if len(access) > 0 {
 		var accessList []string
@@ -243,40 +254,36 @@ func (f *Fair) GetItemsDatestamp(partitionName string, datestamp, until time.Tim
 			accessList = append(accessList, fmt.Sprintf("access=$%v", key+3))
 			params = append(params, acc)
 		}
-		sqlstr += fmt.Sprintf(" AND (%s)", strings.Join(accessList, " OR "))
+		sqlWhere += fmt.Sprintf(" AND (%s)", strings.Join(accessList, " OR "))
 	}
 	if !until.Equal(time.Time{}) {
 		params = append(params, until)
-		sqlstr += fmt.Sprintf(" AND datestamp<=$%v", len(params))
+		sqlWhere += fmt.Sprintf(" AND datestamp<=$%v", len(params))
 	}
-	sqlstr += " ORDER BY seq ASC"
-	return f.getItems(sqlstr, params, limit, offset, fn)
+	return f.getItems(sqlWhere, params, limit, offset, completeListSize, fn)
 }
 
-func (f *Fair) GetItemsSeq(partitionName string, seq int64, until time.Time, access []DataAccess, limit, offset int64, fn func(item *ItemData) error) error {
+func (f *Fair) GetItemsSeq(partitionName string, seq int64, until time.Time, access []DataAccess, limit, offset int64, completeListSize *int64, fn func(item *ItemData) error) error {
 	partition, ok := f.partitions[partitionName]
 	if !ok {
 		return errors.New(fmt.Sprintf("partition %s not found", partitionName))
 	}
 
-	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, signature, source, deleted, seq, datestamp"+
-		" FROM %s.core"+
-		" WHERE partition=$1 AND seq>=$2", f.dbschema)
+	sqlWhere := "partition=$1 AND seq>=$2"
 	params := []interface{}{partition.Name, seq}
 	if len(access) > 0 {
 		var accessList []string
 		for key, acc := range access {
-			accessList = append(accessList, fmt.Sprintf("$%v=%s", key+3, acc))
+			accessList = append(accessList, fmt.Sprintf("access=$%v", key+3))
 			params = append(params, acc)
 		}
-		sqlstr += fmt.Sprintf(" AND (%s)", strings.Join(accessList, " OR "))
+		sqlWhere += fmt.Sprintf(" AND (%s)", strings.Join(accessList, " OR "))
 	}
 	if !until.Equal(time.Time{}) {
 		params = append(params, until)
-		sqlstr += fmt.Sprintf(" AND datestamp<=$%v", len(params))
+		sqlWhere += fmt.Sprintf(" AND datestamp<=$%v", len(params))
 	}
-	sqlstr += " ORDER BY seq ASC"
-	return f.getItems(sqlstr, params, limit, offset, fn)
+	return f.getItems(sqlWhere, params, limit, offset, completeListSize, fn)
 }
 
 func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
@@ -367,8 +374,8 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 			return "", errors.Wrapf(err, "cannot marshal core data [%v]", data.Metadata)
 		}
 		sqlstr := fmt.Sprintf("INSERT INTO %s.core"+
-			" (uuid, partition, datestamp, setspec, metadata, signature, source, access, catalog, seq)"+
-			" VALUES($1, $2, NOW(), $3, $4, $5, $6, $7, $8, NEXTVAL('lastchange'))", f.dbschema)
+			" (uuid, partition, datestamp, setspec, metadata, signature, source, access, catalog, seq, deleted)"+
+			" VALUES($1, $2, NOW(), $3, $4, $5, $6, $7, $8, NEXTVAL('lastchange')), false", f.dbschema)
 		params := []interface{}{
 			uuidStr,        // uuid
 			partition.Name, // partition
@@ -465,6 +472,26 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 		return uuidStr, nil
 	}
 
+}
+
+func (f *Fair) GetSets() (map[string]string, error) {
+	sqlstr := fmt.Sprintf("SELECT s.setspec, s.setname"+
+		" FROM (SELECT DISTINCT unnest(setspec) AS setspecx FROM %s.core) specs"+
+		" LEFT JOIN %s.set s ON s.setspec=setspecx", f.dbschema, f.dbschema)
+	rows, err := f.db.Query(sqlstr)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot query sets %s", sqlstr)
+	}
+	var sets map[string]string = make(map[string]string)
+	defer rows.Close()
+	for rows.Next() {
+		var setspec, setname string
+		if err := rows.Scan(&setspec, &setname); err != nil {
+			return nil, errors.Wrapf(err, "cannot scan sets query result - %s", sqlstr)
+		}
+		sets[setspec] = setname
+	}
+	return sets, nil
 }
 
 func (f *Fair) StartUpdate(partitionName string, source string) error {
