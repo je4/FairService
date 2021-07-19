@@ -624,7 +624,7 @@ func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request,
 
 // todo: add paging with resumption token
 func (s *Server) oaiHandlerListSets(w http.ResponseWriter, req *http.Request, partition *fair.Partition) {
-	sets, err := s.fair.GetSets()
+	sets, err := s.fair.GetSets(partition.Name)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(fmt.Sprintf("cannot read sets from database: %v", err)))
