@@ -18,7 +18,9 @@ import (
 	"time"
 )
 
-//go:embed static
+//go:embed static/*
+//go:embed static/js/*
+//go:embed static/img/*
 var staticFS embed.FS
 
 type Server struct {
