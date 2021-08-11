@@ -11,8 +11,8 @@ certpem = "auto"
 linktokenexp = "1h"
 
 [[partition]]
-    name = "mediathek"
-    addrext = "https://localhost:8443/mediathek"
+    name = "repo"
+    addrext = "https://localhost:8443/repo"
     jwtkey = "geheim"
     jwtalg = ["HS256","HS384","HS512"]
     [partition.oai]

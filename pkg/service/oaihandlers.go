@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/je4/FairService/v2/pkg/fair"
+	"github.com/je4/FairService/v2/pkg/model/datacite"
 	"github.com/je4/FairService/v2/pkg/model/dcmi"
 	"github.com/je4/FairService/v2/pkg/service/oai"
 	"github.com/pkg/errors"
@@ -14,6 +15,9 @@ import (
 	"strings"
 	"time"
 )
+
+// const STYLESHEET = "../../static/oai2.xsl"
+const STYLESHEET = "../../static/dspace.xsl"
 
 func sendError(w http.ResponseWriter, code oai.ErrorCodeType, message, verb, identifier, metadataPrefix, baseURL string) {
 	w.Header().Set("Content-type", "text/xml")
@@ -30,7 +34,7 @@ func sendError(w http.ResponseWriter, code oai.ErrorCodeType, message, verb, ide
 		MetadataPrefix: metadataPrefix,
 		Value:          baseURL,
 	}
-	w.Write([]byte("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"../../static/oai2.xsl\"?>"))
+	w.Write([]byte(fmt.Sprintf("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"%s\"?>", STYLESHEET)))
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	enc.Encode(pmh)
@@ -209,9 +213,14 @@ func (s *Server) oaiHandlerListMetadataFormats(w http.ResponseWriter, req *http.
 			Schema:            "https://www.openarchives.org/OAI/2.0/oai_dc.xsd",
 			MetadataNamespace: "https://www.openarchives.org/OAI/2.0/oai_dc/",
 		},
+			{
+				MetadataPrefix:    "oai_datacite",
+				Schema:            "http://schema.datacite.org/meta/kernel-4.1/metadata.xsd",
+				MetadataNamespace: "http://datacite.org/schema/kernel-4",
+			},
 		},
 	}
-	w.Write([]byte("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"../../static/oai2.xsl\"?>"))
+	w.Write([]byte(fmt.Sprintf("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"%s\"?>", STYLESHEET)))
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(pmh); err != nil {
@@ -244,7 +253,7 @@ func (s *Server) oaiHandlerIdentify(w http.ResponseWriter, req *http.Request, pa
 		Granularity:       "YYYY-MM-DDThh:mm:ssZ",
 		Compression:       []string{"gzip", "deflate"},
 	}
-	w.Write([]byte("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"../../static/oai2.xsl\"?>"))
+	w.Write([]byte(fmt.Sprintf("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"%s\"?>", STYLESHEET)))
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(pmh); err != nil {
@@ -280,6 +289,11 @@ func (s *Server) oaiHandlerGetRecord(w http.ResponseWriter, req *http.Request, p
 		dcmiData.InitNamespace()
 		dcmiData.FromCore(data.Metadata)
 		metadata.OAIDC = dcmiData
+	case "oai_datacite":
+		dataciteData := &datacite.DataCite{}
+		dataciteData.InitNamespace()
+		dataciteData.FromCore(data.Metadata)
+		metadata.Datacite = dataciteData
 	default:
 		s.log.Infof("invalid metadataPrefix %s", metadataPrefix)
 		sendError(w, oai.ErrorCodeCannotDisseminateFormat, fmt.Sprintf("invalid metadataPrefix %s", metadataPrefix), "GetRecord", identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
@@ -303,7 +317,7 @@ func (s *Server) oaiHandlerGetRecord(w http.ResponseWriter, req *http.Request, p
 		Metadata: metadata,
 		About:    nil,
 	}}}
-	w.Write([]byte("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"../../static/oai2.xsl\"?>"))
+	w.Write([]byte(fmt.Sprintf("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"%s\"?>", STYLESHEET)))
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(pmh); err != nil {
@@ -450,7 +464,7 @@ func (s *Server) oaiHandlerListIdentifiers(w http.ResponseWriter, req *http.Requ
 		Value:          partition.AddrExt + "/" + oai.APIPATH,
 	}
 	pmh.ListIdentifiers = listIdentifiers
-	w.Write([]byte("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"../../static/oai2.xsl\"?>"))
+	w.Write([]byte(fmt.Sprintf("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"%s\"?>", STYLESHEET)))
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(pmh); err != nil {
@@ -465,6 +479,7 @@ func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request,
 	}
 	switch metadataPrefix {
 	case "oai_dc":
+	case "oai_datacite":
 	default:
 		s.log.Infof("invalid metadataPrefix %s", metadataPrefix)
 		sendError(w, oai.ErrorCodeCannotDisseminateFormat, fmt.Sprintf("invalid metadataPrefix %s", metadataPrefix), "ListRecords", "", metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
@@ -530,6 +545,11 @@ func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request,
 					dcmiData.InitNamespace()
 					dcmiData.FromCore(item.Metadata)
 					metadata.OAIDC = dcmiData
+				case "oai_datacite":
+					dataciteData := &datacite.DataCite{}
+					dataciteData.InitNamespace()
+					dataciteData.FromCore(item.Metadata)
+					metadata.Datacite = dataciteData
 				default:
 					return errors.New(fmt.Sprintf("invalid metadataPrefix %s", metadataPrefix))
 				}
@@ -613,7 +633,7 @@ func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request,
 		Value:          partition.AddrExt + "/" + oai.APIPATH,
 	}
 	pmh.ListRecords = listRecords
-	w.Write([]byte("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"../../static/oai2.xsl\"?>"))
+	w.Write([]byte(fmt.Sprintf("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"%s\"?>", STYLESHEET)))
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(pmh); err != nil {

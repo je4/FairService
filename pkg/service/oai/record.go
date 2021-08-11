@@ -35,7 +35,8 @@ type RecordAbout struct {
 }
 
 type Metadata struct {
-	OAIDC interface{} `xml:"oai_dc:dc,omitempty"`
+	OAIDC    interface{} `xml:"oai_dc:dc,omitempty"`
+	Datacite interface{} `xml:"oai_datacite:datacite,omitempty"`
 }
 
 type Record struct {
