@@ -40,7 +40,7 @@ var DataAccessReverse = map[string]DataAccess{
 }
 
 type ItemData struct {
-	Source    string      `json:"source"`
+	Source    int64       `json:"source"`
 	Signature string      `json:"signature"`
 	Metadata  myfair.Core `json:"metadata"`
 	Set       []string    `json:"set"`
@@ -208,16 +208,16 @@ func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int
 		var set, catalog []string
 		var accessStr string
 		var signature string
-		var sourceStr string
+		var source int64
 		var deleted bool
 		var seq int64
 		var datestamp time.Time
-		if err := rows.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &sourceStr, &deleted, &seq, &datestamp); err != nil {
+		if err := rows.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &source, &deleted, &seq, &datestamp); err != nil {
 			return errors.Wrapf(err, "cannot scan result of [%s] - [%v]", sqlstr, params)
 		}
 		data := &ItemData{
 			UUID:      uuidStr,
-			Source:    sourceStr,
+			Source:    source,
 			Signature: signature,
 			Metadata:  myfair.Core{},
 			Set:       set,
@@ -304,11 +304,11 @@ func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 	var set, catalog []string
 	var accessStr string
 	var signature string
-	var sourceStr string
+	var source int64
 	var deleted bool
 	var seq int64
 	var datestamp time.Time
-	if err := row.Scan(&metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &sourceStr, &deleted, &seq, &datestamp); err != nil {
+	if err := row.Scan(&metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &source, &deleted, &seq, &datestamp); err != nil {
 		if err != sql.ErrNoRows {
 			return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
@@ -316,7 +316,7 @@ func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 	}
 	data := &ItemData{
 		UUID:      uuidStr,
-		Source:    sourceStr,
+		Source:    source,
 		Signature: signature,
 		Metadata:  myfair.Core{},
 		Set:       set,
@@ -344,7 +344,7 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 	sort.Strings(data.Catalog)
 	sort.Strings(data.Set)
 
-	src, err := f.GetSourceByName(data.Source, partitionName)
+	src, err := f.GetSourceById(data.Source, partitionName)
 	if err != nil {
 		return "", errors.Wrapf(err, "cannot get source %s", data.Source)
 	}

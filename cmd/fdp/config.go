@@ -43,19 +43,23 @@ type SSHTunnel struct {
 
 type OAI struct {
 	SignatureDomain        string   `toml:"signaturedomain"`
-	RepositoryName         string   `toml:"repositoryname"`
-	AdminEmail             []string `toml:"adminemail"`
-	Description            string   `toml:"description"`
 	Pagesize               int64    `toml:"pagesize"`
 	ResumptionTokenTimeout duration `toml:"resumptiontokentimeout"`
+	RepositoryName         string   `toml:"repositoryname"`
+	AdminEmail             []string `toml:"adminemail"`
+	RepositoryIdentifier   string   `toml:"repositoryidentifier"`
+	SampleIdentifier       string   `toml:"sampleidentifier"`
+	Delimiter              string   `toml:"delimiter"`
+	Scheme                 string   `toml:"scheme"`
 }
 
 type Partition struct {
-	Name    string   `toml:"name"`
-	AddrExt string   `toml:"addrext"`
-	OAI     OAI      `toml:"oai"`
-	JWTKey  string   `toml:"jwtkey"`
-	JWTAlg  []string `toml:"jwtalg"`
+	Name        string   `toml:"name"`
+	AddrExt     string   `toml:"addrext"`
+	Description string   `toml:"description"`
+	OAI         OAI      `toml:"oai"`
+	JWTKey      string   `toml:"jwtkey"`
+	JWTAlg      []string `toml:"jwtalg"`
 }
 
 type Config struct {

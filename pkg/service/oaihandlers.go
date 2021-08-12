@@ -16,17 +16,17 @@ import (
 	"time"
 )
 
-// const STYLESHEET = "../../static/oai2.xsl"
-const STYLESHEET = "../../static/dspace.xsl"
+// const STYLESHEET = "../static/oai2.xsl"
+const STYLESHEET = "../static/dspace.xsl"
 
 func sendError(w http.ResponseWriter, code oai.ErrorCodeType, message, verb, identifier, metadataPrefix, baseURL string) {
 	w.Header().Set("Content-type", "text/xml")
 	pmh := &oai.OAIPMH{}
 	pmh.InitNamespace()
-	pmh.Error = &oai.Error{Code: oai.ErrorCode{
+	pmh.Error = &oai.Error{
 		Code:  code,
 		Value: message,
-	}}
+	}
 	pmh.ResponseDate = time.Now().Format("2006-01-02T15:04:05Z")
 	pmh.Request = &oai.Request{
 		Verb:           verb,
@@ -54,10 +54,17 @@ func getVar(key string, values url.Values) (string, bool) {
 func (s *Server) oaiHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	pName := vars["partition"]
+	context := vars["context"]
+
 	partition, err := s.fair.GetPartition(pName)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte(fmt.Sprintf("invalid partition: %s", pName)))
+		return
+	}
+	if context != "request" {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(fmt.Sprintf("invalid context %s for partition: %s", context, pName)))
 		return
 	}
 	values := req.URL.Query()
@@ -104,7 +111,7 @@ func (s *Server) oaiHandler(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 		}
-		s.oaiHandlerListIdentifiers(w, req, partition, from, until, set, resumptionToken, metadataPrefix)
+		s.oaiHandlerListIdentifiers(w, req, partition, context, from, until, set, resumptionToken, metadataPrefix)
 	case "ListRecords":
 		var fromStr, untilStr, set, resumptionToken, metadataPrefix string
 		for key, vals := range values {
@@ -143,7 +150,7 @@ func (s *Server) oaiHandler(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 		}
-		s.oaiHandlerListRecords(w, req, partition, from, until, set, resumptionToken, metadataPrefix)
+		s.oaiHandlerListRecords(w, req, partition, context, from, until, set, resumptionToken, metadataPrefix)
 	case "GetRecord":
 		var identifier, metadataPrefix string
 		for key, vals := range values {
@@ -165,7 +172,7 @@ func (s *Server) oaiHandler(w http.ResponseWriter, req *http.Request) {
 			sendError(w, oai.ErrorCodeBadArgument, "identifier AND metadataPrefix needed", verb, identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
 			return
 		}
-		s.oaiHandlerGetRecord(w, req, partition, identifier, metadataPrefix)
+		s.oaiHandlerGetRecord(w, req, partition, context, identifier, metadataPrefix)
 	case "Identify":
 		for key, _ := range values {
 			if key == "verb" {
@@ -174,7 +181,7 @@ func (s *Server) oaiHandler(w http.ResponseWriter, req *http.Request) {
 			sendError(w, oai.ErrorCodeBadArgument, fmt.Sprintf("unknown parameter %s", key), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
 			return
 		}
-		s.oaiHandlerIdentify(w, req, partition)
+		s.oaiHandlerIdentify(w, req, partition, context)
 	case "ListSets":
 		for key, _ := range values {
 			if key == "verb" {
@@ -183,7 +190,7 @@ func (s *Server) oaiHandler(w http.ResponseWriter, req *http.Request) {
 			sendError(w, oai.ErrorCodeBadArgument, fmt.Sprintf("unknown parameter %s", key), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
 			return
 		}
-		s.oaiHandlerListSets(w, req, partition)
+		s.oaiHandlerListSets(w, req, partition, context)
 	case "ListMetadataFormats":
 		for key, _ := range values {
 			if key == "verb" || key == "identifier" {
@@ -192,20 +199,20 @@ func (s *Server) oaiHandler(w http.ResponseWriter, req *http.Request) {
 			sendError(w, oai.ErrorCodeBadArgument, fmt.Sprintf("unknown parameter %s", key), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
 			return
 		}
-		s.oaiHandlerListMetadataFormats(w, req, partition)
+		s.oaiHandlerListMetadataFormats(w, req, partition, context)
 	default:
 		sendError(w, oai.ErrorCodeBadVerb, fmt.Sprintf("unknown verb: %s", verb), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
 	}
 	return
 }
 
-func (s *Server) oaiHandlerListMetadataFormats(w http.ResponseWriter, req *http.Request, partition *fair.Partition) {
+func (s *Server) oaiHandlerListMetadataFormats(w http.ResponseWriter, req *http.Request, partition *fair.Partition, context string) {
 	pmh := &oai.OAIPMH{}
 	pmh.InitNamespace()
 	pmh.ResponseDate = time.Now().Format("2006-01-02T15:04:05Z")
 	pmh.Request = &oai.Request{
 		Verb:  "ListMetadataFormats",
-		Value: partition.AddrExt + "/" + oai.APIPATH,
+		Value: fmt.Sprintf("%s/%s/%s", partition.AddrExt, oai.APIPATH, context),
 	}
 	pmh.ListMetadataFormats = &oai.ListMetadataFormats{
 		MetadataFormat: []*oai.MetadataFormat{{
@@ -220,6 +227,15 @@ func (s *Server) oaiHandlerListMetadataFormats(w http.ResponseWriter, req *http.
 			},
 		},
 	}
+	/*
+		pmh.ListMetadataFormats.ResumptionToken = &oai.ResumptionToken{
+			ExpirationDate:   "",
+			Value:            "",
+			Cursor:           0,
+			CompleteListSize: 2,
+		}
+	*/
+
 	w.Write([]byte(fmt.Sprintf("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"%s\"?>", STYLESHEET)))
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
@@ -228,7 +244,7 @@ func (s *Server) oaiHandlerListMetadataFormats(w http.ResponseWriter, req *http.
 	}
 }
 
-func (s *Server) oaiHandlerIdentify(w http.ResponseWriter, req *http.Request, partition *fair.Partition) {
+func (s *Server) oaiHandlerIdentify(w http.ResponseWriter, req *http.Request, partition *fair.Partition, context string) {
 	earliestDatestamp, err := s.fair.GetMinimumDatestamp(partition.Name)
 	if err != nil {
 		s.log.Errorf("cannot get earliest datestamp: %v", err)
@@ -241,7 +257,7 @@ func (s *Server) oaiHandlerIdentify(w http.ResponseWriter, req *http.Request, pa
 	pmh.ResponseDate = time.Now().Format("2006-01-02T15:04:05Z")
 	pmh.Request = &oai.Request{
 		Verb:  "Identify",
-		Value: partition.AddrExt + "/" + oai.APIPATH,
+		Value: fmt.Sprintf("%s/%s/%s", partition.AddrExt, oai.APIPATH, context),
 	}
 	pmh.Identify = &oai.Identify{
 		RepositoryName:    partition.OAIRepositoryName,
@@ -252,7 +268,14 @@ func (s *Server) oaiHandlerIdentify(w http.ResponseWriter, req *http.Request, pa
 		DeletedRecord:     "transient",
 		Granularity:       "YYYY-MM-DDThh:mm:ssZ",
 		Compression:       []string{"gzip", "deflate"},
+		Description: oai.Description{Identifier: oai.Identifier{
+			Scheme:               partition.OAIScheme,
+			RepositoryIdentifier: partition.OAIRepositoryIdentifier,
+			Delimiter:            partition.OAIDelimiter,
+			SampleIdentifier:     partition.OAISampleIdentifier,
+		}},
 	}
+	pmh.Identify.Description.Identifier.InitNamespace()
 	w.Write([]byte(fmt.Sprintf("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"%s\"?>", STYLESHEET)))
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
@@ -261,8 +284,8 @@ func (s *Server) oaiHandlerIdentify(w http.ResponseWriter, req *http.Request, pa
 	}
 }
 
-func (s *Server) oaiHandlerGetRecord(w http.ResponseWriter, req *http.Request, partition *fair.Partition, identifier, metadataPrefix string) {
-	uuidStr := strings.TrimPrefix(identifier, fmt.Sprintf("oai:%s:", partition.OAISignatureDomain))
+func (s *Server) oaiHandlerGetRecord(w http.ResponseWriter, req *http.Request, partition *fair.Partition, context, identifier, metadataPrefix string) {
+	uuidStr := strings.TrimPrefix(identifier, fmt.Sprintf("%s:%s:", partition.OAIScheme, partition.OAIRepositoryIdentifier))
 	if uuidStr == identifier {
 		s.log.Infof("invalid identifier for partition %s: %s", partition.Name, identifier)
 		sendError(w, oai.ErrorCodeIdDoesNotExist, "", "GetRecord", identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
@@ -306,7 +329,7 @@ func (s *Server) oaiHandlerGetRecord(w http.ResponseWriter, req *http.Request, p
 		Verb:           "GetRecord",
 		Identifier:     identifier,
 		MetadataPrefix: metadataPrefix,
-		Value:          partition.AddrExt + "/" + oai.APIPATH,
+		Value:          fmt.Sprintf("%s/%s/%s", partition.AddrExt, oai.APIPATH, context),
 	}
 	pmh.GetRecord = &oai.GetRecord{Record: []*oai.Record{{
 		Header: &oai.RecordHeader{
@@ -336,7 +359,7 @@ type resumptionData struct {
 	lastToken        string
 }
 
-func (s *Server) oaiHandlerListIdentifiers(w http.ResponseWriter, req *http.Request, partition *fair.Partition, from, until time.Time, set, resumptionToken, metadataPrefix string) {
+func (s *Server) oaiHandlerListIdentifiers(w http.ResponseWriter, req *http.Request, partition *fair.Partition, context string, from, until time.Time, set, resumptionToken, metadataPrefix string) {
 	var rData *resumptionData
 	if resumptionToken != "" {
 		data, err := s.resumptionTokenCache.Get(resumptionToken)
@@ -381,7 +404,7 @@ func (s *Server) oaiHandlerListIdentifiers(w http.ResponseWriter, req *http.Requ
 				status = oai.RecordHeaderStatusDeleted
 			}
 			header := &oai.RecordHeader{
-				Identifier: fmt.Sprintf("oai:%s:%s", partition.OAISignatureDomain, item.UUID),
+				Identifier: fmt.Sprintf("%s:%s:%s", partition.OAIScheme, partition.OAIRepositoryIdentifier, item.UUID),
 				Datestamp:  item.Datestamp.Format("2006-01-02T15:04:05Z"),
 				SetSpec:    item.Set,
 				Status:     status,
@@ -461,7 +484,7 @@ func (s *Server) oaiHandlerListIdentifiers(w http.ResponseWriter, req *http.Requ
 	pmh.Request = &oai.Request{
 		Verb:           "ListIdentifiers",
 		MetadataPrefix: metadataPrefix,
-		Value:          partition.AddrExt + "/" + oai.APIPATH,
+		Value:          fmt.Sprintf("%s/%s/%s", partition.AddrExt, oai.APIPATH, context),
 	}
 	pmh.ListIdentifiers = listIdentifiers
 	w.Write([]byte(fmt.Sprintf("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"%s\"?>", STYLESHEET)))
@@ -473,7 +496,7 @@ func (s *Server) oaiHandlerListIdentifiers(w http.ResponseWriter, req *http.Requ
 
 }
 
-func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request, partition *fair.Partition, from, until time.Time, set, resumptionToken, metadataPrefix string) {
+func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request, partition *fair.Partition, context string, from, until time.Time, set, resumptionToken, metadataPrefix string) {
 	if metadataPrefix == "" {
 		metadataPrefix = "oai_dc"
 	}
@@ -531,7 +554,7 @@ func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request,
 			}
 			record := &oai.Record{
 				Header: &oai.RecordHeader{
-					Identifier: fmt.Sprintf("oai:%s:%s", partition.OAISignatureDomain, item.UUID),
+					Identifier: fmt.Sprintf("%s:%s:%s", partition.OAIScheme, partition.OAIRepositoryIdentifier, item.UUID),
 					Datestamp:  item.Datestamp.Format("2006-01-02T15:04:05Z"),
 					SetSpec:    item.Set,
 					Status:     status,
@@ -630,7 +653,7 @@ func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request,
 	pmh.Request = &oai.Request{
 		Verb:           "ListRecords",
 		MetadataPrefix: metadataPrefix,
-		Value:          partition.AddrExt + "/" + oai.APIPATH,
+		Value:          fmt.Sprintf("%s/%s/%s", partition.AddrExt, oai.APIPATH, context),
 	}
 	pmh.ListRecords = listRecords
 	w.Write([]byte(fmt.Sprintf("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"%s\"?>", STYLESHEET)))
@@ -643,7 +666,7 @@ func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request,
 }
 
 // todo: add paging with resumption token
-func (s *Server) oaiHandlerListSets(w http.ResponseWriter, req *http.Request, partition *fair.Partition) {
+func (s *Server) oaiHandlerListSets(w http.ResponseWriter, req *http.Request, partition *fair.Partition, context string) {
 	sets, err := s.fair.GetSets(partition.Name)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -666,10 +689,10 @@ func (s *Server) oaiHandlerListSets(w http.ResponseWriter, req *http.Request, pa
 	pmh.ResponseDate = time.Now().Format("2006-01-02T15:04:05Z")
 	pmh.Request = &oai.Request{
 		Verb:  "ListSets",
-		Value: partition.AddrExt + "/" + oai.APIPATH,
+		Value: fmt.Sprintf("%s/%s/%s", partition.AddrExt, oai.APIPATH, context),
 	}
 	pmh.ListSets = listSets
-	w.Write([]byte("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"../../static/oai2.xsl\"?>"))
+	w.Write([]byte(fmt.Sprintf("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"%s\"?>", STYLESHEET)))
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(pmh); err != nil {
