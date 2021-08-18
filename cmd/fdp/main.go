@@ -117,11 +117,13 @@ func main() {
 			return
 		}
 
-		handle, err = fair.NewHandleServiceClient(config.Handle.Addr, tr)
+		handle, err = fair.NewHandleServiceClient(config.Handle.Addr, tr, logger)
 		if err != nil {
 			logger.Panicf("cannot create handle service: %v", err)
 			return
 		}
+	} else {
+		logger.Info("no handle creator configured")
 	}
 	var partitions []*fair.Partition
 	for _, pconf := range config.Partition {
