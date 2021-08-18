@@ -376,7 +376,7 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 		}
 		uuidStr := uuidVal.String()
 		if f.handle != nil {
-			newHandle := fmt.Sprintf("fair/%s/%s/%s", partition.HandleID, partition.Domain, uuidStr)
+			newHandle := fmt.Sprintf("%s/fair/%s/%s", partition.HandleID, partition.Domain, uuidStr)
 			newURL, err := url.Parse(fmt.Sprintf("%s/redir/%s", partition.AddrExt, uuidStr))
 			if err != nil {
 				return "", errors.Wrapf(err, "cannot parse url %s", fmt.Sprintf("%s/redir/%s", partition.AddrExt, uuidStr))
