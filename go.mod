@@ -11,10 +11,12 @@ require (
 	github.com/google/uuid v1.1.2
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
-	github.com/je4/utils/v2 v2.0.0-20210702125424-8c1cdd3f1ccc
+	github.com/je4/utils/v2 v2.0.0-20210816105524-d30a0aa17c15
 	github.com/lib/pq v1.10.2
 	github.com/op/go-logging v0.0.0-20160315200505-970db520ece7
 	github.com/pkg/errors v0.9.1
+	go.uber.org/atomic v1.8.0 // indirect
+	go.uber.org/multierr v1.7.0 // indirect
 )
 
 replace github.com/je4/FairService/v2 => ./

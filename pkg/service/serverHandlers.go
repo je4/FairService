@@ -7,6 +7,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/FairService/v2/pkg/model/dcmi"
+	"io/ioutil"
 	"net/http"
 	"strings"
 )
@@ -36,7 +37,7 @@ func (s *Server) redirectHandler(w http.ResponseWriter, req *http.Request) {
 		w.Write([]byte(fmt.Sprintf("error loading item %s/%s: %v", pName, uuidStr, err)))
 		return
 	}
-	source, err := s.fair.GetSourceById(data.Source, part.Name)
+	source, err := s.fair.GetSourceByName(data.Source, part.Name)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Header().Set("Content-type", "text/plain")
@@ -256,11 +257,22 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	pName := vars["partition"]
 
-	decoder := json.NewDecoder(req.Body)
 	var data fair.ItemData
-	err := decoder.Decode(&data)
+
+	/*
+		decoder := json.NewDecoder(req.Body)
+		err := decoder.Decode(&data)
+	*/
+	bdata, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		sendResult("error", fmt.Sprintf("cannot parse request body: %v", err), "")
+		s.log.Errorf("cannot read request body: %v", err)
+		sendResult("error", fmt.Sprintf("cannot read request body: %v", err), "")
+		return
+	}
+
+	if err := json.Unmarshal(bdata, &data); err != nil {
+		s.log.Errorf("cannot unmarshal request body [%s]: %v", string(bdata), err)
+		sendResult("error", fmt.Sprintf("cannot unmarshal request body [%s]: %v", string(bdata), err), "")
 		return
 	}
 

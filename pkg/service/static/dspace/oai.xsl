@@ -24,12 +24,12 @@
                 <title>FAIRService OAI-PMH Data Provider</title>
                 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
                 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-                <script src="../static/js/jquery.js" type="text/javascript"></script>
-                <script src="../static/js/bootstrap.min.js" type="text/javascript"></script>
+                <script src="../static/dspace/js/jquery.js" type="text/javascript"></script>
+                <script src="../static/dspace/js/bootstrap.min.js" type="text/javascript"></script>
 
-                <link rel="stylesheet" href="../static/css/bootstrap.min.css" type="text/css" />
-                <link rel="stylesheet" href="../static/css/bootstrap-theme.min.css" type="text/css" />
-                <link rel="stylesheet" href="../static/css/style.css" type="text/css" />
+                <link rel="stylesheet" href="../static/dspace/css/bootstrap.min.css" type="text/css" />
+                <link rel="stylesheet" href="../static/dspace/css/bootstrap-theme.min.css" type="text/css" />
+                <link rel="stylesheet" href="../static/dspace/css/style.css" type="text/css" />
             </head>
             <body>
                 <div class="container">
@@ -126,7 +126,7 @@
                         <p><small>Design by Lyncode</small></p>
                         <p>
                             <a href="http://www.lyncode.com">
-                                <img style="height: 20px;" src="../static/img/lyncode.png" alt="Lyncode" />
+                                <img style="height: 20px;" src="../static/dspace/img/lyncode.png" alt="Lyncode" />
                             </a>
                         </p>
                     </div>

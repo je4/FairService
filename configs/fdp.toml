@@ -11,18 +11,18 @@ certpem = "auto"
 linktokenexp = "1h"
 
 [[partition]]
-    name = "repo"
-    addrext = "https://localhost:8443/repo"
+    name = "mediathek"
+    addrext = "https://localhost:8443/mediathek"
     jwtkey = "geheim"
     jwtalg = ["HS256", "HS384", "HS512"]
+    handleid = "20.500.11806"
     description = "This repository contains researchdata and OER created at Basel University of Art and Design FHNW"
+    domain = "mediathek.hgk.fhnw.ch"
     [partition.oai]
-        signaturedomain = "mediathek.hgk.fhnw.ch"
         pagesize = 80
         resumptiontokentimeout = "3m"
         scheme = "oai"
         repositoryname = "Repository of Mediathek HGK FHNW"
-        repositoryidentifier = "mediathek.hgk.fhnw.ch"
         sampleIdentifier = "oai:mediathek.hgk.fhnw.ch:f1a30561-df33-11eb-8511-b0227af7e31e"
         adminemail = ["tabea.lurk@fhnw.ch"]
 
@@ -34,29 +34,21 @@ dsn = "postgres://fairservice:MtgViCEqJoiQoXOP@localhost:5433/fairservice"
 connection_max = 5000
 schema = "public"
 
-[_sshtunnel]
-user = "root"
-privatekey = "C:/daten/keys/putty_ed25519.priv.openssh"
-[sshtunnel.serverendpoint]
-port = 22
-host = "ba14ns21403.fhnw.ch"
+[handle]
+    jwtkey = "secret"
+    jwtalg = "HS512"
+    addr = "http://localhost:8444"
 
-[[sshtunnel.tunnel]]
-name = "postgres"
-[sshtunnel.tunnel.localendpoint]
-port = 5435
-host = "localhost"
+[_tunnel.ba14ns21403]
+    user = "root"
+    privatekey = "C:/daten/keys/putty_ed25519.priv.openssh"
+    [_tunnel.ba14ns21403.endpoint]
+        port = 22
+        host = "ba14ns21403.fhnw.ch"
+    [_tunnel.ba14ns21403.forward.postgres.local]
+        port = 5433
+        host = "localhost"
+    [_tunnel.ba14ns21403.forward.postgres.remote]
+        port = 5432
+        host = "v000306.adm.ds.fhnw.ch"
 
-[sshtunnel.tunnel.remoteendpoint]
-port = 5432
-host = "v000306.adm.ds.fhnw.ch"
-
-[[sshtunnel.tunnel]]
-name = "elasticsearch"
-[sshtunnel.tunnel.localendpoint]
-port = 5434
-host = "localhost"
-
-[sshtunnel.tunnel.remoteendpoint]
-port = 5432
-host = "v000306.adm.ds.fhnw.ch"

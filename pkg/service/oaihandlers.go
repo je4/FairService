@@ -17,7 +17,7 @@ import (
 )
 
 // const STYLESHEET = "../static/oai2.xsl"
-const STYLESHEET = "../static/dspace.xsl"
+const STYLESHEET = "../static/dspace/oai.xsl"
 
 func sendError(w http.ResponseWriter, code oai.ErrorCodeType, message, verb, identifier, metadataPrefix, baseURL string) {
 	w.Header().Set("Content-type", "text/xml")
@@ -270,7 +270,7 @@ func (s *Server) oaiHandlerIdentify(w http.ResponseWriter, req *http.Request, pa
 		Compression:       []string{"gzip", "deflate"},
 		Description: oai.Description{Identifier: oai.Identifier{
 			Scheme:               partition.OAIScheme,
-			RepositoryIdentifier: partition.OAIRepositoryIdentifier,
+			RepositoryIdentifier: partition.Domain,
 			Delimiter:            partition.OAIDelimiter,
 			SampleIdentifier:     partition.OAISampleIdentifier,
 		}},
@@ -285,7 +285,7 @@ func (s *Server) oaiHandlerIdentify(w http.ResponseWriter, req *http.Request, pa
 }
 
 func (s *Server) oaiHandlerGetRecord(w http.ResponseWriter, req *http.Request, partition *fair.Partition, context, identifier, metadataPrefix string) {
-	uuidStr := strings.TrimPrefix(identifier, fmt.Sprintf("%s:%s:", partition.OAIScheme, partition.OAIRepositoryIdentifier))
+	uuidStr := strings.TrimPrefix(identifier, fmt.Sprintf("%s:%s:", partition.OAIScheme, partition.Domain))
 	if uuidStr == identifier {
 		s.log.Infof("invalid identifier for partition %s: %s", partition.Name, identifier)
 		sendError(w, oai.ErrorCodeIdDoesNotExist, "", "GetRecord", identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
@@ -404,7 +404,7 @@ func (s *Server) oaiHandlerListIdentifiers(w http.ResponseWriter, req *http.Requ
 				status = oai.RecordHeaderStatusDeleted
 			}
 			header := &oai.RecordHeader{
-				Identifier: fmt.Sprintf("%s:%s:%s", partition.OAIScheme, partition.OAIRepositoryIdentifier, item.UUID),
+				Identifier: fmt.Sprintf("%s:%s:%s", partition.OAIScheme, partition.Domain, item.UUID),
 				Datestamp:  item.Datestamp.Format("2006-01-02T15:04:05Z"),
 				SetSpec:    item.Set,
 				Status:     status,
@@ -554,7 +554,7 @@ func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request,
 			}
 			record := &oai.Record{
 				Header: &oai.RecordHeader{
-					Identifier: fmt.Sprintf("%s:%s:%s", partition.OAIScheme, partition.OAIRepositoryIdentifier, item.UUID),
+					Identifier: fmt.Sprintf("%s:%s:%s", partition.OAIScheme, partition.Domain, item.UUID),
 					Datestamp:  item.Datestamp.Format("2006-01-02T15:04:05Z"),
 					SetSpec:    item.Set,
 					Status:     status,

@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"crypto/tls"
-	"embed"
 	"fmt"
 	"github.com/bluele/gcache"
 	"github.com/gorilla/handlers"
@@ -21,19 +20,6 @@ import (
 	"strings"
 	"time"
 )
-
-//go:embed static/*
-//go:embed static/js/*
-//go:embed static/img/*
-var staticFS embed.FS
-
-//go:embed template/*
-var templateFS embed.FS
-
-var templateFiles = map[string]string{
-	"partition": "template/partition.gohtml",
-	"oai":       "template/oai.gohtml",
-}
 
 type Server struct {
 	host, port           string
