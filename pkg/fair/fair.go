@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/je4/FairService/v2/pkg/model/myfair"
+	//"github.com/je4/FairService/v2/pkg/service"
 	"github.com/lib/pq"
 	"github.com/op/go-logging"
+	"net/url"
 	"reflect"
 	"sort"
 	"strings"
@@ -69,18 +71,20 @@ func equalStrings(a, b []string) bool {
 }
 
 type Fair struct {
-	dbschema     string
+	dbSchema     string
 	db           *sql.DB
+	handle       *HandleServiceClient
 	sourcesMutex sync.RWMutex
 	sources      map[int64]*Source
 	partitions   map[string]*Partition
 	log          *logging.Logger
 }
 
-func NewFair(db *sql.DB, dbschema string, log *logging.Logger) (*Fair, error) {
+func NewFair(db *sql.DB, dbSchema string, handle *HandleServiceClient, log *logging.Logger) (*Fair, error) {
 	f := &Fair{
-		dbschema:     dbschema,
+		dbSchema:     dbSchema,
 		db:           db,
+		handle:       handle,
 		sourcesMutex: sync.RWMutex{},
 		sources:      map[int64]*Source{},
 		partitions:   map[string]*Partition{},
@@ -105,7 +109,7 @@ func (f *Fair) GetPartition(name string) (*Partition, error) {
 }
 
 func (f *Fair) LoadSources() error {
-	sqlstr := fmt.Sprintf("SELECT sourceid, name, detailurl, description, oai_domain, partition FROM %s.source", f.dbschema)
+	sqlstr := fmt.Sprintf("SELECT sourceid, name, detailurl, description, oai_domain, partition FROM %s.source", f.dbSchema)
 	rows, err := f.db.Query(sqlstr)
 	if err != nil {
 		return errors.Wrapf(err, "cannot execute %s", sqlstr)
@@ -164,7 +168,7 @@ func (f *Fair) GetMinimumDatestamp(partitionName string) (time.Time, error) {
 	}
 	sqlstr := fmt.Sprintf("SELECT MIN(datestamp) AS mindate"+
 		" FROM %s.coreview"+
-		" WHERE partition=$1", f.dbschema)
+		" WHERE partition=$1", f.dbSchema)
 	params := []interface{}{partition.Name}
 	var datestamp time.Time
 	if err := f.db.QueryRow(sqlstr, params...).Scan(&datestamp); err != nil {
@@ -180,7 +184,7 @@ func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int
 	if completeListSize != nil {
 		sqlstr := fmt.Sprintf("SELECT COUNT(*) AS num"+
 			" FROM %s.coreview"+
-			" WHERE %s", f.dbschema, sqlWhere)
+			" WHERE %s", f.dbSchema, sqlWhere)
 		if err := f.db.QueryRow(sqlstr, params...).Scan(completeListSize); err != nil {
 			return errors.Wrapf(err, "cannot get number of result items [%s] - [%v]", sqlstr, params)
 		}
@@ -188,7 +192,7 @@ func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int
 	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, signature, source, deleted, seq, datestamp"+
 		" FROM %s.coreview"+
 		" WHERE %s"+
-		" ORDER BY seq ASC", f.dbschema, sqlWhere)
+		" ORDER BY seq ASC", f.dbSchema, sqlWhere)
 	if limit > 0 {
 		sqlstr += fmt.Sprintf(" LIMIT %v", limit)
 	}
@@ -208,16 +212,16 @@ func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int
 		var set, catalog []string
 		var accessStr string
 		var signature string
-		var sourceStr string
+		var source string
 		var deleted bool
 		var seq int64
 		var datestamp time.Time
-		if err := rows.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &sourceStr, &deleted, &seq, &datestamp); err != nil {
+		if err := rows.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &source, &deleted, &seq, &datestamp); err != nil {
 			return errors.Wrapf(err, "cannot scan result of [%s] - [%v]", sqlstr, params)
 		}
 		data := &ItemData{
 			UUID:      uuidStr,
-			Source:    sourceStr,
+			Source:    source,
 			Signature: signature,
 			Metadata:  myfair.Core{},
 			Set:       set,
@@ -294,9 +298,9 @@ func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 		return nil, errors.New(fmt.Sprintf("partition %s not found", partitionName))
 	}
 
-	sqlstr := fmt.Sprintf("SELECT metadata, setspec, catalog, access, signature, source, deleted, seq, datestamp"+
+	sqlstr := fmt.Sprintf("SELECT metadata, setspec, catalog, access, signature, sourcename, deleted, seq, datestamp"+
 		" FROM %s.coreview"+
-		" WHERE partition=$1 AND uuid=$2", f.dbschema)
+		" WHERE partition=$1 AND uuid=$2", f.dbSchema)
 	params := []interface{}{partition.Name, uuidStr}
 	row := f.db.QueryRow(sqlstr, params...)
 
@@ -304,11 +308,11 @@ func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 	var set, catalog []string
 	var accessStr string
 	var signature string
-	var sourceStr string
+	var source string
 	var deleted bool
 	var seq int64
 	var datestamp time.Time
-	if err := row.Scan(&metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &sourceStr, &deleted, &seq, &datestamp); err != nil {
+	if err := row.Scan(&metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &source, &deleted, &seq, &datestamp); err != nil {
 		if err != sql.ErrNoRows {
 			return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
@@ -316,7 +320,7 @@ func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 	}
 	data := &ItemData{
 		UUID:      uuidStr,
-		Source:    sourceStr,
+		Source:    source,
 		Signature: signature,
 		Metadata:  myfair.Core{},
 		Set:       set,
@@ -351,7 +355,7 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 
 	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, deleted"+
 		" FROM %s.coreview "+
-		" WHERE source=$1 AND signature=$2", f.dbschema)
+		" WHERE source=$1 AND signature=$2", f.dbSchema)
 	params := []interface{}{src.ID, data.Signature}
 	row := f.db.QueryRow(sqlstr, params...)
 
@@ -371,25 +375,39 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 			return "", errors.Wrap(err, "cannot generate uuid")
 		}
 		uuidStr := uuidVal.String()
+		if f.handle != nil {
+			newHandle := fmt.Sprintf("fair/%s/%s/%s", partition.HandleID, partition.Domain, uuidStr)
+			newURL, err := url.Parse(fmt.Sprintf("%s/redir/%s", partition.AddrExt, uuidStr))
+			if err != nil {
+				return "", errors.Wrapf(err, "cannot parse url %s", fmt.Sprintf("%s/redir/%s", partition.AddrExt, uuidStr))
+			}
+			if err := f.handle.Create(newHandle, newURL); err != nil {
+				return "", errors.Wrapf(err, "cannot create handle %s for %s", newHandle, newURL.String())
+			}
+			data.Metadata.Identifier = append(data.Metadata.Identifier, myfair.Identifier{
+				Value:          newHandle,
+				IdentifierType: myfair.RelatedIdentifierTypeHandle,
+			})
+		}
+
 		coreBytes, err := json.Marshal(data.Metadata)
 		if err != nil {
 			return "", errors.Wrapf(err, "cannot marshal core data [%v]", data.Metadata)
 		}
 		sqlstr := fmt.Sprintf("INSERT INTO %s.core"+
 			" (uuid, datestamp, setspec, metadata, signature, source, access, catalog, seq, deleted)"+
-			" VALUES($1, NOW(), $2, $3, $4, $5, $6, $7, NEXTVAL('lastchange')), false", f.dbschema)
+			" VALUES($1, NOW(), $2, $3, $4, $5, $6, $7, NEXTVAL('lastchange'), false)", f.dbSchema)
 		params := []interface{}{
-			uuidStr,        // uuid
-			partition.Name, // partition
+			uuidStr, // uuid
 			// datestamp
-			pq.Array(data.Set), // setspec
-			string(coreBytes),  // metadata
-			// dirty
+			pq.Array(data.Set),     // setspec
+			string(coreBytes),      // metadata
 			data.Signature,         // signature
 			src.ID,                 // source
 			data.Access,            // access
 			pq.Array(data.Catalog), // catalog
 			// seq
+			//deleted
 		}
 		ret, err := f.db.Exec(sqlstr, params...)
 		if err != nil {
@@ -404,7 +422,7 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 		}
 		sqlstr = fmt.Sprintf("INSERT INTO %s.core_dirty"+
 			" (uuid)"+
-			" VALUES($1)", f.dbschema)
+			" VALUES($1)", f.dbSchema)
 		params = []interface{}{
 			uuidStr, // uuid
 		}
@@ -412,6 +430,7 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 			return "", errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
 		f.log.Infof("new item [%s] inserted", uuidStr)
+
 		return uuidStr, nil
 
 	} else {
@@ -434,7 +453,7 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 			f.log.Infof("no update needed for item [%v]", uuidStr)
 			sqlstr = fmt.Sprintf("INSERT INTO %s.core_dirty"+
 				" (uuid)"+
-				" VALUES($1)", f.dbschema)
+				" VALUES($1)", f.dbSchema)
 			params = []interface{}{
 				uuidStr, // uuid
 			}
@@ -451,7 +470,7 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 
 		sqlstr = fmt.Sprintf("UPDATE %s.core"+
 			" SET setspec=$1, metadata=$2, access=$3, catalog=$4, deleted=false"+
-			" WHERE uuid=$5", f.dbschema)
+			" WHERE uuid=$5", f.dbSchema)
 		params := []interface{}{
 			pq.Array(data.Set),
 			string(dataMetaBytes),
@@ -463,7 +482,7 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 		}
 		sqlstr = fmt.Sprintf("INSERT INTO %s.core_dirty"+
 			" (uuid)"+
-			" VALUES($1)", f.dbschema)
+			" VALUES($1)", f.dbSchema)
 		params = []interface{}{
 			uuidStr, // uuid
 		}
@@ -479,7 +498,7 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 func (f *Fair) GetSets(partitionName string) (map[string]string, error) {
 	sqlstr := fmt.Sprintf("SELECT s.setspec, s.setname"+
 		" FROM (SELECT DISTINCT unnest(setspec) AS setspecx FROM %s.coreview WHERE partition=$1) specs"+
-		" LEFT JOIN %s.set s ON s.setspec=setspecx", f.dbschema, f.dbschema)
+		" LEFT JOIN %s.set s ON s.setspec=setspecx", f.dbSchema, f.dbSchema)
 	rows, err := f.db.Query(sqlstr, partitionName)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot query sets %s", sqlstr)
@@ -502,7 +521,7 @@ func (f *Fair) StartUpdate(partitionName string, source string) error {
 		return errors.Wrapf(err, "cannot get source %s", source)
 	}
 	sqlstr := fmt.Sprintf("DELETE FROM %s.core_dirty"+
-		" WHERE uuid IN (SELECT uuid FROM %s.core WHERE source=$1)", f.dbschema, f.dbschema)
+		" WHERE uuid IN (SELECT uuid FROM %s.core WHERE source=$1)", f.dbSchema, f.dbSchema)
 	params := []interface{}{src.ID}
 	if _, err := f.db.Exec(sqlstr, params...); err != nil {
 		return errors.Wrapf(err, "cannot execute dirty update - %s - %v", sqlstr, params)
@@ -517,7 +536,7 @@ func (f *Fair) AbortUpdate(partitionName string, source string) error {
 		if err != nil {
 			return errors.Wrapf(err, "cannot get source %s", source)
 		}
-		sqlstr := fmt.Sprintf("UPDATE %s.core SET dirty=FALSE WHERE deleted=FALSE AND source=$1", f.dbschema)
+		sqlstr := fmt.Sprintf("UPDATE %s.core SET dirty=FALSE WHERE deleted=FALSE AND source=$1", f.dbSchema)
 		params := []interface{}{src.ID}
 		if _, err := f.db.Exec(sqlstr, params...); err != nil {
 			return errors.Wrapf(err, "cannot execute dirty reset update - %s - %v", sqlstr, params)
@@ -533,7 +552,7 @@ func (f *Fair) EndUpdate(partitionName string, source string) error {
 	}
 	sqlstr := fmt.Sprintf("UPDATE %s.core"+
 		" SET deleted=TRUE"+
-		" WHERE source=$1 AND uuid NOT IN (SELECT uuid FROM %s.core_dirty)", f.dbschema, f.dbschema)
+		" WHERE source=$1 AND uuid NOT IN (SELECT uuid FROM %s.core_dirty)", f.dbSchema, f.dbSchema)
 	params := []interface{}{src.ID}
 	if _, err := f.db.Exec(sqlstr, params...); err != nil {
 		return errors.Wrapf(err, "cannot execute dirty update - %s - %v", sqlstr, params)

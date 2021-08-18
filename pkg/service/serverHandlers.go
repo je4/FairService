@@ -7,13 +7,88 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/FairService/v2/pkg/model/dcmi"
+	"io/ioutil"
 	"net/http"
+	"strings"
 )
 
 type CreateResultStatus struct {
 	Status  string `json:"status"`
 	Message string `json:"message,omitempty"`
 	UUID    string `json:"uuid,omitempty"`
+}
+
+func (s *Server) redirectHandler(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	pName := vars["partition"]
+	uuidStr := vars["uuid"]
+
+	part, err := s.fair.GetPartition(pName)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Header().Set("Content-type", "text/plain")
+		w.Write([]byte(fmt.Sprintf("partition [%s] not found", pName)))
+		return
+	}
+	data, err := s.fair.GetItem(pName, uuidStr)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Header().Set("Content-type", "text/plain")
+		w.Write([]byte(fmt.Sprintf("error loading item %s/%s: %v", pName, uuidStr, err)))
+		return
+	}
+	source, err := s.fair.GetSourceByName(data.Source, part.Name)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Header().Set("Content-type", "text/plain")
+		w.Write([]byte(fmt.Sprintf("error loading source %s for item %s/%s: %v", data.Source, pName, uuidStr, err)))
+		return
+	}
+
+	targetURL := strings.Replace(source.DetailURL, "{signature}", data.Signature, -1)
+
+	http.Redirect(w, req, targetURL, 301)
+}
+func (s *Server) partitionHandler(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	pName := vars["partition"]
+
+	part, err := s.fair.GetPartition(pName)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Header().Set("Content-type", "text/plain")
+		w.Write([]byte(fmt.Sprintf("partition [%s] not found", pName)))
+		return
+	}
+
+	tpl := s.templates["partition"]
+	if err := tpl.Execute(w, part); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Header().Set("Content-type", "text/plain")
+		w.Write([]byte(fmt.Sprintf("error executing template %s in partition %s: %v", "partition", pName, err)))
+		return
+	}
+}
+
+func (s *Server) partitionOAIHandler(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	pName := vars["partition"]
+
+	part, err := s.fair.GetPartition(pName)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Header().Set("Content-type", "text/plain")
+		w.Write([]byte(fmt.Sprintf("partition [%s] not found", pName)))
+		return
+	}
+
+	tpl := s.templates["oai"]
+	if err := tpl.Execute(w, part); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Header().Set("Content-type", "text/plain")
+		w.Write([]byte(fmt.Sprintf("error executing template %s in partition %s: %v", "partition", pName, err)))
+		return
+	}
 }
 
 func (s *Server) itemHandler(w http.ResponseWriter, req *http.Request) {
@@ -182,11 +257,22 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	pName := vars["partition"]
 
-	decoder := json.NewDecoder(req.Body)
 	var data fair.ItemData
-	err := decoder.Decode(&data)
+
+	/*
+		decoder := json.NewDecoder(req.Body)
+		err := decoder.Decode(&data)
+	*/
+	bdata, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		sendResult("error", fmt.Sprintf("cannot parse request body: %v", err), "")
+		s.log.Errorf("cannot read request body: %v", err)
+		sendResult("error", fmt.Sprintf("cannot read request body: %v", err), "")
+		return
+	}
+
+	if err := json.Unmarshal(bdata, &data); err != nil {
+		s.log.Errorf("cannot unmarshal request body [%s]: %v", string(bdata), err)
+		sendResult("error", fmt.Sprintf("cannot unmarshal request body [%s]: %v", string(bdata), err), "")
 		return
 	}
 

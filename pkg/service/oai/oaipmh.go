@@ -2,7 +2,7 @@ package oai
 
 import "encoding/xml"
 
-const APIPATH string = "oai2"
+const APIPATH string = "oai"
 
 type Request struct {
 	Verb           string `xml:"verb,attr"`

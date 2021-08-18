@@ -6,27 +6,50 @@ import (
 )
 
 type Partition struct {
-	Name                   string
-	AddrExt                string
-	JWTKey                 string
-	JWTAlg                 []string
-	OAISignatureDomain     string
-	OAIDescrption          string
-	OAIAdminEmail          []string
-	OAIRepositoryName      string
-	OAIPagesize            int64
+	Name                string
+	AddrExt             string
+	Description         string
+	JWTKey              string
+	JWTAlg              []string
+	Domain              string
+	OAIAdminEmail       []string
+	OAIRepositoryName   string
+	OAIPagesize         int64
+	OAISampleIdentifier string
+	OAIDelimiter        string
+	OAIScheme           string
+
 	ResumptionTokenTimeout time.Duration
+	HandleID               string
 }
 
-func NewPartition(Name, AddrExt, OAISignatureDomain, OAIRepositoryName string, OAIAdminEmail []string, OAIDescrption string, pagesize int64, resumptionTokenTimeout time.Duration, JWTKey string, JWTAlg []string) (*Partition, error) {
+func NewPartition(
+	Name,
+	AddrExt,
+	Domain,
+	OAIRepositoryName string,
+	OAIAdminEmail []string,
+	OAISampleIdentifier,
+	OAIDelimiter string,
+	OAIScheme string,
+	HandleID string,
+	Description string,
+	pagesize int64,
+	resumptionTokenTimeout time.Duration,
+	JWTKey string,
+	JWTAlg []string) (*Partition, error) {
 	p := &Partition{
 		Name:                   strings.ToLower(Name),
 		AddrExt:                strings.TrimRight(AddrExt, "/"),
-		OAISignatureDomain:     OAISignatureDomain,
+		Domain:                 Domain,
 		OAIRepositoryName:      OAIRepositoryName,
 		OAIAdminEmail:          OAIAdminEmail,
-		OAIDescrption:          OAIDescrption,
+		Description:            Description,
 		OAIPagesize:            pagesize,
+		OAISampleIdentifier:    OAISampleIdentifier,
+		OAIDelimiter:           OAIDelimiter,
+		OAIScheme:              OAIScheme,
+		HandleID:               HandleID,
 		ResumptionTokenTimeout: resumptionTokenTimeout,
 		JWTKey:                 JWTKey,
 		JWTAlg:                 JWTAlg,

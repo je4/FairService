@@ -13,6 +13,12 @@ const (
 	ErrorCodeNoSetHierarchy          ErrorCodeType = "noSetHierarchy"
 )
 
+type Error struct {
+	Code  ErrorCodeType `xml:"code,attr"`
+	Value string        `xml:",chardata"`
+}
+
+/*
 type ErrorCode struct {
 	Code  ErrorCodeType `xml:"code,attr"`
 	Value string        `xml:",chardata"`
@@ -21,3 +27,5 @@ type ErrorCode struct {
 type Error struct {
 	Code ErrorCode `xml:"code"`
 }
+
+*/
