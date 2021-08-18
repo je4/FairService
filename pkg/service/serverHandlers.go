@@ -65,7 +65,7 @@ func (s *Server) partitionHandler(w http.ResponseWriter, req *http.Request) {
 	if err := tpl.Execute(w, part); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Header().Set("Content-type", "text/plain")
-		w.Write([]byte(fmt.Sprintf("error executing template %s in partition %s: %v", "partition", pName)))
+		w.Write([]byte(fmt.Sprintf("error executing template %s in partition %s: %v", "partition", pName, err)))
 		return
 	}
 }
@@ -86,7 +86,7 @@ func (s *Server) partitionOAIHandler(w http.ResponseWriter, req *http.Request) {
 	if err := tpl.Execute(w, part); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Header().Set("Content-type", "text/plain")
-		w.Write([]byte(fmt.Sprintf("error executing template %s in partition %s: %v", "partition", pName)))
+		w.Write([]byte(fmt.Sprintf("error executing template %s in partition %s: %v", "partition", pName, err)))
 		return
 	}
 }
