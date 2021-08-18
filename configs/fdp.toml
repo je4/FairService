@@ -8,12 +8,14 @@ addrext = "https://localhost:8443/"
 certpem = "auto"
 #certpem = "cert/server.crt" # tls client certificate file in PEM format
 #keypem = "cert/server.key" # tls client key file in PEM format
+jwtkey = "ov@cO+Rn,lcwmP6r:O3"
+jwtalg = ["HS256", "HS384", "HS512"]
 linktokenexp = "1h"
 
 [[partition]]
     name = "mediathek"
     addrext = "https://localhost:8443/mediathek"
-    jwtkey = "geheim"
+    jwtkey = "ov@cO+Rn,lcwmP6r:O3"
     jwtalg = ["HS256", "HS384", "HS512"]
     handleid = "20.500.11806"
     description = "This repository contains researchdata and OER created at Basel University of Art and Design FHNW"

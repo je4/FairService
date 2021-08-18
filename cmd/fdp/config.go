@@ -75,6 +75,8 @@ type Config struct {
 	Addr         string               `toml:"addr"`
 	CertPEM      string               `toml:"certpem"`
 	KeyPEM       string               `toml:"keypem"`
+	JWTKey       string               `toml:"jwtkey"`
+	JWTAlg       []string             `toml:"jwtalg"`
 	LinkTokenExp duration             `toml:"linktokenexp"`
 	DB           CfgDatabase          `toml:"database"`
 	Tunnel       map[string]SSHTunnel `toml:"tunnel"`

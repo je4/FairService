@@ -155,7 +155,7 @@ func main() {
 		fair.AddPartition(p)
 	}
 
-	srv, err := service.NewServer(config.Addr, logger, fair, accessLog, config.LinkTokenExp.Duration)
+	srv, err := service.NewServer(config.Addr, logger, fair, accessLog, config.JWTKey, config.JWTAlg, config.LinkTokenExp.Duration)
 	if err != nil {
 		logger.Panicf("cannot initialize server: %v", err)
 	}

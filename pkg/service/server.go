@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"crypto/sha512"
 	"crypto/tls"
 	"fmt"
 	"github.com/bluele/gcache"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	fair "github.com/je4/FairService/v2/pkg/fair"
+	"github.com/je4/utils/v2/pkg/JWTInterceptor"
 	dcert "github.com/je4/utils/v2/pkg/cert"
 	"github.com/op/go-logging"
 	"github.com/pkg/errors"
@@ -25,6 +27,8 @@ type Server struct {
 	host, port           string
 	srv                  *http.Server
 	linkTokenExp         time.Duration
+	jwtKey               string
+	jwtAlg               []string
 	log                  *logging.Logger
 	accessLog            io.Writer
 	fair                 *fair.Fair
@@ -32,7 +36,7 @@ type Server struct {
 	resumptionTokenCache gcache.Cache
 }
 
-func NewServer(addr string, log *logging.Logger, fair *fair.Fair, accessLog io.Writer, linkTokenExp time.Duration) (*Server, error) {
+func NewServer(addr string, log *logging.Logger, fair *fair.Fair, accessLog io.Writer, jwtKey string, jwtAlg []string, linkTokenExp time.Duration) (*Server, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot split address %s", addr)
@@ -51,6 +55,8 @@ func NewServer(addr string, log *logging.Logger, fair *fair.Fair, accessLog io.W
 		accessLog:            accessLog,
 		linkTokenExp:         linkTokenExp,
 		fair:                 fair,
+		jwtKey:               jwtKey,
+		jwtAlg:               jwtAlg,
 		templates:            map[string]*template.Template{},
 		resumptionTokenCache: gcache.New(500).ARC().Build(),
 	}
@@ -122,20 +128,40 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 	).Methods("GET")
 	router.Handle(
 		"/{partition}/item",
-		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.createHandler) }()),
-	).Methods("POST")
+		handlers.CompressHandler(JWTInterceptor.JWTInterceptor(
+			func() http.Handler { return http.HandlerFunc(s.createHandler) }(),
+			"",
+			s.jwtKey,
+			s.jwtAlg,
+			sha512.New()))).
+		Methods("POST")
 	router.Handle(
 		"/{partition}/startupdate",
-		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.startUpdateHandler) }()),
-	).Methods("POST")
+		handlers.CompressHandler(JWTInterceptor.JWTInterceptor(
+			func() http.Handler { return http.HandlerFunc(s.startUpdateHandler) }(),
+			"",
+			s.jwtKey,
+			s.jwtAlg,
+			sha512.New()))).
+		Methods("POST")
 	router.Handle(
 		"/{partition}/endupdate",
-		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.endUpdateHandler) }()),
-	).Methods("POST")
+		handlers.CompressHandler(JWTInterceptor.JWTInterceptor(
+			func() http.Handler { return http.HandlerFunc(s.endUpdateHandler) }(),
+			"",
+			s.jwtKey,
+			s.jwtAlg,
+			sha512.New()))).
+		Methods("POST")
 	router.Handle(
 		"/{partition}/abortupdate",
-		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.abortUpdateHandler) }()),
-	).Methods("POST")
+		handlers.CompressHandler(JWTInterceptor.JWTInterceptor(
+			func() http.Handler { return http.HandlerFunc(s.abortUpdateHandler) }(),
+			"",
+			s.jwtKey,
+			s.jwtAlg,
+			sha512.New()))).
+		Methods("POST")
 	router.Handle(
 		"/{partition}/item/{uuid}/{outputType}",
 		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.itemHandler) }()),
