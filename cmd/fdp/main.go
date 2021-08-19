@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"flag"
 	"github.com/je4/FairService/v2/pkg/fair"
+	"github.com/je4/FairService/v2/pkg/model/datacite"
 	"github.com/je4/FairService/v2/pkg/service"
 	"github.com/je4/utils/v2/pkg/JWTInterceptor"
 	lm "github.com/je4/utils/v2/pkg/logger"
@@ -104,6 +105,39 @@ func main() {
 		accessLog = f
 	}
 
+	var dataciteClient *datacite.Client
+	if config.Datacite.Api != "" {
+		dataciteClient, err = datacite.NewClient(
+			config.Datacite.Api,
+			config.Datacite.User,
+			config.Datacite.Password,
+			config.Datacite.Prefix)
+		if err != nil {
+			logger.Panicf("cannot create datacite client: %v", err)
+			return
+		}
+
+		if err := dataciteClient.Hearbeat(); err != nil {
+			logger.Panicf("cannot check datacite heartbeat: %v", err)
+			return
+		}
+
+		r, err := dataciteClient.CreateDOI(nil)
+		if err != nil {
+			logger.Panicf("cannot create doi: %v", err)
+			return
+		}
+		logger.Infof("doi: %v", r)
+
+		/*
+			r, err := dataciteClient.RetrieveDOI("10.5438/0012")
+			if err != nil {
+				logger.Panicf("cannot get doi: %v", err)
+				return
+			}
+			logger.Infof("doi: %v", r)
+		*/
+	}
 	var handle *fair.HandleServiceClient
 	if config.Handle.Addr != "" {
 		tr, err := JWTInterceptor.NewJWTTransport(nil,

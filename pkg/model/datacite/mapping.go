@@ -151,13 +151,13 @@ func (datacite *DataCite) FromCore(core myfair.Core) error {
 				},
 				GivenName:   p.GivenName,
 				FamilyName:  p.FamilyName,
-				Affiliation: p.Affiliation,
-				NameIdentifier: NameIdentifier{
+				Affiliation: []string{p.Affiliation},
+				NameIdentifier: []NameIdentifier{NameIdentifier{
 					Value:                p.NameIdentifier.Value,
 					Lang:                 p.NameIdentifier.Lang,
 					SchemeURI:            p.NameIdentifier.SchemeURI,
 					NameIdentifierScheme: p.NameIdentifier.NameIdentifierScheme,
-				},
+				}},
 			})
 		} else {
 			datacite.Contributors.Contributor = append(datacite.Contributors.Contributor, Contributor{

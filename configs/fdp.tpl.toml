@@ -29,14 +29,14 @@ linktokenexp = "1h"
         adminemail = ["tabea.lurk@fhnw.ch"]
 
 [datacite]
-    user = "WFOS.MZWLKS"
-    password = "c>pJA^3ay%q.0"
-    api = "https://api.datacite.org"
-    prefix = "10.26254"
+    user = "dcuser"
+    password = "xxxxxxxxxxxxx"
+    api = "https://api.test.datacite.org"
+
 
 [database]
 servertype = "postgres"
-dsn = "postgres://fairservice:MtgViCEqJoiQoXOP@localhost:5433/fairservice"
+dsn = "postgres://fairservice:xxxxxxx@localhost:5433/fairservice"
 connection_max = 5000
 schema = "public"
 

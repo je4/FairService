@@ -67,6 +67,13 @@ type Handle struct {
 	JWTAlg string `toml:"jwtalg"`
 }
 
+type Datacite struct {
+	Api      string `toml:"api"`
+	User     string `toml:"user"`
+	Password string `toml:"password"`
+	Prefix   string `toml:"prefix"`
+}
+
 type Config struct {
 	Logfile      string               `toml:"logfile"`
 	Loglevel     string               `toml:"loglevel"`
@@ -82,6 +89,7 @@ type Config struct {
 	Tunnel       map[string]SSHTunnel `toml:"tunnel"`
 	Partition    []Partition          `toml:"partition"`
 	Handle       Handle               `toml:"handle"`
+	Datacite     Datacite             `toml:"datacite"`
 }
 
 func LoadConfig(filepath string) Config {
