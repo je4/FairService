@@ -355,7 +355,7 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 		return "", errors.Wrapf(err, "cannot get source %s", data.Source)
 	}
 
-	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, deleted, identifiers"+
+	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, deleted, identifier"+
 		" FROM %s.coreview "+
 		" WHERE source=$1 AND signature=$2", f.dbSchema)
 	params := []interface{}{src.ID, data.Signature}
