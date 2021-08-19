@@ -33,12 +33,14 @@ const (
 	DataAccessPublic     DataAccess = "public"
 	DataAccessClosed     DataAccess = "closed"
 	DataAccessClosedData DataAccess = "closed_data"
+	DataAccessOpenAccess DataAccess = "open_access"
 )
 
 var DataAccessReverse = map[string]DataAccess{
 	string(DataAccessPublic):     DataAccessPublic,
 	string(DataAccessClosed):     DataAccessClosed,
 	string(DataAccessClosedData): DataAccessClosedData,
+	string(DataAccessOpenAccess): DataAccessOpenAccess,
 }
 
 type ItemData struct {
@@ -353,7 +355,7 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 		return "", errors.Wrapf(err, "cannot get source %s", data.Source)
 	}
 
-	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, deleted"+
+	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, deleted, identifiers"+
 		" FROM %s.coreview "+
 		" WHERE source=$1 AND signature=$2", f.dbSchema)
 	params := []interface{}{src.ID, data.Signature}
@@ -361,10 +363,10 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 
 	var metaStr string
 	var uuidStr string
-	var set, catalog []string
+	var set, catalog, identifiers []string
 	var accessStr string
 	var deleted bool
-	if err := row.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &deleted); err != nil {
+	if err := row.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &deleted, pq.Array(&identifiers)); err != nil {
 		if err != sql.ErrNoRows {
 			return "", errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
@@ -375,6 +377,7 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 			return "", errors.Wrap(err, "cannot generate uuid")
 		}
 		uuidStr := uuidVal.String()
+		identifiers = []string{}
 		if f.handle != nil {
 			newHandle := fmt.Sprintf("%s/fair/%s/%s", partition.HandleID, partition.Domain, uuidStr)
 			newURL, err := url.Parse(fmt.Sprintf("%s/redir/%s", partition.AddrExt, uuidStr))
@@ -388,6 +391,7 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 				Value:          newHandle,
 				IdentifierType: myfair.RelatedIdentifierTypeHandle,
 			})
+			identifiers = append(identifiers, fmt.Sprintf("%s:%s", myfair.RelatedIdentifierTypeHandle, newHandle))
 		}
 
 		coreBytes, err := json.Marshal(data.Metadata)
@@ -395,8 +399,8 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 			return "", errors.Wrapf(err, "cannot marshal core data [%v]", data.Metadata)
 		}
 		sqlstr := fmt.Sprintf("INSERT INTO %s.core"+
-			" (uuid, datestamp, setspec, metadata, signature, source, access, catalog, seq, deleted)"+
-			" VALUES($1, NOW(), $2, $3, $4, $5, $6, $7, NEXTVAL('lastchange'), false)", f.dbSchema)
+			" (uuid, datestamp, setspec, metadata, signature, source, access, catalog, seq, deleted, identifier)"+
+			" VALUES($1, NOW(), $2, $3, $4, $5, $6, $7, NEXTVAL('lastchange'), false, $8)", f.dbSchema)
 		params := []interface{}{
 			uuidStr, // uuid
 			// datestamp
@@ -407,7 +411,8 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 			data.Access,            // access
 			pq.Array(data.Catalog), // catalog
 			// seq
-			//deleted
+			// deleted
+			pq.Array(identifiers), // identifier
 		}
 		ret, err := f.db.Exec(sqlstr, params...)
 		if err != nil {
@@ -440,6 +445,34 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 		}
 		sort.Strings(catalog)
 		sort.Strings(set)
+		sort.Strings(identifiers)
+
+		for _, id := range identifiers {
+			strs := strings.SplitN(id, ":", 2)
+			if len(strs) != 2 {
+				return "", errors.New(fmt.Sprintf("[%s] invalid identifier format %s", uuidStr, id))
+			}
+
+			idType, ok := myfair.RelatedIdentifierTypeReverse[strs[0]]
+			if !ok {
+				return "", errors.New(fmt.Sprintf("[%s] unknown identifier type %s", uuidStr, id))
+			}
+			idStr := strs[1]
+			found := false
+			for _, di := range data.Metadata.Identifier {
+				if di.IdentifierType == idType && di.Value == idStr {
+					found = true
+					break
+				}
+			}
+			if !found {
+				data.Metadata.Identifier = append(data.Metadata.Identifier, myfair.Identifier{
+					Value:          idStr,
+					IdentifierType: idType,
+				})
+			}
+		}
+
 		// do update here
 		var oldMeta myfair.Core
 		if err := json.Unmarshal([]byte(metaStr), &oldMeta); err != nil {
