@@ -3,6 +3,7 @@ package dcmi
 import (
 	"fmt"
 	"github.com/je4/FairService/v2/pkg/model/myfair"
+	"strings"
 )
 
 var MyfairResource = map[myfair.ResourceType]Type{
@@ -94,7 +95,15 @@ func (dcmi *DCMI) FromCore(core myfair.Core) error {
 	if len(core.Identifier) > 0 {
 		dcmi.Identifier = []string{}
 		for _, id := range core.Identifier {
-			dcmi.Identifier = append(dcmi.Identifier, fmt.Sprintf("%v:%s", id.IdentifierType, id.Value))
+			dcmi.Identifier = append(dcmi.Identifier, fmt.Sprintf("%v:%s", strings.ToLower(string(id.IdentifierType)), id.Value))
+			switch id.IdentifierType {
+			case myfair.RelatedIdentifierTypeHandle:
+				dcmi.Identifier = append(dcmi.Identifier, fmt.Sprintf("https://hdl.handle.net/%s", id.Value))
+			case myfair.RelatedIdentifierTypeURL:
+				dcmi.Identifier = append(dcmi.Identifier, fmt.Sprintf("%s", id.Value))
+			case myfair.RelatedIdentifierTypeDOI:
+				dcmi.Identifier = append(dcmi.Identifier, fmt.Sprintf("https://dx.doi.org/%s", id.Value))
+			}
 		}
 	}
 	if core.Rights != "" {
