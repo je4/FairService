@@ -117,17 +117,10 @@ func main() {
 			return
 		}
 
-		if err := dataciteClient.Hearbeat(); err != nil {
+		if err := dataciteClient.Heartbeat(); err != nil {
 			logger.Panicf("cannot check datacite heartbeat: %v", err)
 			return
 		}
-
-		r, err := dataciteClient.CreateDOI(nil)
-		if err != nil {
-			logger.Panicf("cannot create doi: %v", err)
-			return
-		}
-		logger.Infof("doi: %v", r)
 
 		/*
 			r, err := dataciteClient.RetrieveDOI("10.5438/0012")
@@ -183,7 +176,7 @@ func main() {
 		partitions = append(partitions, p)
 	}
 
-	fair, err := fair.NewFair(db, config.DB.Schema, handle, logger)
+	fair, err := fair.NewFair(db, config.DB.Schema, handle, dataciteClient, logger)
 	if err != nil {
 		logger.Panicf("cannot initialize fair: %v", err)
 	}
@@ -191,7 +184,7 @@ func main() {
 		fair.AddPartition(p)
 	}
 
-	srv, err := service.NewServer(config.Addr, logger, fair, accessLog, config.JWTKey, config.JWTAlg, config.LinkTokenExp.Duration)
+	srv, err := service.NewServer(config.Addr, config.UserName, config.Password, logger, fair, accessLog, config.JWTKey, config.JWTAlg, config.LinkTokenExp.Duration)
 	if err != nil {
 		logger.Panicf("cannot initialize server: %v", err)
 	}

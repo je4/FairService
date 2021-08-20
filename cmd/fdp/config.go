@@ -90,6 +90,8 @@ type Config struct {
 	Partition    []Partition          `toml:"partition"`
 	Handle       Handle               `toml:"handle"`
 	Datacite     Datacite             `toml:"datacite"`
+	UserName     string               `toml:"username"`
+	Password     string               `toml:"password"`
 }
 
 func LoadConfig(filepath string) Config {

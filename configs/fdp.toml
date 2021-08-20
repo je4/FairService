@@ -11,10 +11,13 @@ certpem = "auto"
 jwtkey = "ov@cO+Rn,lcwmP6r:O3"
 jwtalg = ["HS256", "HS384", "HS512"]
 linktokenexp = "1h"
+username = "admin"
+password = "swordfish"
 
 [[partition]]
     name = "mediathek"
-    addrext = "https://localhost:8443/mediathek"
+    # addrext = "https://localhost:8443/mediathek"
+    addrext = "https://dataverse.hgk.fhnw.ch/mediathek"
     jwtkey = "ov@cO+Rn,lcwmP6r:O3"
     jwtalg = ["HS256", "HS384", "HS512"]
     handleid = "20.500.11806"
