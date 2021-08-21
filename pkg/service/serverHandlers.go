@@ -6,12 +6,12 @@ import (
 	"encoding/xml"
 	"fmt"
 	"github.com/gorilla/mux"
+	"github.com/je4/FairService/v2/pkg/datatable"
 	"github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/FairService/v2/pkg/model/dcmi"
 	"io/ioutil"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -372,32 +372,6 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 	return
 }
 
-type SearchQueryColumnSearch struct {
-	Value string `json:"value"`
-	Regex bool   `json:"regex"`
-}
-
-type SearchQueryColumn struct {
-	Data       string                  `json:"data"`
-	Name       string                  `json:"name"`
-	Searchable bool                    `json:"searchable"`
-	Orderable  bool                    `json:"orderable"`
-	Search     SearchQueryColumnSearch `json:"search"`
-}
-
-type SearchQueryOrder struct {
-	Column int64  `json:"column"`
-	Dir    string `json:"dir"`
-}
-
-type SearchQuery struct {
-	Columns []SearchQueryColumn     `json:"columns"`
-	Order   []SearchQueryOrder      `json:"order"`
-	Start   int64                   `json:"start"`
-	Length  int64                   `json:"length"`
-	Search  SearchQueryColumnSearch `json:"search"`
-}
-
 type DataTableResult struct {
 	Draw            int64               `json:"draw"`
 	RecordsTotal    int64               `json:"recordsTotal"`
@@ -432,57 +406,20 @@ func (s *Server) searchDatatableHandler(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	values := req.URL.Query()
-	/*
-		sq := SearchQuery{
-			Columns: []SearchQueryColumn{},
-			Order:   []SearchQueryOrder{},
-			Search:  SearchQueryColumnSearch{},
-		}
-	*/
-	var start, length, draw int64
-	var search string
-	for key, vals := range values {
-		if len(vals) == 0 {
-			continue
-		}
-		val := vals[0]
-		/*
-			columns := columnsParam.FindAllString(key, -1)
-			if columns != nil {
-
-			} else {
-
-		*/
-		switch key {
-		case "start":
-			if start, err = strconv.ParseInt(val, 10, 64); err != nil {
-				sendResult("error", fmt.Sprintf("invalid parameter %s: %s", key, val), "")
-				return
-			}
-		case "length":
-			if length, err = strconv.ParseInt(val, 10, 64); err != nil {
-				sendResult("error", fmt.Sprintf("invalid parameter %s: %s", key, val), "")
-				return
-			}
-		case "draw":
-			if draw, err = strconv.ParseInt(val, 10, 64); err != nil {
-				sendResult("error", fmt.Sprintf("invalid parameter %s: %s", key, val), "")
-				return
-			}
-		case "search[value]":
-			search = val
-		}
+	dReq := &datatable.Request{}
+	if err := dReq.FromRequest(req); err != nil {
+		sendResult("error", fmt.Sprintf("cannot eval request parameter: %v", err), "")
+		return
 	}
 
-	result, num, err := s.fair.Search(pName, search, start, length)
+	result, num, err := s.fair.Search(pName, dReq)
 	if err != nil {
 		sendResult("error", fmt.Sprintf("cannot search: %v", err), "")
 		return
 	}
 
 	rData := &DataTableResult{
-		Draw:            draw,
+		Draw:            dReq.Draw,
 		RecordsTotal:    num,
 		RecordsFiltered: num - int64(len(result)),
 		Data:            result,

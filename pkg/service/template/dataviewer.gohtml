@@ -20,27 +20,25 @@
         </a>
     </header>
 
-    <table id="fairdata" class="display" style="width:100%">
+    <table id="fairdata" class="display table" style="width:100%">
         <thead>
         <tr>
-            <th>First name</th>
-            <th>Last name</th>
-            <th>Position</th>
-            <th>Office</th>
-            <th>Start date</th>
-            <th>Salary</th>
+            <th>Titles</th>
+            <th>Persons</th>
+            <th>Year</th>
+            <th></th>
         </tr>
         </thead>
+        <!--
         <tfoot>
         <tr>
-            <th>First name</th>
-            <th>Last name</th>
-            <th>Position</th>
-            <th>Office</th>
-            <th>Start date</th>
-            <th>Salary</th>
+            <th>Titles</th>
+            <th>Persons</th>
+            <th>Year</th>
+            <th></th>
         </tr>
         </tfoot>
+        -->
     </table>
 </div>
 <!-- Optional JavaScript; choose one of the two! -->
@@ -54,7 +52,75 @@
         $('#fairdata').DataTable( {
             "processing": true,
             "serverSide": true,
-            "ajax": "viewer/search"
+            "ajax": "viewer/search",
+            columns: [
+                /*
+                {
+                    data: 'access',
+                    "visible": false,
+                },
+                {
+                    data: 'catalogs',
+                    "visible": false,
+                },
+                {
+                    data: 'deleted',
+                    "visible": false,
+                },
+                {
+                    data: 'identifiers',
+                    "visible": false,
+                },
+                {
+                    data: 'partitions',
+                    "visible": false,
+                },
+                */
+                {
+                    targets: 0,
+                    data: 'titles'
+                },
+                {
+                    targets: 1,
+                    data: 'persons'
+                },
+                {
+                    targets: 2,
+                    data: 'publicationyear'
+                },
+                {
+                    targets: 3,
+                    data: 'uuid',
+                    orderable: false,
+                    searchable: false,
+                    render: function (data, type) {
+                        if (type === 'display') {
+                            if(data == '') return;
+                            return '<a href="redir/'+data+'"><img src="static/bootstrap/icons/box-arrow-up-right.svg" width="20" /></a>';
+                        }
+                        return data;
+                    },
+
+                }
+                /*
+                {
+                    data: 'resourcetype',
+                    "visible": false,
+                },
+                {
+                    data: 'sets',
+                    "visible": false,
+                },
+                {
+                    data: 'signature',
+                    "visible": false,
+                },
+                {
+                    data: 'sourcename',
+                    "visible": false,
+                },
+                */
+                ]
         } );
     } );
 </script>

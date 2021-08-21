@@ -9,6 +9,7 @@ import "embed"
 //go:embed static/bootstrap/css/datatables.min.css
 //go:embed static/bootstrap/js/bootstrap.bundle.min.js
 //go:embed static/bootstrap/js/bootstrap.bundle.min.js.map
+//go:embed static/bootstrap/icons/box-arrow-up-right.svg
 //go:embed static/dspace/js/jquery.js
 //go:embed static/dspace/js/bootstrap.min.js
 //go:embed static/bootstrap/js/datatables.min.js

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/je4/FairService/v2/pkg/datatable"
 	"github.com/je4/FairService/v2/pkg/model/datacite"
 	"github.com/je4/FairService/v2/pkg/model/myfair"
 	//"github.com/je4/FairService/v2/pkg/service"
@@ -624,23 +625,64 @@ func (f *Fair) CreateDOI(partitionName, uuidStr, targetUrl string) (*datacite.AP
 	return f.dataciteClient.CreateDOI(dataciteData, doiSuffix, targetUrl)
 }
 
-func (f *Fair) Search(partitionName string, searchStr string, offset, limit int64) ([]map[string]string, int64, error) {
+var fieldDef = map[string]string{
+	"partition":       "src.partition AS partition",
+	"sourcename":      "src.name AS sourcename",
+	"uuid":            "s.uuid AS uuid",
+	"persons":         "array_to_string(s.persons, '; ') AS persons",
+	"titles":          "array_to_string(s.titles, '; ') AS titles",
+	"sets":            "array_to_string(s.setspec, '; ') AS sets",
+	"catalogs":        "array_to_string(s.catalog, '; ') AS catalogs",
+	"signature":       "s.signature AS signature",
+	"access":          "s.access AS access",
+	"deleted":         "s.deleted::TEXT AS deleted",
+	"identifiers":     "array_to_string(s.identifier, '; ') AS identifiers",
+	"resourcetype":    "s.resourcetype AS resourcetype",
+	"publicationyear": "s.publicationyear AS publicationyear",
+}
+
+func (f *Fair) Search(partitionName string, dtr *datatable.Request) ([]map[string]string, int64, error) {
 	part, err := f.GetPartition(partitionName)
 	if err != nil {
 		return nil, 0, errors.Wrapf(err, "cannot get partition %s", partitionName)
 	}
 
-	sqlFields := "src.partition AS partition, src.name AS sourcename, s.uuid, " +
-		" array_to_string(s.persons, '; ') AS persons, array_to_string(s.titles, '; ') AS titles, " +
-		" array_to_string(s.setspec, '; ') AS sets, array_to_string(s.catalog, '; ') AS catalogs, s.signature, " +
-		" s.access, s.deleted, array_to_string(s.identifier, '; ') AS identifiers, s.resourcetype, s.publicationyear"
+	var fields []string
+	var resultData = map[string]*string{}
+	var resultVals []interface{}
+
+	for key, col := range dtr.Columns {
+		str, ok := fieldDef[col.Data]
+		if !ok {
+			return nil, 0, errors.New(fmt.Sprintf("invalid field name for column %v: %s", key, col.Data))
+		}
+		fields = append(fields, str)
+		var h string
+		resultData[col.Data] = &h
+		resultVals = append(resultVals, &h)
+	}
+	sqlFields := strings.Join(fields, ", ")
+
+	var orderList = []string{}
+	for key, order := range dtr.Order {
+		col, ok := dtr.Columns[order.Column]
+		if !ok {
+			return nil, 0, errors.New(fmt.Sprintf("invalid column nuber %v in order %v", order.Column, key))
+		}
+		switch order.Dir {
+		case "asc":
+			orderList = append(orderList, fmt.Sprintf("%s %s", col.Data, order.Dir))
+		case "desc":
+			orderList = append(orderList, fmt.Sprintf("%s %s", col.Data, order.Dir))
+		}
+	}
 
 	var params = []interface{}{part.Name}
 	sqlWhere := " s.source=src.sourceid AND src.partition=$1 "
 
-	if searchStr != "" {
-		params = append(params, searchStr)
-		searchStr += " AND s.fulltext @@ to_tsquery($2) "
+	if dtr.Search.Value != "" {
+		params = append(params, dtr.Search.Value)
+		sqlWhere += " AND s.fulltext @@ to_tsquery($2) "
 	}
 
 	sqlstr := fmt.Sprintf("SELECT COUNT(*) AS num"+
@@ -650,44 +692,35 @@ func (f *Fair) Search(partitionName string, searchStr string, offset, limit int6
 	if err := f.db.QueryRow(sqlstr, params...).Scan(&num); err != nil {
 		return nil, 0, errors.Wrapf(err, "cannot execute query %s - %v", sqlstr, params)
 	}
-	if offset >= num {
+	if dtr.Start >= num {
 		return []map[string]string{}, num, nil
+	}
+
+	sqlOrder := ""
+	if len(orderList) > 0 {
+		sqlOrder = fmt.Sprintf("ORDER BY %s", strings.Join(orderList, ", "))
 	}
 
 	sqlstr = fmt.Sprintf("SELECT %s "+
 		" FROM %s.searchable s, %s.source src "+
 		" WHERE %s "+
-		" LIMIT %v OFFSET %v", sqlFields, f.dbSchema, f.dbSchema, sqlWhere, limit, offset)
+		" %s "+
+		" LIMIT %v OFFSET %v", sqlFields, f.dbSchema, f.dbSchema, sqlWhere, sqlOrder, dtr.Length, dtr.Start)
+	f.log.Infof("%s - %v", sqlstr, params)
 	rows, err := f.db.Query(sqlstr, params...)
 	if err != nil {
 		return nil, 0, errors.Wrapf(err, "cannot execute query %s - %v", sqlstr, params)
 	}
-	var partition, sourcename, persons, titles, sets, catalogs, signature, access, identifiers, resourcetype, publicationyear string
-	var deleted bool
 	var result []map[string]string
 	for rows.Next() {
-		if err := rows.Scan(&partition, &sourcename, &persons, &titles, &sets, &catalogs, &signature, &access,
-			&deleted, &identifiers, &resourcetype, &publicationyear); err != nil {
+		if err := rows.Scan(resultVals...); err != nil {
 			return nil, 0, errors.Wrapf(err, "cannot scan row %s - %v", sqlstr, params)
 		}
-		delstr := "0"
-		if deleted {
-			delstr = "1"
+		var rLine = map[string]string{}
+		for key, val := range resultData {
+			rLine[key] = *val
 		}
-		result = append(result, map[string]string{
-			"partition":       partition,
-			"sourcename":      sourcename,
-			"persons":         persons,
-			"titles":          titles,
-			"sets":            sets,
-			"catalogs":        catalogs,
-			"signature":       signature,
-			"access":          access,
-			"deleted":         delstr,
-			"identifiers":     identifiers,
-			"resourcetype":    resourcetype,
-			"publicationyear": publicationyear,
-		})
+		result = append(result, rLine)
 	}
 	return result, num, nil
 }
