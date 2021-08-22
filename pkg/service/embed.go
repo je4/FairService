@@ -16,6 +16,7 @@ import "embed"
 //go:embed static/dspace/css/style.css
 //go:embed static/dspace/css/bootstrap.min.css
 //go:embed static/dspace/css/bootstrap-theme.min.css
+//go:embed static/img/DOI_logo.svg
 var staticFS embed.FS
 
 //go:embed template/oai.gohtml

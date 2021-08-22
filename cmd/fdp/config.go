@@ -51,14 +51,15 @@ type OAI struct {
 }
 
 type Partition struct {
-	Name        string   `toml:"name"`
-	AddrExt     string   `toml:"addrext"`
-	Description string   `toml:"description"`
-	Domain      string   `toml:"domain"`
-	OAI         OAI      `toml:"oai"`
-	HandleID    string   `toml:"handleid"`
-	JWTKey      string   `toml:"jwtkey"`
-	JWTAlg      []string `toml:"jwtalg"`
+	Name         string   `toml:"name"`
+	AddrExt      string   `toml:"addrext"`
+	Description  string   `toml:"description"`
+	Domain       string   `toml:"domain"`
+	HandlePrefix string   `toml:"handleprefix"`
+	OAI          OAI      `toml:"oai"`
+	HandleID     string   `toml:"handleid"`
+	JWTKey       string   `toml:"jwtkey"`
+	JWTAlg       []string `toml:"jwtalg"`
 }
 
 type Handle struct {

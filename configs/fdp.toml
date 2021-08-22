@@ -23,6 +23,7 @@ password = "swordfish"
     handleid = "20.500.11806"
     description = "This repository contains researchdata and OER created at Basel University of Art and Design FHNW"
     domain = "mediathek.hgk.fhnw.ch"
+    handleprefix = "med"
     [partition.oai]
         pagesize = 80
         resumptiontokentimeout = "3m"

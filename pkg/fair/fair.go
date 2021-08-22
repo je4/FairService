@@ -46,16 +46,17 @@ var DataAccessReverse = map[string]DataAccess{
 }
 
 type ItemData struct {
-	Source    string      `json:"source"`
-	Signature string      `json:"signature"`
-	Metadata  myfair.Core `json:"metadata"`
-	Set       []string    `json:"set"`
-	Catalog   []string    `json:"catalog"`
-	Access    DataAccess  `json:"access"`
-	Deleted   bool        `json:"deleted"`
-	Seq       int64
-	UUID      string
-	Datestamp time.Time
+	Source     string      `json:"source"`
+	Signature  string      `json:"signature"`
+	Metadata   myfair.Core `json:"metadata"`
+	Set        []string    `json:"set"`
+	Catalog    []string    `json:"catalog"`
+	Identifier []string    `json:"identifier"`
+	Access     DataAccess  `json:"access"`
+	Deleted    bool        `json:"deleted"`
+	Seq        int64       `json:"-"`
+	UUID       string      `json:"uuid"`
+	Datestamp  time.Time   `json:"datestamp"`
 }
 
 type SourceData struct {
@@ -100,6 +101,15 @@ func NewFair(db *sql.DB, dbSchema string, handle *HandleServiceClient, dataciteC
 		return nil, errors.Wrap(err, "cannot load sources")
 	}
 	return f, nil
+}
+
+func (f *Fair) nextCounter(name string) (int64, error) {
+	sqlStr := fmt.Sprintf("SELECT NEXTVAL('%s.%s')", f.dbSchema, name)
+	var next int64
+	if err := f.db.QueryRow(sqlStr).Scan(&next); err != nil {
+		return 0, errors.Wrapf(err, "cannot execute %s", sqlStr)
+	}
+	return next, nil
 }
 
 func (f *Fair) AddPartition(p *Partition) {
@@ -304,7 +314,7 @@ func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 		return nil, errors.New(fmt.Sprintf("partition %s not found", partitionName))
 	}
 
-	sqlstr := fmt.Sprintf("SELECT metadata, setspec, catalog, access, signature, sourcename, deleted, seq, datestamp"+
+	sqlstr := fmt.Sprintf("SELECT metadata, setspec, catalog, access, signature, sourcename, deleted, seq, datestamp, identifier"+
 		" FROM %s.coreview"+
 		" WHERE partition=$1 AND uuid=$2", f.dbSchema)
 	params := []interface{}{partition.Name, uuidStr}
@@ -318,22 +328,24 @@ func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 	var deleted bool
 	var seq int64
 	var datestamp time.Time
-	if err := row.Scan(&metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &source, &deleted, &seq, &datestamp); err != nil {
+	var identifier []string
+	if err := row.Scan(&metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &source, &deleted, &seq, &datestamp, pq.Array(&identifier)); err != nil {
 		if err != sql.ErrNoRows {
 			return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
 		return nil, nil
 	}
 	data := &ItemData{
-		UUID:      uuidStr,
-		Source:    source,
-		Signature: signature,
-		Metadata:  myfair.Core{},
-		Set:       set,
-		Catalog:   catalog,
-		Deleted:   deleted,
-		Seq:       seq,
-		Datestamp: datestamp,
+		UUID:       uuidStr,
+		Source:     source,
+		Signature:  signature,
+		Metadata:   myfair.Core{},
+		Set:        set,
+		Catalog:    catalog,
+		Identifier: identifier,
+		Deleted:    deleted,
+		Seq:        seq,
+		Datestamp:  datestamp,
 	}
 	data.Access, ok = DataAccessReverse[accessStr]
 	if !ok {
@@ -382,8 +394,27 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 		}
 		uuidStr := uuidVal.String()
 		identifiers = []string{}
+		var sqlHandle = sql.NullString{}
 		if f.handle != nil {
-			newHandle := fmt.Sprintf("%s/fair/%s/%s", partition.HandleID, partition.Domain, uuidStr)
+			/*
+				// check whether internal handle already available
+				var hasHandle bool
+				var handlePrefix = fmt.Sprintf("%s/", partition.HandleID)
+				for _, id := range data.Metadata.Identifier {
+					if id.IdentifierType == myfair.RelatedIdentifierTypeHandle {
+						if strings.HasPrefix(id.Value, handlePrefix) {
+							hasHandle = true
+							break
+						}
+					}
+				}
+
+			*/
+			next, err := f.nextCounter("handle")
+			if err != nil {
+				return "", errors.Wrap(err, "cannot get next handle value")
+			}
+			newHandle := fmt.Sprintf("%s/%s/%v", partition.HandleID, partition.HandlePrefix, next)
 			newURL, err := url.Parse(fmt.Sprintf("%s/redir/%s", partition.AddrExt, uuidStr))
 			if err != nil {
 				return "", errors.Wrapf(err, "cannot parse url %s", fmt.Sprintf("%s/redir/%s", partition.AddrExt, uuidStr))
@@ -391,11 +422,14 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 			if err := f.handle.Create(newHandle, newURL); err != nil {
 				return "", errors.Wrapf(err, "cannot create handle %s for %s", newHandle, newURL.String())
 			}
+			sqlHandle.String = newHandle
+			sqlHandle.Valid = true
 			data.Metadata.Identifier = append(data.Metadata.Identifier, myfair.Identifier{
 				Value:          newHandle,
 				IdentifierType: myfair.RelatedIdentifierTypeHandle,
 			})
 			identifiers = append(identifiers, fmt.Sprintf("%s:%s", myfair.RelatedIdentifierTypeHandle, newHandle))
+
 		}
 
 		coreBytes, err := json.Marshal(data.Metadata)
@@ -477,6 +511,11 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 			}
 		}
 
+		identifiers = []string{}
+		for _, id := range data.Metadata.Identifier {
+			identifiers = append(identifiers, fmt.Sprintf("%s:%s", id.IdentifierType, id.Value))
+		}
+
 		// do update here
 		var oldMeta myfair.Core
 		if err := json.Unmarshal([]byte(metaStr), &oldMeta); err != nil {
@@ -506,13 +545,14 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 		}
 
 		sqlstr = fmt.Sprintf("UPDATE %s.core"+
-			" SET setspec=$1, metadata=$2, access=$3, catalog=$4, deleted=false"+
-			" WHERE uuid=$5", f.dbSchema)
+			" SET setspec=$1, metadata=$2, access=$3, catalog=$4, deleted=false, identifier=$5"+
+			" WHERE uuid=$6", f.dbSchema)
 		params := []interface{}{
 			pq.Array(data.Set),
 			string(dataMetaBytes),
 			data.Access,
 			pq.Array(data.Catalog),
+			pq.Array(identifiers),
 			uuidStr}
 		if _, err := f.db.Exec(sqlstr, params...); err != nil {
 			return "", errors.Wrapf(err, "[%s] cannot update [%s] - [%v]", uuidStr, sqlstr, params)
@@ -603,13 +643,6 @@ func (f *Fair) CreateDOI(partitionName, uuidStr, targetUrl string) (*datacite.AP
 		return nil, errors.Wrapf(err, "cannot get partition %s", partitionName)
 	}
 
-	doiSuffix := fmt.Sprintf("%s/%s", part.Domain, uuidStr)
-	doiStr := fmt.Sprintf("%s/%s", f.dataciteClient.GetPrefix(), doiSuffix)
-	_, err = f.dataciteClient.RetrieveDOI(doiStr)
-	if err == nil {
-		return nil, errors.New(fmt.Sprintf("doi %s already exists", doiStr))
-	}
-
 	data, err := f.GetItem(partitionName, uuidStr)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error loading item")
@@ -618,11 +651,51 @@ func (f *Fair) CreateDOI(partitionName, uuidStr, targetUrl string) (*datacite.AP
 		return nil, errors.New(fmt.Sprintf("item %s/%s not found", partitionName, uuidStr))
 	}
 
+	if data.Deleted {
+		return nil, errors.New(fmt.Sprintf("item %s/%s is deleted", partitionName, uuidStr))
+	}
+
+	var hasDOI string
+	var doiPrefix = fmt.Sprintf("%s:", myfair.RelatedIdentifierTypeDOI)
+	for _, id := range data.Identifier {
+		if strings.HasPrefix(id, doiPrefix) {
+			hasDOI = strings.TrimPrefix(id, doiPrefix)
+			break
+		}
+	}
+	if hasDOI != "" {
+		return nil, errors.New(fmt.Sprintf("doi %s for uuid %s already exists", hasDOI, uuidStr))
+	}
+
+	next, err := f.nextCounter("doi")
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot get next doi sequence value")
+	}
+
+	doiSuffix := fmt.Sprintf("%s/%v", part.HandlePrefix, next)
+	doiStr := fmt.Sprintf("%s/%s", f.dataciteClient.GetPrefix(), doiSuffix)
+	_, err = f.dataciteClient.RetrieveDOI(doiStr)
+	if err == nil {
+		return nil, errors.New(fmt.Sprintf("doi %s already exists", doiStr))
+	}
+
 	dataciteData := &datacite.DataCite{}
 	dataciteData.InitNamespace()
 	dataciteData.FromCore(data.Metadata)
 
-	return f.dataciteClient.CreateDOI(dataciteData, doiSuffix, targetUrl)
+	api, err := f.dataciteClient.CreateDOI(dataciteData, doiSuffix, targetUrl)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot create doi")
+	}
+
+	data.Metadata.Identifier = append(data.Metadata.Identifier, myfair.Identifier{
+		Value:          doiStr,
+		IdentifierType: myfair.RelatedIdentifierTypeDOI,
+	})
+	if _, err := f.CreateItem(partitionName, data); err != nil {
+		return nil, errors.Wrapf(err, "cannot store item %s/%s", partitionName, uuidStr)
+	}
+	return api, nil
 }
 
 var fieldDef = map[string]string{
@@ -637,6 +710,8 @@ var fieldDef = map[string]string{
 	"access":          "s.access AS access",
 	"deleted":         "s.deleted::TEXT AS deleted",
 	"identifiers":     "array_to_string(s.identifier, '; ') AS identifiers",
+	"handle":          "s.handle AS handle",
+	"doi":             "s.doi AS doi",
 	"resourcetype":    "s.resourcetype AS resourcetype",
 	"publicationyear": "s.publicationyear AS publicationyear",
 }

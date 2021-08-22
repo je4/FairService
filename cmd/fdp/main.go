@@ -158,6 +158,7 @@ func main() {
 			pconf.Name,
 			pconf.AddrExt,
 			pconf.Domain,
+			pconf.HandlePrefix,
 			pconf.OAI.RepositoryName,
 			pconf.OAI.AdminEmail,
 			pconf.OAI.SampleIdentifier,
