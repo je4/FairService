@@ -1,4 +1,4 @@
-package datacite
+package dataciteModel
 
 import (
 	"github.com/araddon/dateparse"

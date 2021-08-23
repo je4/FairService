@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/je4/FairService/v2/pkg/fair"
-	"github.com/je4/FairService/v2/pkg/model/datacite"
+	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/FairService/v2/pkg/model/dcmi"
 	"github.com/je4/FairService/v2/pkg/service/oai"
 	"github.com/pkg/errors"
@@ -313,7 +313,7 @@ func (s *Server) oaiHandlerGetRecord(w http.ResponseWriter, req *http.Request, p
 		dcmiData.FromCore(data.Metadata)
 		metadata.OAIDC = dcmiData
 	case "oai_datacite":
-		dataciteData := &datacite.DataCite{}
+		dataciteData := &dataciteModel.DataCite{}
 		dataciteData.InitNamespace()
 		dataciteData.FromCore(data.Metadata)
 		metadata.Datacite = dataciteData
@@ -569,7 +569,7 @@ func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request,
 					dcmiData.FromCore(item.Metadata)
 					metadata.OAIDC = dcmiData
 				case "oai_datacite":
-					dataciteData := &datacite.DataCite{}
+					dataciteData := &dataciteModel.DataCite{}
 					dataciteData.InitNamespace()
 					dataciteData.FromCore(item.Metadata)
 					metadata.Datacite = dataciteData

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/pkg/errors"
 	"io/ioutil"
 	"net/http"
@@ -92,7 +93,56 @@ func (c *Client) RetrieveDOI(doi string) (*API, error) {
 	return dc, nil
 }
 
-func (c *Client) CreateDOI(data *DataCite, doiSuffix, targetUrl string) (*API, error) {
+func (c *Client) Delete(doi string) (*API, error) {
+	doiApi, err := c.RetrieveDOI(doi)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot retrieve %s", doi)
+	}
+
+	if doiApi.Data.Type != "draft" {
+		return nil, errors.New(fmt.Sprintf("cannot delete dois with type %s", doiApi.Data.Type))
+	}
+	var client http.Client
+
+	urlStr := fmt.Sprintf("%s/dois/%s", c.api, doi)
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot parse url %s", urlStr)
+	}
+	req := &http.Request{
+		Method: "DELETE",
+		URL:    u,
+		Header: map[string][]string{},
+	}
+	uPwd := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", c.user, c.password)))
+	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", uPwd))
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot query %s", urlStr)
+	}
+	rData, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot get result data of %s", urlStr)
+	}
+	if resp.StatusCode >= http.StatusBadRequest {
+		rErr := &APIErrorResult{}
+		if err := json.Unmarshal(rData, rErr); err != nil {
+			return nil, errors.Wrapf(err, "cannot unmarshal result [%s]", string(rData))
+		}
+		errs := []string{}
+		for _, e := range rErr.Errors {
+			errs = append(errs, fmt.Sprintf("%v:%s", e.Status, e.Title))
+		}
+		return nil, errors.New(fmt.Sprintf("%s - %s", resp.Status, strings.Join(errs, " / ")))
+	}
+	dc := &API{}
+	if err := json.Unmarshal(rData, dc); err != nil {
+		return nil, errors.Wrapf(err, "cannot unmarshal result [%s]", string(rData))
+	}
+	return dc, nil
+}
+
+func (c *Client) CreateDOI(data *dataciteModel.DataCite, doiSuffix, targetUrl string) (*API, error) {
 	var client http.Client
 
 	xmlBytes, err := xml.Marshal(data)

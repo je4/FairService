@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/je4/FairService/v2/pkg/datatable"
-	"github.com/je4/FairService/v2/pkg/model/datacite"
+	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/FairService/v2/pkg/model/myfair"
+	datacite2 "github.com/je4/FairService/v2/pkg/service/datacite"
+
 	//"github.com/je4/FairService/v2/pkg/service"
 	"github.com/lib/pq"
 	"github.com/op/go-logging"
@@ -79,14 +81,14 @@ type Fair struct {
 	dbSchema       string
 	db             *sql.DB
 	handle         *HandleServiceClient
-	dataciteClient *datacite.Client
+	dataciteClient *datacite2.Client
 	sourcesMutex   sync.RWMutex
 	sources        map[int64]*Source
 	partitions     map[string]*Partition
 	log            *logging.Logger
 }
 
-func NewFair(db *sql.DB, dbSchema string, handle *HandleServiceClient, dataciteClient *datacite.Client, log *logging.Logger) (*Fair, error) {
+func NewFair(db *sql.DB, dbSchema string, handle *HandleServiceClient, dataciteClient *datacite2.Client, log *logging.Logger) (*Fair, error) {
 	f := &Fair{
 		dbSchema:       dbSchema,
 		db:             db,
@@ -357,6 +359,35 @@ func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 	return data, nil
 }
 
+func (f *Fair) DeleteItem(partitionName, uuidStr string) error {
+	partition, ok := f.partitions[partitionName]
+	if !ok {
+		return errors.New(fmt.Sprintf("partition %s not found", partitionName))
+	}
+	data, err := f.GetItem(partitionName, uuidStr)
+	if err != nil {
+		return errors.Wrapf(err, "cannot get item %s/%s", partitionName, uuidStr)
+	}
+	// if already deleted, don't do anything
+	if data.Deleted {
+		return nil
+	}
+	doiPrefix := fmt.Sprintf("%s:%s/", myfair.RelatedIdentifierTypeDOI, f.dataciteClient.GetPrefix())
+	for _, id := range data.Identifier {
+		if strings.HasPrefix(id, doiPrefix) {
+			doi := strings.TrimPrefix(id, fmt.Sprintf("%s:", myfair.RelatedIdentifierTypeDOI))
+			if _, err := f.dataciteClient.Delete(doi); err != nil {
+				// todo: change publication status
+				return errors.Wrapf(err, "cannot delete doi %s", doi)
+			} else {
+				// todo: remove doi from metadata and store it
+
+			}
+		}
+	}
+	return nil
+}
+
 func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) {
 	partition, ok := f.partitions[partitionName]
 	if !ok {
@@ -396,20 +427,6 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 		identifiers = []string{}
 		var sqlHandle = sql.NullString{}
 		if f.handle != nil {
-			/*
-				// check whether internal handle already available
-				var hasHandle bool
-				var handlePrefix = fmt.Sprintf("%s/", partition.HandleID)
-				for _, id := range data.Metadata.Identifier {
-					if id.IdentifierType == myfair.RelatedIdentifierTypeHandle {
-						if strings.HasPrefix(id.Value, handlePrefix) {
-							hasHandle = true
-							break
-						}
-					}
-				}
-
-			*/
 			next, err := f.nextCounter("handle")
 			if err != nil {
 				return "", errors.Wrap(err, "cannot get next handle value")
@@ -637,7 +654,7 @@ func (f *Fair) EndUpdate(partitionName string, source string) error {
 	return f.StartUpdate(partitionName, source)
 }
 
-func (f *Fair) CreateDOI(partitionName, uuidStr, targetUrl string) (*datacite.API, error) {
+func (f *Fair) CreateDOI(partitionName, uuidStr, targetUrl string) (*datacite2.API, error) {
 	part, err := f.GetPartition(partitionName)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot get partition %s", partitionName)
@@ -679,7 +696,7 @@ func (f *Fair) CreateDOI(partitionName, uuidStr, targetUrl string) (*datacite.AP
 		return nil, errors.New(fmt.Sprintf("doi %s already exists", doiStr))
 	}
 
-	dataciteData := &datacite.DataCite{}
+	dataciteData := &dataciteModel.DataCite{}
 	dataciteData.InitNamespace()
 	dataciteData.FromCore(data.Metadata)
 
