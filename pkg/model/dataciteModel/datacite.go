@@ -99,9 +99,13 @@ type Identifier struct {
 }
 
 type AlternateIdentifier struct {
-	XMLName                 xml.Name              `xml:"identifier" json:"-"`
+	XMLName                 xml.Name              `xml:"alternateIdentifier" json:"-"`
 	Value                   string                `xml:",chardata" json:"alternateIdentifier"`
 	AlternateIdentifierType RelatedIdentifierType `xml:"alternateIdentifierType,attr" json:"alternateIdentifierType"`
+}
+
+type AlternateIdentifiers struct {
+	AlternateIdentifier []AlternateIdentifier
 }
 
 type ResourceType struct {
@@ -117,6 +121,8 @@ type DataCite struct {
 
 	// DataCite: #1 Identifier (with mandatory type sub-property)
 	Identifier Identifier `xml:"identifier"`
+
+	AlternateIdentifiers AlternateIdentifiers `xml:"alternateIdentifiers"`
 
 	// DataCite: #2 Creator (with optional given name, family name, name identifier
 	//              and affiliation sub-properties)

@@ -35,7 +35,7 @@ password = "swordfish"
 [datacite]
     user = "WFOS.MZWLKS"
     password = "c>pJA^3ay%q.0"
-    api = "https://api.datacite.org"
+    api = "https://api.test.datacite.org"
     prefix = "10.26254"
 
 [database]

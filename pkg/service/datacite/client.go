@@ -14,6 +14,15 @@ import (
 	"strings"
 )
 
+type DCEvent string
+
+const (
+	DCEventPublish  DCEvent = "publish"
+	DCEventHide     DCEvent = "hide"
+	DCEventDraft    DCEvent = "draft"
+	DCEventRegister DCEvent = "register"
+)
+
 type Client struct {
 	api      string
 	user     string
@@ -173,6 +182,62 @@ func (c *Client) CreateDOI(data *dataciteModel.DataCite, doiSuffix, targetUrl st
 	}
 	req := &http.Request{
 		Method: "POST",
+		URL:    u,
+		Body:   ioutil.NopCloser(bytes.NewBuffer(aJson)),
+		Header: map[string][]string{},
+	}
+	upwd := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", c.user, c.password)))
+	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", upwd))
+	req.Header.Set("Content-type", "application/vnd.api+json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot request url %s", urlStr)
+	}
+	rData, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot get result data of %s", urlStr)
+	}
+	if resp.StatusCode >= http.StatusBadRequest {
+		rErr := &APIErrorResult{}
+		if err := json.Unmarshal(rData, rErr); err != nil {
+			return nil, errors.Wrapf(err, "cannot unmarshal result [%s]", string(rData))
+		}
+		errs := []string{}
+		for _, e := range rErr.Errors {
+			errs = append(errs, fmt.Sprintf("%v:%s", e.Status, e.Title))
+		}
+		return nil, errors.New(fmt.Sprintf("%s - %s", resp.Status, strings.Join(errs, " / ")))
+	}
+
+	dca := &API{}
+	if err := json.Unmarshal(rData, dca); err != nil {
+		return nil, errors.Wrapf(err, "cannot unmarshal result [%s]", string(rData))
+	}
+	return dca, nil
+
+}
+
+func (c *Client) SetEvent(doiSuffix string, event DCEvent) (*API, error) {
+	var client http.Client
+
+	doiString := fmt.Sprintf("%s/%s", c.prefix, doiSuffix)
+	a := API{Data: &APIDOIData{
+		Attributes: APIDOIDataAttributes{
+			Event: string(event),
+		},
+	}}
+	aJson, err := json.Marshal(a)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot marshal request data")
+	}
+
+	urlStr := fmt.Sprintf("%s/dois/%s", c.api, doiString)
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot parse url %s", urlStr)
+	}
+	req := &http.Request{
+		Method: "PUT",
 		URL:    u,
 		Body:   ioutil.NopCloser(bytes.NewBuffer(aJson)),
 		Header: map[string][]string{},

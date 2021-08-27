@@ -184,11 +184,19 @@ func (datacite *DataCite) FromCore(core myfair.Core) error {
 		datacite.PublicationYear = t.Year()
 	}
 
+	datacite.AlternateIdentifiers = AlternateIdentifiers{AlternateIdentifier: []AlternateIdentifier{}}
 	if len(core.Identifier) > 0 {
 		for _, id := range core.Identifier {
-			datacite.Identifier = Identifier{
-				Value:          id.Value,
-				IdentifierType: relatedIdentifierFromCore(id.IdentifierType),
+			if id.IdentifierType != myfair.RelatedIdentifierTypeDOI {
+				datacite.AlternateIdentifiers.AlternateIdentifier = append(datacite.AlternateIdentifiers.AlternateIdentifier, AlternateIdentifier{
+					Value:                   id.Value,
+					AlternateIdentifierType: relatedIdentifierFromCore(id.IdentifierType),
+				})
+			} else {
+				datacite.Identifier = Identifier{
+					Value:          id.Value,
+					IdentifierType: relatedIdentifierFromCore(id.IdentifierType),
+				}
 			}
 		}
 	}

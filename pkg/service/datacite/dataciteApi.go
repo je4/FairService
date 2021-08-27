@@ -58,7 +58,7 @@ type APIDOIDataAttributes struct {
 	FundingReferences  []interface{}               `json:"fundingReferences,omitempty"`
 	Xml                Base64String                `json:"xml,omitempty"`
 	Url                string                      `json:"url,omitempty"`
-	ContentUrl         []string                    `json:"content_url,omitempty"`
+	ContentUrl         []string                    `json:"contentUrl,omitempty"`
 	MetadataVersion    int                         `json:"metadataVersion,omitempty"`
 	SchemaVersion      string                      `json:"schemaVersion,omitempty"`
 	Source             string                      `json:"source,omitempty"`
