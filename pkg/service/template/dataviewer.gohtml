@@ -27,18 +27,9 @@
             <th>Persons</th>
             <th>Year</th>
             <th></th>
+            <th><img src="static/bootstrap/icons/trash.svg" width="20" /></th>
         </tr>
         </thead>
-        <!--
-        <tfoot>
-        <tr>
-            <th>Titles</th>
-            <th>Persons</th>
-            <th>Year</th>
-            <th></th>
-        </tr>
-        </tfoot>
-        -->
     </table>
 </div>
 <!-- Optional JavaScript; choose one of the two! -->
@@ -54,28 +45,6 @@
             "serverSide": true,
             "ajax": "viewer/search",
             columns: [
-                /*
-                {
-                    data: 'access',
-                    "visible": false,
-                },
-                {
-                    data: 'catalogs',
-                    "visible": false,
-                },
-                {
-                    data: 'deleted',
-                    "visible": false,
-                },
-                {
-                    data: 'identifiers',
-                    "visible": false,
-                },
-                {
-                    data: 'partitions',
-                    "visible": false,
-                },
-                */
                 {
                     targets: 0,
                     data: 'titles'
@@ -102,26 +71,21 @@
                         }
                         return data;
                     },
-
+                },
+                {
+                    targets: 4,
+                    data: 'deleted',
+                    orderable: true,
+                    searchable: false,
+                    render: function (data, type) {
+                        if (type === 'display') {
+                            if(data != 'true') return "";
+                            let str = '<img src="static/bootstrap/icons/trash.svg" width="20" />';
+                            return str;
+                        }
+                        return data;
+                    },
                 }
-                /*
-                {
-                    data: 'resourcetype',
-                    "visible": false,
-                },
-                {
-                    data: 'sets',
-                    "visible": false,
-                },
-                {
-                    data: 'signature',
-                    "visible": false,
-                },
-                {
-                    data: 'sourcename',
-                    "visible": false,
-                },
-                */
                 ]
         } );
     } );
