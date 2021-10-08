@@ -11,6 +11,7 @@ import "embed"
 //go:embed static/bootstrap/js/bootstrap.bundle.min.js.map
 //go:embed static/bootstrap/icons/box-arrow-up-right.svg
 //go:embed static/bootstrap/icons/file-binary.svg
+//go:embed static/bootstrap/icons/trash.svg
 //go:embed static/dspace/js/jquery.js
 //go:embed static/dspace/js/bootstrap.min.js
 //go:embed static/bootstrap/js/datatables.min.js

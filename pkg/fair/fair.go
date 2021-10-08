@@ -772,7 +772,7 @@ func (f *Fair) Search(partitionName string, dtr *datatable.Request) ([]map[strin
 	}
 
 	var params = []interface{}{part.Name}
-	sqlWhere := " s.source=src.sourceid AND src.partition=$1 "
+	sqlWhere := "s.source=src.sourceid AND src.partition=$1 "
 
 	sqlstr := fmt.Sprintf("SELECT COUNT(*) AS num"+
 		" FROM %s.searchable s, %s.source src "+

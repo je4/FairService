@@ -105,6 +105,7 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 					*r2.URL = *r.URL
 					r2.URL.Path = p
 					r2.URL.RawPath = rp
+					w.Header().Set("Cache-Control", "max-age=3600")
 					h.ServeHTTP(w, r2)
 				} else {
 					http.NotFound(w, r)
