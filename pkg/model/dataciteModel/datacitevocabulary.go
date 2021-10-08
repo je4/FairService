@@ -1,4 +1,4 @@
-package datacite
+package dataciteModel
 
 type TitleType string
 

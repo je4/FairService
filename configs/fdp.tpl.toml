@@ -11,19 +11,15 @@ certpem = "auto"
 jwtkey = "ov@cO+Rn,lcwmP6r:O3"
 jwtalg = ["HS256", "HS384", "HS512"]
 linktokenexp = "1h"
-username = "admin"
-password = "swordfish"
 
 [[partition]]
     name = "mediathek"
-    # addrext = "https://localhost:8443/mediathek"
-    addrext = "https://dataverse.hgk.fhnw.ch/mediathek"
+    addrext = "https://localhost:8443/mediathek"
     jwtkey = "ov@cO+Rn,lcwmP6r:O3"
     jwtalg = ["HS256", "HS384", "HS512"]
     handleid = "20.500.11806"
     description = "This repository contains researchdata and OER created at Basel University of Art and Design FHNW"
     domain = "mediathek.hgk.fhnw.ch"
-    handleprefix = "med"
     [partition.oai]
         pagesize = 80
         resumptiontokentimeout = "3m"
@@ -33,14 +29,14 @@ password = "swordfish"
         adminemail = ["tabea.lurk@fhnw.ch"]
 
 [datacite]
-    user = "WFOS.MZWLKS"
-    password = "c>pJA^3ay%q.0"
+    user = "dcuser"
+    password = "xxxxxxxxxxxxx"
     api = "https://api.test.datacite.org"
-    prefix = "10.26254"
+
 
 [database]
 servertype = "postgres"
-dsn = "postgres://fairservice:MtgViCEqJoiQoXOP@localhost:5433/fairservice"
+dsn = "postgres://fairservice:xxxxxxx@localhost:5433/fairservice"
 connection_max = 5000
 schema = "public"
 

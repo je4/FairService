@@ -25,6 +25,7 @@ import (
 
 type Server struct {
 	host, port           string
+	name, password       string
 	srv                  *http.Server
 	linkTokenExp         time.Duration
 	jwtKey               string
@@ -36,7 +37,7 @@ type Server struct {
 	resumptionTokenCache gcache.Cache
 }
 
-func NewServer(addr string, log *logging.Logger, fair *fair.Fair, accessLog io.Writer, jwtKey string, jwtAlg []string, linkTokenExp time.Duration) (*Server, error) {
+func NewServer(addr, name, password string, log *logging.Logger, fair *fair.Fair, accessLog io.Writer, jwtKey string, jwtAlg []string, linkTokenExp time.Duration) (*Server, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot split address %s", addr)
@@ -51,6 +52,8 @@ func NewServer(addr string, log *logging.Logger, fair *fair.Fair, accessLog io.W
 	srv := &Server{
 		host:                 host,
 		port:                 port,
+		name:                 name,
+		password:             password,
 		log:                  log,
 		accessLog:            accessLog,
 		linkTokenExp:         linkTokenExp,
@@ -123,6 +126,14 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.partitionHandler) }()),
 	).Methods("GET")
 	router.Handle(
+		"/{partition}/viewer",
+		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.dataviewerHandler) }()),
+	).Methods("GET")
+	router.Handle(
+		"/{partition}/viewer/search",
+		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.searchDatatableHandler) }()),
+	).Methods("GET")
+	router.Handle(
 		"/{partition}/oai/",
 		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.partitionOAIHandler) }()),
 	).Methods("GET")
@@ -169,6 +180,10 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 	router.Handle(
 		"/{partition}/item/{uuid}",
 		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.itemHandler) }()),
+	).Methods("GET")
+	router.Handle(
+		"/{partition}/createdoi/{uuid}",
+		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.createDOIHandler) }()),
 	).Methods("GET")
 
 	router.Handle(

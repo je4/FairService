@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/je4/FairService/v2/pkg/datatable"
+	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/FairService/v2/pkg/model/myfair"
+	"github.com/je4/FairService/v2/pkg/service/datacite"
 	//"github.com/je4/FairService/v2/pkg/service"
 	"github.com/lib/pq"
 	"github.com/op/go-logging"
@@ -44,16 +47,17 @@ var DataAccessReverse = map[string]DataAccess{
 }
 
 type ItemData struct {
-	Source    string      `json:"source"`
-	Signature string      `json:"signature"`
-	Metadata  myfair.Core `json:"metadata"`
-	Set       []string    `json:"set"`
-	Catalog   []string    `json:"catalog"`
-	Access    DataAccess  `json:"access"`
-	Deleted   bool        `json:"deleted"`
-	Seq       int64
-	UUID      string
-	Datestamp time.Time
+	Source     string      `json:"source"`
+	Signature  string      `json:"signature"`
+	Metadata   myfair.Core `json:"metadata"`
+	Set        []string    `json:"set"`
+	Catalog    []string    `json:"catalog"`
+	Identifier []string    `json:"identifier"`
+	Access     DataAccess  `json:"access"`
+	Deleted    bool        `json:"deleted"`
+	Seq        int64       `json:"-"`
+	UUID       string      `json:"uuid"`
+	Datestamp  time.Time   `json:"datestamp"`
 }
 
 type SourceData struct {
@@ -73,29 +77,40 @@ func equalStrings(a, b []string) bool {
 }
 
 type Fair struct {
-	dbSchema     string
-	db           *sql.DB
-	handle       *HandleServiceClient
-	sourcesMutex sync.RWMutex
-	sources      map[int64]*Source
-	partitions   map[string]*Partition
-	log          *logging.Logger
+	dbSchema       string
+	db             *sql.DB
+	handle         *HandleServiceClient
+	dataciteClient *datacite.Client
+	sourcesMutex   sync.RWMutex
+	sources        map[int64]*Source
+	partitions     map[string]*Partition
+	log            *logging.Logger
 }
 
-func NewFair(db *sql.DB, dbSchema string, handle *HandleServiceClient, log *logging.Logger) (*Fair, error) {
+func NewFair(db *sql.DB, dbSchema string, handle *HandleServiceClient, dataciteClient *datacite.Client, log *logging.Logger) (*Fair, error) {
 	f := &Fair{
-		dbSchema:     dbSchema,
-		db:           db,
-		handle:       handle,
-		sourcesMutex: sync.RWMutex{},
-		sources:      map[int64]*Source{},
-		partitions:   map[string]*Partition{},
-		log:          log,
+		dbSchema:       dbSchema,
+		db:             db,
+		handle:         handle,
+		dataciteClient: dataciteClient,
+		sourcesMutex:   sync.RWMutex{},
+		sources:        map[int64]*Source{},
+		partitions:     map[string]*Partition{},
+		log:            log,
 	}
 	if err := f.LoadSources(); err != nil {
 		return nil, errors.Wrap(err, "cannot load sources")
 	}
 	return f, nil
+}
+
+func (f *Fair) nextCounter(name string) (int64, error) {
+	sqlStr := fmt.Sprintf("SELECT NEXTVAL('%s.%s')", f.dbSchema, name)
+	var next int64
+	if err := f.db.QueryRow(sqlStr).Scan(&next); err != nil {
+		return 0, errors.Wrapf(err, "cannot execute %s", sqlStr)
+	}
+	return next, nil
 }
 
 func (f *Fair) AddPartition(p *Partition) {
@@ -300,7 +315,7 @@ func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 		return nil, errors.New(fmt.Sprintf("partition %s not found", partitionName))
 	}
 
-	sqlstr := fmt.Sprintf("SELECT metadata, setspec, catalog, access, signature, sourcename, deleted, seq, datestamp"+
+	sqlstr := fmt.Sprintf("SELECT metadata, setspec, catalog, access, signature, sourcename, deleted, seq, datestamp, identifier"+
 		" FROM %s.coreview"+
 		" WHERE partition=$1 AND uuid=$2", f.dbSchema)
 	params := []interface{}{partition.Name, uuidStr}
@@ -314,22 +329,24 @@ func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 	var deleted bool
 	var seq int64
 	var datestamp time.Time
-	if err := row.Scan(&metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &source, &deleted, &seq, &datestamp); err != nil {
+	var identifier []string
+	if err := row.Scan(&metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &source, &deleted, &seq, &datestamp, pq.Array(&identifier)); err != nil {
 		if err != sql.ErrNoRows {
 			return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
 		return nil, nil
 	}
 	data := &ItemData{
-		UUID:      uuidStr,
-		Source:    source,
-		Signature: signature,
-		Metadata:  myfair.Core{},
-		Set:       set,
-		Catalog:   catalog,
-		Deleted:   deleted,
-		Seq:       seq,
-		Datestamp: datestamp,
+		UUID:       uuidStr,
+		Source:     source,
+		Signature:  signature,
+		Metadata:   myfair.Core{},
+		Set:        set,
+		Catalog:    catalog,
+		Identifier: identifier,
+		Deleted:    deleted,
+		Seq:        seq,
+		Datestamp:  datestamp,
 	}
 	data.Access, ok = DataAccessReverse[accessStr]
 	if !ok {
@@ -341,7 +358,39 @@ func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 	return data, nil
 }
 
-func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
+func (f *Fair) DeleteItem(partitionName, uuidStr string) error {
+	/*
+		partition, ok := f.partitions[partitionName]
+		if !ok {
+			return errors.New(fmt.Sprintf("partition %s not found", partitionName))
+		}
+	*/
+	data, err := f.GetItem(partitionName, uuidStr)
+	if err != nil {
+		return errors.Wrapf(err, "cannot get item %s/%s", partitionName, uuidStr)
+	}
+	// if already deleted, don't do anything
+	if data.Deleted {
+		return nil
+	}
+	doiPrefix := fmt.Sprintf("%s:%s/", myfair.RelatedIdentifierTypeDOI, f.dataciteClient.GetPrefix())
+	for _, id := range data.Identifier {
+		if strings.HasPrefix(id, doiPrefix) {
+			doi := strings.TrimPrefix(id, fmt.Sprintf("%s:", myfair.RelatedIdentifierTypeDOI))
+			if _, err := f.dataciteClient.Delete(doi); err != nil {
+				if _, err := f.dataciteClient.SetEvent(doi, datacite.DCEventHide); err != nil {
+					return errors.Wrapf(err, "cannot hide doi %s", doi)
+				}
+			} else {
+				// todo: remove doi from metadata and store it
+
+			}
+		}
+	}
+	return nil
+}
+
+func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) {
 	partition, ok := f.partitions[partitionName]
 	if !ok {
 		return "", errors.New(fmt.Sprintf("partition %s not found", partitionName))
@@ -378,8 +427,13 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 		}
 		uuidStr := uuidVal.String()
 		identifiers = []string{}
+		var sqlHandle = sql.NullString{}
 		if f.handle != nil {
-			newHandle := fmt.Sprintf("%s/fair/%s/%s", partition.HandleID, partition.Domain, uuidStr)
+			next, err := f.nextCounter("handle")
+			if err != nil {
+				return "", errors.Wrap(err, "cannot get next handle value")
+			}
+			newHandle := fmt.Sprintf("%s/%s/%v", partition.HandleID, partition.HandlePrefix, next)
 			newURL, err := url.Parse(fmt.Sprintf("%s/redir/%s", partition.AddrExt, uuidStr))
 			if err != nil {
 				return "", errors.Wrapf(err, "cannot parse url %s", fmt.Sprintf("%s/redir/%s", partition.AddrExt, uuidStr))
@@ -387,11 +441,14 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 			if err := f.handle.Create(newHandle, newURL); err != nil {
 				return "", errors.Wrapf(err, "cannot create handle %s for %s", newHandle, newURL.String())
 			}
+			sqlHandle.String = newHandle
+			sqlHandle.Valid = true
 			data.Metadata.Identifier = append(data.Metadata.Identifier, myfair.Identifier{
 				Value:          newHandle,
 				IdentifierType: myfair.RelatedIdentifierTypeHandle,
 			})
 			identifiers = append(identifiers, fmt.Sprintf("%s:%s", myfair.RelatedIdentifierTypeHandle, newHandle))
+
 		}
 
 		coreBytes, err := json.Marshal(data.Metadata)
@@ -473,6 +530,11 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 			}
 		}
 
+		identifiers = []string{}
+		for _, id := range data.Metadata.Identifier {
+			identifiers = append(identifiers, fmt.Sprintf("%s:%s", id.IdentifierType, id.Value))
+		}
+
 		// do update here
 		var oldMeta myfair.Core
 		if err := json.Unmarshal([]byte(metaStr), &oldMeta); err != nil {
@@ -502,13 +564,14 @@ func (f *Fair) CreateItem(partitionName string, data ItemData) (string, error) {
 		}
 
 		sqlstr = fmt.Sprintf("UPDATE %s.core"+
-			" SET setspec=$1, metadata=$2, access=$3, catalog=$4, deleted=false"+
-			" WHERE uuid=$5", f.dbSchema)
+			" SET setspec=$1, metadata=$2, access=$3, catalog=$4, deleted=false, identifier=$5"+
+			" WHERE uuid=$6", f.dbSchema)
 		params := []interface{}{
 			pq.Array(data.Set),
 			string(dataMetaBytes),
 			data.Access,
 			pq.Array(data.Catalog),
+			pq.Array(identifiers),
 			uuidStr}
 		if _, err := f.db.Exec(sqlstr, params...); err != nil {
 			return "", errors.Wrapf(err, "[%s] cannot update [%s] - [%v]", uuidStr, sqlstr, params)
@@ -591,4 +654,174 @@ func (f *Fair) EndUpdate(partitionName string, source string) error {
 		return errors.Wrapf(err, "cannot execute dirty update - %s - %v", sqlstr, params)
 	}
 	return f.StartUpdate(partitionName, source)
+}
+
+func (f *Fair) CreateDOI(partitionName, uuidStr, targetUrl string) (*datacite.API, error) {
+	part, err := f.GetPartition(partitionName)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot get partition %s", partitionName)
+	}
+
+	data, err := f.GetItem(partitionName, uuidStr)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error loading item")
+	}
+	if data == nil {
+		return nil, errors.New(fmt.Sprintf("item %s/%s not found", partitionName, uuidStr))
+	}
+
+	if data.Deleted {
+		return nil, errors.New(fmt.Sprintf("item %s/%s is deleted", partitionName, uuidStr))
+	}
+
+	var hasDOI string
+	var doiPrefix = fmt.Sprintf("%s:", myfair.RelatedIdentifierTypeDOI)
+	for _, id := range data.Identifier {
+		if strings.HasPrefix(id, doiPrefix) {
+			hasDOI = strings.TrimPrefix(id, doiPrefix)
+			break
+		}
+	}
+	if hasDOI != "" {
+		return nil, errors.New(fmt.Sprintf("doi %s for uuid %s already exists", hasDOI, uuidStr))
+	}
+
+	next, err := f.nextCounter("doi")
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot get next doi sequence value")
+	}
+
+	doiSuffix := fmt.Sprintf("%s/%v", part.HandlePrefix, next)
+	doiStr := fmt.Sprintf("%s/%s", f.dataciteClient.GetPrefix(), doiSuffix)
+	_, err = f.dataciteClient.RetrieveDOI(doiStr)
+	if err == nil {
+		return nil, errors.New(fmt.Sprintf("doi %s already exists", doiStr))
+	}
+
+	dataciteData := &dataciteModel.DataCite{}
+	dataciteData.InitNamespace()
+	dataciteData.FromCore(data.Metadata)
+
+	api, err := f.dataciteClient.CreateDOI(dataciteData, doiSuffix, targetUrl)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot create doi")
+	}
+
+	data.Metadata.Identifier = append(data.Metadata.Identifier, myfair.Identifier{
+		Value:          doiStr,
+		IdentifierType: myfair.RelatedIdentifierTypeDOI,
+	})
+	if _, err := f.CreateItem(partitionName, data); err != nil {
+		return nil, errors.Wrapf(err, "cannot store item %s/%s", partitionName, uuidStr)
+	}
+	return api, nil
+}
+
+var fieldDef = map[string]string{
+	"partition":       "src.partition AS partition",
+	"sourcename":      "src.name AS sourcename",
+	"uuid":            "s.uuid AS uuid",
+	"persons":         "array_to_string(s.persons, '; ') AS persons",
+	"titles":          "array_to_string(s.titles, '; ') AS titles",
+	"sets":            "array_to_string(s.setspec, '; ') AS sets",
+	"catalogs":        "array_to_string(s.catalog, '; ') AS catalogs",
+	"signature":       "s.signature AS signature",
+	"access":          "s.access AS access",
+	"deleted":         "s.deleted::TEXT AS deleted",
+	"identifiers":     "array_to_string(s.identifier, '; ') AS identifiers",
+	"handle":          "s.handle AS handle",
+	"doi":             "s.doi AS doi",
+	"resourcetype":    "s.resourcetype AS resourcetype",
+	"publicationyear": "s.publicationyear AS publicationyear",
+}
+
+func (f *Fair) Search(partitionName string, dtr *datatable.Request) ([]map[string]string, int64, int64, error) {
+	part, err := f.GetPartition(partitionName)
+	if err != nil {
+		return nil, 0, 0, errors.Wrapf(err, "cannot get partition %s", partitionName)
+	}
+
+	var fields []string
+	var resultData = map[string]*string{}
+	var resultVals []interface{}
+
+	for key, col := range dtr.Columns {
+		str, ok := fieldDef[col.Data]
+		if !ok {
+			return nil, 0, 0, errors.New(fmt.Sprintf("invalid field name for column %v: %s", key, col.Data))
+		}
+		fields = append(fields, str)
+		var h string
+		resultData[col.Data] = &h
+		resultVals = append(resultVals, &h)
+	}
+	sqlFields := strings.Join(fields, ", ")
+
+	var orderList = []string{}
+	for key, order := range dtr.Order {
+		col, ok := dtr.Columns[order.Column]
+		if !ok {
+			return nil, 0, 0, errors.New(fmt.Sprintf("invalid column nuber %v in order %v", order.Column, key))
+		}
+		switch order.Dir {
+		case "asc":
+			orderList = append(orderList, fmt.Sprintf("%s %s", col.Data, order.Dir))
+		case "desc":
+			orderList = append(orderList, fmt.Sprintf("%s %s", col.Data, order.Dir))
+		}
+	}
+
+	var params = []interface{}{part.Name}
+	sqlWhere := " s.source=src.sourceid AND src.partition=$1 "
+
+	sqlstr := fmt.Sprintf("SELECT COUNT(*) AS num"+
+		" FROM %s.searchable s, %s.source src "+
+		" WHERE %s", f.dbSchema, f.dbSchema, sqlWhere)
+	var num, total int64
+	if err := f.db.QueryRow(sqlstr, params...).Scan(&total); err != nil {
+		return nil, 0, 0, errors.Wrapf(err, "cannot execute query %s - %v", sqlstr, params)
+	}
+
+	if dtr.Search.Value != "" {
+		params = append(params, dtr.Search.Value+":*")
+		sqlWhere += " AND s.fulltext @@ to_tsquery($2) "
+		sqlstr = fmt.Sprintf("SELECT COUNT(*) AS num"+
+			" FROM %s.searchable s, %s.source src "+
+			" WHERE %s", f.dbSchema, f.dbSchema, sqlWhere)
+	}
+	if err := f.db.QueryRow(sqlstr, params...).Scan(&num); err != nil {
+		return nil, 0, 0, errors.Wrapf(err, "cannot execute query %s - %v", sqlstr, params)
+	}
+
+	if dtr.Start >= num {
+		return []map[string]string{}, num, total, nil
+	}
+
+	sqlOrder := ""
+	if len(orderList) > 0 {
+		sqlOrder = fmt.Sprintf("ORDER BY %s", strings.Join(orderList, ", "))
+	}
+
+	sqlstr = fmt.Sprintf("SELECT %s "+
+		" FROM %s.searchable s, %s.source src "+
+		" WHERE %s "+
+		" %s "+
+		" LIMIT %v OFFSET %v", sqlFields, f.dbSchema, f.dbSchema, sqlWhere, sqlOrder, dtr.Length, dtr.Start)
+	f.log.Infof("%s - %v", sqlstr, params)
+	rows, err := f.db.Query(sqlstr, params...)
+	if err != nil {
+		return nil, 0, 0, errors.Wrapf(err, "cannot execute query %s - %v", sqlstr, params)
+	}
+	var result []map[string]string
+	for rows.Next() {
+		if err := rows.Scan(resultVals...); err != nil {
+			return nil, 0, 0, errors.Wrapf(err, "cannot scan row %s - %v", sqlstr, params)
+		}
+		var rLine = map[string]string{}
+		for key, val := range resultData {
+			rLine[key] = *val
+		}
+		result = append(result, rLine)
+	}
+	return result, num, total, nil
 }

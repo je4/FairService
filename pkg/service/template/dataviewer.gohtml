@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="Jürgen Enge, info-age GmbH Basel">
+
+    <!-- Bootstrap CSS -->
+    <link href="static/bootstrap/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-KyZXEAg3QhqLMpG8r+8fhAXLRk2vvoC2f3B09zVXn8CA5QIVfZOJ3BCsw2P0p/We" crossorigin="anonymous">
+    <link rel="stylesheet" href="static/bootstrap/css/datatables.min.css" crossorigin="anonymous">
+
+    <title>Fair Service: {{.Name}}</title>
+</head>
+<body>
+<div class="container py-4">
+    <header class="pb-3 mb-4 border-bottom">
+        <a href="https://github.com/je4/FairService" class="d-flex align-items-center text-dark text-decoration-none">
+            <span class="fs-4">FAIR Service - {{.OAIRepositoryName}}</span>
+        </a>
+    </header>
+
+    <table id="fairdata" class="display table" style="width:100%">
+        <thead>
+        <tr>
+            <th>Titles</th>
+            <th>Persons</th>
+            <th>Year</th>
+            <th></th>
+        </tr>
+        </thead>
+        <!--
+        <tfoot>
+        <tr>
+            <th>Titles</th>
+            <th>Persons</th>
+            <th>Year</th>
+            <th></th>
+        </tr>
+        </tfoot>
+        -->
+    </table>
+</div>
+<!-- Optional JavaScript; choose one of the two! -->
+
+<!-- Option 1: Bootstrap Bundle with Popper -->
+<script src="static/bootstrap/js/bootstrap.bundle.min.js" integrity="sha384-U1DAWAznBHeqEIlVSCgzq+c9gqGAJn5c/t99JyeKa9xxaYpSvHU5awsuZVVFIhvj" crossorigin="anonymous"></script>
+<script type="text/javascript" src="static/dspace/js/jquery.js" crossorigin="anonymous"></script>
+<script type="text/javascript" src="static/bootstrap/js/datatables.min.js" crossorigin="anonymous"></script>
+<script type="text/javascript">
+    $(document).ready(function() {
+        $('#fairdata').DataTable( {
+            "processing": true,
+            "serverSide": true,
+            "ajax": "viewer/search",
+            columns: [
+                /*
+                {
+                    data: 'access',
+                    "visible": false,
+                },
+                {
+                    data: 'catalogs',
+                    "visible": false,
+                },
+                {
+                    data: 'deleted',
+                    "visible": false,
+                },
+                {
+                    data: 'identifiers',
+                    "visible": false,
+                },
+                {
+                    data: 'partitions',
+                    "visible": false,
+                },
+                */
+                {
+                    targets: 0,
+                    data: 'titles'
+                },
+                {
+                    targets: 1,
+                    data: 'persons'
+                },
+                {
+                    targets: 2,
+                    data: 'publicationyear'
+                },
+                {
+                    targets: 3,
+                    data: 'uuid',
+                    orderable: false,
+                    searchable: false,
+                    render: function (data, type) {
+                        if (type === 'display') {
+                            if(data == '') return;
+                            let str = '<a target="_blank" href="redir/'+data+'"><img src="static/bootstrap/icons/box-arrow-up-right.svg" width="20" /></a>';
+                            str += '<a target="_blank" href="item/'+data+'/json"><img src="static/bootstrap/icons/file-binary.svg" width="20" /></a>';
+                            return str;
+                        }
+                        return data;
+                    },
+
+                }
+                /*
+                {
+                    data: 'resourcetype',
+                    "visible": false,
+                },
+                {
+                    data: 'sets',
+                    "visible": false,
+                },
+                {
+                    data: 'signature',
+                    "visible": false,
+                },
+                {
+                    data: 'sourcename',
+                    "visible": false,
+                },
+                */
+                ]
+        } );
+    } );
+</script>
+</body>
+</html>

@@ -12,6 +12,7 @@ type Partition struct {
 	JWTKey              string
 	JWTAlg              []string
 	Domain              string
+	HandlePrefix        string
 	OAIAdminEmail       []string
 	OAIRepositoryName   string
 	OAIPagesize         int64
@@ -27,6 +28,7 @@ func NewPartition(
 	Name,
 	AddrExt,
 	Domain,
+	HandlePrefix,
 	OAIRepositoryName string,
 	OAIAdminEmail []string,
 	OAISampleIdentifier,
@@ -42,6 +44,7 @@ func NewPartition(
 		Name:                   strings.ToLower(Name),
 		AddrExt:                strings.TrimRight(AddrExt, "/"),
 		Domain:                 Domain,
+		HandlePrefix:           HandlePrefix,
 		OAIRepositoryName:      OAIRepositoryName,
 		OAIAdminEmail:          OAIAdminEmail,
 		Description:            Description,

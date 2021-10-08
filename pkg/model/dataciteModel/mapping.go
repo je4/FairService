@@ -1,4 +1,4 @@
-package datacite
+package dataciteModel
 
 import (
 	"github.com/araddon/dateparse"
@@ -151,13 +151,13 @@ func (datacite *DataCite) FromCore(core myfair.Core) error {
 				},
 				GivenName:   p.GivenName,
 				FamilyName:  p.FamilyName,
-				Affiliation: p.Affiliation,
-				NameIdentifier: NameIdentifier{
+				Affiliation: []string{p.Affiliation},
+				NameIdentifier: []NameIdentifier{NameIdentifier{
 					Value:                p.NameIdentifier.Value,
 					Lang:                 p.NameIdentifier.Lang,
 					SchemeURI:            p.NameIdentifier.SchemeURI,
 					NameIdentifierScheme: p.NameIdentifier.NameIdentifierScheme,
-				},
+				}},
 			})
 		} else {
 			datacite.Contributors.Contributor = append(datacite.Contributors.Contributor, Contributor{
@@ -184,11 +184,19 @@ func (datacite *DataCite) FromCore(core myfair.Core) error {
 		datacite.PublicationYear = t.Year()
 	}
 
+	datacite.AlternateIdentifiers = AlternateIdentifiers{AlternateIdentifier: []AlternateIdentifier{}}
 	if len(core.Identifier) > 0 {
 		for _, id := range core.Identifier {
-			datacite.Identifier = Identifier{
-				Value:          id.Value,
-				IdentifierType: relatedIdentifierFromCore(id.IdentifierType),
+			if id.IdentifierType != myfair.RelatedIdentifierTypeDOI {
+				datacite.AlternateIdentifiers.AlternateIdentifier = append(datacite.AlternateIdentifiers.AlternateIdentifier, AlternateIdentifier{
+					Value:                   id.Value,
+					AlternateIdentifierType: relatedIdentifierFromCore(id.IdentifierType),
+				})
+			} else {
+				datacite.Identifier = Identifier{
+					Value:          id.Value,
+					IdentifierType: relatedIdentifierFromCore(id.IdentifierType),
+				}
 			}
 		}
 	}
