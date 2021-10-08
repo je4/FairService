@@ -735,10 +735,10 @@ var fieldDef = map[string]string{
 	"publicationyear": "s.publicationyear AS publicationyear",
 }
 
-func (f *Fair) Search(partitionName string, dtr *datatable.Request) ([]map[string]string, int64, error) {
+func (f *Fair) Search(partitionName string, dtr *datatable.Request) ([]map[string]string, int64, int64, error) {
 	part, err := f.GetPartition(partitionName)
 	if err != nil {
-		return nil, 0, errors.Wrapf(err, "cannot get partition %s", partitionName)
+		return nil, 0, 0, errors.Wrapf(err, "cannot get partition %s", partitionName)
 	}
 
 	var fields []string
@@ -748,7 +748,7 @@ func (f *Fair) Search(partitionName string, dtr *datatable.Request) ([]map[strin
 	for key, col := range dtr.Columns {
 		str, ok := fieldDef[col.Data]
 		if !ok {
-			return nil, 0, errors.New(fmt.Sprintf("invalid field name for column %v: %s", key, col.Data))
+			return nil, 0, 0, errors.New(fmt.Sprintf("invalid field name for column %v: %s", key, col.Data))
 		}
 		fields = append(fields, str)
 		var h string
@@ -761,7 +761,7 @@ func (f *Fair) Search(partitionName string, dtr *datatable.Request) ([]map[strin
 	for key, order := range dtr.Order {
 		col, ok := dtr.Columns[order.Column]
 		if !ok {
-			return nil, 0, errors.New(fmt.Sprintf("invalid column nuber %v in order %v", order.Column, key))
+			return nil, 0, 0, errors.New(fmt.Sprintf("invalid column nuber %v in order %v", order.Column, key))
 		}
 		switch order.Dir {
 		case "asc":
@@ -774,20 +774,27 @@ func (f *Fair) Search(partitionName string, dtr *datatable.Request) ([]map[strin
 	var params = []interface{}{part.Name}
 	sqlWhere := " s.source=src.sourceid AND src.partition=$1 "
 
-	if dtr.Search.Value != "" {
-		params = append(params, dtr.Search.Value)
-		sqlWhere += " AND s.fulltext @@ to_tsquery($2) "
-	}
-
 	sqlstr := fmt.Sprintf("SELECT COUNT(*) AS num"+
 		" FROM %s.searchable s, %s.source src "+
 		" WHERE %s", f.dbSchema, f.dbSchema, sqlWhere)
-	var num int64
-	if err := f.db.QueryRow(sqlstr, params...).Scan(&num); err != nil {
-		return nil, 0, errors.Wrapf(err, "cannot execute query %s - %v", sqlstr, params)
+	var num, total int64
+	if err := f.db.QueryRow(sqlstr, params...).Scan(&total); err != nil {
+		return nil, 0, 0, errors.Wrapf(err, "cannot execute query %s - %v", sqlstr, params)
 	}
+
+	if dtr.Search.Value != "" {
+		params = append(params, dtr.Search.Value+":*")
+		sqlWhere += " AND s.fulltext @@ to_tsquery($2) "
+		sqlstr = fmt.Sprintf("SELECT COUNT(*) AS num"+
+			" FROM %s.searchable s, %s.source src "+
+			" WHERE %s", f.dbSchema, f.dbSchema, sqlWhere)
+	}
+	if err := f.db.QueryRow(sqlstr, params...).Scan(&num); err != nil {
+		return nil, 0, 0, errors.Wrapf(err, "cannot execute query %s - %v", sqlstr, params)
+	}
+
 	if dtr.Start >= num {
-		return []map[string]string{}, num, nil
+		return []map[string]string{}, num, total, nil
 	}
 
 	sqlOrder := ""
@@ -803,12 +810,12 @@ func (f *Fair) Search(partitionName string, dtr *datatable.Request) ([]map[strin
 	f.log.Infof("%s - %v", sqlstr, params)
 	rows, err := f.db.Query(sqlstr, params...)
 	if err != nil {
-		return nil, 0, errors.Wrapf(err, "cannot execute query %s - %v", sqlstr, params)
+		return nil, 0, 0, errors.Wrapf(err, "cannot execute query %s - %v", sqlstr, params)
 	}
 	var result []map[string]string
 	for rows.Next() {
 		if err := rows.Scan(resultVals...); err != nil {
-			return nil, 0, errors.Wrapf(err, "cannot scan row %s - %v", sqlstr, params)
+			return nil, 0, 0, errors.Wrapf(err, "cannot scan row %s - %v", sqlstr, params)
 		}
 		var rLine = map[string]string{}
 		for key, val := range resultData {
@@ -816,5 +823,5 @@ func (f *Fair) Search(partitionName string, dtr *datatable.Request) ([]map[strin
 		}
 		result = append(result, rLine)
 	}
-	return result, num, nil
+	return result, num, total, nil
 }

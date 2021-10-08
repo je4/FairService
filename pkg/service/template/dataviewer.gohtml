@@ -96,7 +96,9 @@
                     render: function (data, type) {
                         if (type === 'display') {
                             if(data == '') return;
-                            return '<a href="redir/'+data+'"><img src="static/bootstrap/icons/box-arrow-up-right.svg" width="20" /></a>';
+                            let str = '<a target="_blank" href="redir/'+data+'"><img src="static/bootstrap/icons/box-arrow-up-right.svg" width="20" /></a>';
+                            str += '<a target="_blank" href="item/'+data+'/json"><img src="static/bootstrap/icons/file-binary.svg" width="20" /></a>';
+                            return str;
                         }
                         return data;
                     },

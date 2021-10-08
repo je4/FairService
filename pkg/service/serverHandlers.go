@@ -54,17 +54,31 @@ func (s *Server) redirectHandler(w http.ResponseWriter, req *http.Request) {
 		w.Write([]byte(fmt.Sprintf("error loading item %s/%s: %v", pName, uuidStr, err)))
 		return
 	}
-	source, err := s.fair.GetSourceByName(data.Source, part.Name)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Header().Set("Content-type", "text/plain")
-		w.Write([]byte(fmt.Sprintf("error loading source %s for item %s/%s: %v", data.Source, pName, uuidStr, err)))
-		return
+	if data.Deleted {
+		tpl := s.templates["deleted"]
+		if err := tpl.Execute(w, struct {
+			Part *fair.Partition
+			Data *fair.ItemData
+		}{Part: part, Data: data}); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Header().Set("Content-type", "text/plain")
+			w.Write([]byte(fmt.Sprintf("error executing template %s in partition %s: %v", "partition", pName, err)))
+			return
+		}
+
+	} else {
+		source, err := s.fair.GetSourceByName(data.Source, part.Name)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Header().Set("Content-type", "text/plain")
+			w.Write([]byte(fmt.Sprintf("error loading source %s for item %s/%s: %v", data.Source, pName, uuidStr, err)))
+			return
+		}
+
+		targetURL := strings.Replace(source.DetailURL, "{signature}", data.Signature, -1)
+
+		http.Redirect(w, req, targetURL, 301)
 	}
-
-	targetURL := strings.Replace(source.DetailURL, "{signature}", data.Signature, -1)
-
-	http.Redirect(w, req, targetURL, 301)
 }
 
 func (s *Server) partitionHandler(w http.ResponseWriter, req *http.Request) {
@@ -165,7 +179,6 @@ func (s *Server) itemHandler(w http.ResponseWriter, req *http.Request) {
 		w.Write([]byte(fmt.Sprintf("item [%s] not found in partition %s", uuidStr, pName)))
 		return
 	}
-
 	switch outputType {
 	case "json":
 		w.Header().Set("Content-type", "text/json")
@@ -377,6 +390,7 @@ type DataTableResult struct {
 	RecordsTotal    int64               `json:"recordsTotal"`
 	RecordsFiltered int64               `json:"recordsFiltered"`
 	Data            []map[string]string `json:"data"`
+	Sql             string              `json:"sql"`
 }
 
 var columnsParam = regexp.MustCompile(`columns\[([0-9]+)\]\[([a-z]+)\]`)
@@ -412,7 +426,7 @@ func (s *Server) searchDatatableHandler(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	result, num, err := s.fair.Search(pName, dReq)
+	result, num, total, err := s.fair.Search(pName, dReq)
 	if err != nil {
 		sendResult("error", fmt.Sprintf("cannot search: %v", err), "")
 		return
@@ -420,8 +434,8 @@ func (s *Server) searchDatatableHandler(w http.ResponseWriter, req *http.Request
 
 	rData := &DataTableResult{
 		Draw:            dReq.Draw,
-		RecordsTotal:    num,
-		RecordsFiltered: num - int64(len(result)),
+		RecordsTotal:    total,
+		RecordsFiltered: num,
 		Data:            result,
 	}
 	enc := json.NewEncoder(w)

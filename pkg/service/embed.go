@@ -10,6 +10,7 @@ import "embed"
 //go:embed static/bootstrap/js/bootstrap.bundle.min.js
 //go:embed static/bootstrap/js/bootstrap.bundle.min.js.map
 //go:embed static/bootstrap/icons/box-arrow-up-right.svg
+//go:embed static/bootstrap/icons/file-binary.svg
 //go:embed static/dspace/js/jquery.js
 //go:embed static/dspace/js/bootstrap.min.js
 //go:embed static/bootstrap/js/datatables.min.js
@@ -22,9 +23,11 @@ var staticFS embed.FS
 //go:embed template/oai.gohtml
 //go:embed template/partition.gohtml
 //go:embed template/dataviewer.gohtml
+//go:embed template/deleted.gohtml
 var templateFS embed.FS
 
 var templateFiles = map[string]string{
+	"deleted":    "template/deleted.gohtml",
 	"partition":  "template/partition.gohtml",
 	"oai":        "template/oai.gohtml",
 	"dataviewer": "template/dataviewer.gohtml",
