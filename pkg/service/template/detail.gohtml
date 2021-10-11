@@ -1,0 +1,75 @@
+<!doctype html>
+{{$this := .}}
+<html lang="en">
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="Jürgen Enge, info-age GmbH Basel">
+
+    <!-- Bootstrap CSS -->
+    <link href="../../static/bootstrap/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-KyZXEAg3QhqLMpG8r+8fhAXLRk2vvoC2f3B09zVXn8CA5QIVfZOJ3BCsw2P0p/We" crossorigin="anonymous">
+
+    <title>Fair Service: {{.Part.Name}}</title>
+</head>
+<body>
+<div class="container py-4">
+    <header class="pb-3 mb-4 border-bottom">
+        <a href="https://github.com/je4/FairService" class="d-flex align-items-center text-dark text-decoration-none">
+            <span class="fs-4">FAIR Service</span>
+        </a>
+    </header>
+
+    <div class="p-5 mb-4 bg-light rounded-3">
+        <div class="container-fluid py-5">
+            <h2 class="display-7 fw-bold">{{.Part.OAIRepositoryName}}</h2>
+            {{range $title := .Data.Metadata.Title}}
+                <h1 class="display-5 fw-bold">{{if (ne $title.Type "")}}{{$title.Type}}: {{end}}{{$title.Data}}</h1>
+            {{end}}
+            {{range $person := .Data.Metadata.Person}}
+                <h3 class="display-7 fw-bold">{{if (ne $person.PersonType "")}}{{$person.PersonType}}: {{end}}{{$person.PersonName.Value}}</h3>
+            {{end}}
+            <table class="table">
+                <thead>
+                <tr>
+                    <th scope="col">Field</th>
+                    <th scope="col">Value</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>PublicationYear</td>
+                    <td>{{.Data.Metadata.PublicationYear}}</td>
+                </tr>
+                <tr>
+                    <td>Publisher</td>
+                    <td>{{.Data.Metadata.Publisher}}</td>
+                </tr>
+                <tr>
+                    <td>Rights</td>
+                    <td>{{.Data.Metadata.Rights}}</td>
+                </tr>
+                <tr>
+                    <td>License</td>
+                    <td>{{.Data.Metadata.License}}</td>
+                </tr>
+                {{$hasDOI := false}}
+                {{range $identifier := .Data.Metadata.Identifier}}
+                    <tr>{{if (eq $identifier.IdentifierType "DOI")}}{{$hasDOI = true}}{{end}}
+                        <td>{{$identifier.IdentifierType}}</td>
+                        <td>{{$identifier.Value}}</td>
+                    </tr>
+                {{end}}
+                </tbody>
+            </table>
+
+        </div>
+    </div>
+</div>
+<!-- Optional JavaScript; choose one of the two! -->
+
+<!-- Option 1: Bootstrap Bundle with Popper -->
+<script src="../../static/bootstrap/js/bootstrap.bundle.min.js" integrity="sha384-U1DAWAznBHeqEIlVSCgzq+c9gqGAJn5c/t99JyeKa9xxaYpSvHU5awsuZVVFIhvj" crossorigin="anonymous"></script>
+
+</body>
+</html>

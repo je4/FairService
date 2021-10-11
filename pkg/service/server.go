@@ -122,6 +122,22 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.oaiHandler) }()),
 	).Methods("GET")
 
+	router.HandleFunc(
+		"/{partition}",
+		func(w http.ResponseWriter, req *http.Request) {
+			vars := mux.Vars(req)
+			pName := vars["partition"]
+
+			part, err := s.fair.GetPartition(pName)
+			if err != nil {
+				w.WriteHeader(http.StatusNotFound)
+				w.Header().Set("Content-type", "text/plain")
+				w.Write([]byte(fmt.Sprintf("partition [%s] not found", pName)))
+				return
+			}
+			http.Redirect(w, req, part.AddrExt+"/", http.StatusPermanentRedirect)
+		},
+	).Methods("GET")
 	router.Handle(
 		"/{partition}/",
 		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.partitionHandler) }()),
@@ -133,6 +149,10 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 	router.Handle(
 		"/{partition}/viewer/search",
 		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.searchDatatableHandler) }()),
+	).Methods("GET")
+	router.Handle(
+		"/{partition}/viewer/item/{uuid}",
+		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.detailHandler) }()),
 	).Methods("GET")
 	router.Handle(
 		"/{partition}/oai/",
@@ -206,13 +226,19 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 			return errors.Wrap(err, "cannot generate default certificate")
 		}
 		s.srv.TLSConfig = &tls.Config{Certificates: []tls.Certificate{*cert}}
-		s.log.Infof("starting FAIR Data Point at https://%v/", addr)
+		for _, part := range s.fair.GetPartitions() {
+			s.log.Infof("starting FAIR Data Point at %v", part.AddrExt)
+		}
 		return s.srv.ListenAndServeTLS("", "")
 	} else if cert != "" && key != "" {
-		s.log.Infof("starting FAIR Data Point at https://%v", addr)
+		for _, part := range s.fair.GetPartitions() {
+			s.log.Infof("starting FAIR Data Point at %v", part.AddrExt)
+		}
 		return s.srv.ListenAndServeTLS(cert, key)
 	} else {
-		s.log.Infof("starting FAIR Data Point at http://%v", addr)
+		for _, part := range s.fair.GetPartitions() {
+			s.log.Infof("starting FAIR Data Point at %v", part.AddrExt)
+		}
 		return s.srv.ListenAndServe()
 	}
 }
