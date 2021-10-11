@@ -81,6 +81,41 @@ func (s *Server) redirectHandler(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func (s *Server) detailHandler(w http.ResponseWriter, req *http.Request) {
+	if !BasicAuth(w, req, s.name, s.password, "FAIR Service") {
+		return
+	}
+
+	vars := mux.Vars(req)
+	pName := vars["partition"]
+	uuidStr := vars["uuid"]
+
+	part, err := s.fair.GetPartition(pName)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Header().Set("Content-type", "text/plain")
+		w.Write([]byte(fmt.Sprintf("partition [%s] not found", pName)))
+		return
+	}
+	data, err := s.fair.GetItem(pName, uuidStr)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Header().Set("Content-type", "text/plain")
+		w.Write([]byte(fmt.Sprintf("error loading item %s/%s: %v", pName, uuidStr, err)))
+		return
+	}
+	tpl := s.templates["detail"]
+	if err := tpl.Execute(w, struct {
+		Part *fair.Partition
+		Data *fair.ItemData
+	}{Part: part, Data: data}); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Header().Set("Content-type", "text/plain")
+		w.Write([]byte(fmt.Sprintf("error executing template %s in partition %s: %v", "partition", pName, err)))
+		return
+	}
+}
+
 func (s *Server) partitionHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	pName := vars["partition"]

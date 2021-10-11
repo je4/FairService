@@ -125,6 +125,10 @@ func (f *Fair) GetPartition(name string) (*Partition, error) {
 	return p, nil
 }
 
+func (f *Fair) GetPartitions() map[string]*Partition {
+	return f.partitions
+}
+
 func (f *Fair) LoadSources() error {
 	sqlstr := fmt.Sprintf("SELECT sourceid, name, detailurl, description, oai_domain, partition FROM %s.source", f.dbSchema)
 	rows, err := f.db.Query(sqlstr)

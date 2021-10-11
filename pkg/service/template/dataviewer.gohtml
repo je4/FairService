@@ -27,6 +27,7 @@
             <th>Persons</th>
             <th>Year</th>
             <th></th>
+            <th>Identifiers</th>
             <th><img src="static/bootstrap/icons/trash.svg" width="20" /></th>
         </tr>
         </thead>
@@ -67,6 +68,7 @@
                             if(data == '') return;
                             let str = '<a target="_blank" href="redir/'+data+'"><img src="static/bootstrap/icons/box-arrow-up-right.svg" width="20" /></a>';
                             str += '<a target="_blank" href="item/'+data+'/json"><img src="static/bootstrap/icons/file-binary.svg" width="20" /></a>';
+                            str += '<a target="_blank" href="viewer/item/'+data+'"><img src="static/bootstrap/icons/file-easel.svg" width="20" /></a>';
                             return str;
                         }
                         return data;
@@ -74,6 +76,36 @@
                 },
                 {
                     targets: 4,
+                    data: 'identifiers',
+                    orderable: false,
+                    searchable: true,
+                    render: function (data, type) {
+                        if (type === 'display') {
+                            if(data == '') return;
+                            let str = '';
+                            let identifiers = data.split("; ");
+                            identifiers.forEach(function(item){
+                               let identifier = item.split(":");
+                               switch(identifier[0].toLowerCase()) {
+                                   case "doi":
+                                       str += '<a target="_blank" href="https://search.datacite.org/works/'+identifier[1]+'">DOI</a> ';
+                                       break;
+                                   case "handle":
+                                       str += '<a target="_blank" href="https://hdl.handle.net/'+identifier[1]+'">Handle</a> ';
+                                       break;
+                                   case "zotero":
+                                       let zot = identifier[1].split('.');
+                                       str += '<a target="_blank" href="https://www.zotero.org/groups/'+zot[0]+'/items/'+zot[1]+'">Zotero</a> ';
+                                       break;
+                               }
+                            });
+                            return str;
+                        }
+                        return data;
+                    },
+                },
+                {
+                    targets: 5,
                     data: 'deleted',
                     orderable: true,
                     searchable: false,
