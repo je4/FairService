@@ -97,6 +97,19 @@ func (s *Server) detailHandler(w http.ResponseWriter, req *http.Request) {
 		w.Write([]byte(fmt.Sprintf("partition [%s] not found", pName)))
 		return
 	}
+
+	doiError := ""
+	message := ""
+	if _, ok := req.URL.Query()["createdoi"]; ok {
+		targetUrl := fmt.Sprintf("%s/redir/%s", part.AddrExt, uuidStr)
+		_, err := s.fair.CreateDOI(pName, uuidStr, targetUrl)
+		if err != nil {
+			doiError = err.Error()
+		} else {
+			message = "Draft DOI successfully created"
+		}
+	}
+
 	data, err := s.fair.GetItem(pName, uuidStr)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
@@ -106,9 +119,11 @@ func (s *Server) detailHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	tpl := s.templates["detail"]
 	if err := tpl.Execute(w, struct {
-		Part *fair.Partition
-		Data *fair.ItemData
-	}{Part: part, Data: data}); err != nil {
+		Error   string
+		Message string
+		Part    *fair.Partition
+		Data    *fair.ItemData
+	}{Error: doiError, Message: message, Part: part, Data: data}); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Header().Set("Content-type", "text/plain")
 		w.Write([]byte(fmt.Sprintf("error executing template %s in partition %s: %v", "partition", pName, err)))

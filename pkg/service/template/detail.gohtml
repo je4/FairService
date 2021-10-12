@@ -22,6 +22,16 @@
 
     <div class="p-5 mb-4 bg-light rounded-3">
         <div class="container-fluid py-5">
+            {{if (ne .Error "")}}
+                <div class="alert alert-danger" role="alert">
+                    {{.Error}}
+                </div>
+            {{end}}
+            {{if (ne .Message "")}}
+                <div class="alert alert-success" role="alert">
+                    {{.Message}}
+                </div>
+            {{end}}
             <h2 class="display-7 fw-bold">{{.Part.OAIRepositoryName}}</h2>
             {{range $title := .Data.Metadata.Title}}
                 <h1 class="display-5 fw-bold">{{if (ne $title.Type "")}}{{$title.Type}}: {{end}}{{$title.Data}}</h1>
@@ -29,6 +39,24 @@
             {{range $person := .Data.Metadata.Person}}
                 <h3 class="display-7 fw-bold">{{if (ne $person.PersonType "")}}{{$person.PersonType}}: {{end}}{{$person.PersonName.Value}}</h3>
             {{end}}
+            <!-- Modal for creating DOI -->
+            <div class="modal fade" id="DOIModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="exampleModalLabel">Create DOI</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            Register Datacite DOI (DRAFT)
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <a class="btn btn-primary" href="?createdoi" role="button">Register</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <table class="table">
                 <thead>
                 <tr>
@@ -58,6 +86,16 @@
                     <tr>{{if (eq $identifier.IdentifierType "DOI")}}{{$hasDOI = true}}{{end}}
                         <td>{{$identifier.IdentifierType}}</td>
                         <td>{{$identifier.Value}}</td>
+                    </tr>
+                {{end}}
+                {{if (not $hasDOI)}}
+                    <tr>
+                        <td>DOI</td>
+                        <td>
+                            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#DOIModal">
+                                Create DOI
+                            </button>
+                        </td>
                     </tr>
                 {{end}}
                 </tbody>

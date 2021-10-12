@@ -394,6 +394,15 @@ func (f *Fair) DeleteItem(partitionName, uuidStr string) error {
 	return nil
 }
 
+func (f *Fair) RefreshSearch() error {
+	sqlstr := fmt.Sprintf("REFRESH MATERIALIZED VIEW %s.searchable WITH DATA", f.dbSchema)
+	_, err := f.db.Exec(sqlstr)
+	if err != nil {
+		return errors.Wrapf(err, "error refreshing search view %s", sqlstr)
+	}
+	return nil
+}
+
 func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) {
 	partition, ok := f.partitions[partitionName]
 	if !ok {
@@ -657,6 +666,7 @@ func (f *Fair) EndUpdate(partitionName string, source string) error {
 	if _, err := f.db.Exec(sqlstr, params...); err != nil {
 		return errors.Wrapf(err, "cannot execute dirty update - %s - %v", sqlstr, params)
 	}
+	f.RefreshSearch()
 	return f.StartUpdate(partitionName, source)
 }
 
@@ -718,6 +728,7 @@ func (f *Fair) CreateDOI(partitionName, uuidStr, targetUrl string) (*datacite.AP
 	if _, err := f.CreateItem(partitionName, data); err != nil {
 		return nil, errors.Wrapf(err, "cannot store item %s/%s", partitionName, uuidStr)
 	}
+	f.RefreshSearch()
 	return api, nil
 }
 

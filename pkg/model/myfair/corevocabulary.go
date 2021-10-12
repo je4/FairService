@@ -108,6 +108,7 @@ const (
 	RelatedIdentifierTypeURL     RelatedIdentifierType = "URL"
 	RelatedIdentifierTypeURN     RelatedIdentifierType = "URN"
 	RelatedIdentifierTypeW3id    RelatedIdentifierType = "w3id"
+	RelatedIdentifierTypeZotero  RelatedIdentifierType = "zotero"
 )
 
 var RelatedIdentifierTypeReverse = map[string]RelatedIdentifierType{
@@ -130,6 +131,7 @@ var RelatedIdentifierTypeReverse = map[string]RelatedIdentifierType{
 	"URL":     RelatedIdentifierTypeURL,
 	"URN":     RelatedIdentifierTypeURN,
 	"w3id":    RelatedIdentifierTypeW3id,
+	"zotero":  RelatedIdentifierTypeZotero,
 }
 
 type ResourceType string
