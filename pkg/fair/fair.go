@@ -395,9 +395,11 @@ func (f *Fair) DeleteItem(partitionName, uuidStr string) error {
 }
 
 func (f *Fair) RefreshSearch() error {
-	sqlstr := fmt.Sprintf("REFRESH MATERIALIZED VIEW %s.searchable WITH DATA", f.dbSchema)
+	f.log.Info("refreshing meterialized view searchable")
+	sqlstr := fmt.Sprintf("SELECT %s.refresh()", f.dbSchema)
 	_, err := f.db.Exec(sqlstr)
 	if err != nil {
+		f.log.Errorf("cannot refresh materialized view: %v - %v", sqlstr, err)
 		return errors.Wrapf(err, "error refreshing search view %s", sqlstr)
 	}
 	return nil
@@ -525,7 +527,8 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 
 			idType, ok := myfair.RelatedIdentifierTypeReverse[strs[0]]
 			if !ok {
-				return "", errors.New(fmt.Sprintf("[%s] unknown identifier type %s", uuidStr, id))
+				f.log.Warningf("[%s] unknown identifier type %s", uuidStr, id)
+				continue
 			}
 			idStr := strs[1]
 			found := false
