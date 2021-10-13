@@ -398,22 +398,23 @@ func (f *Fair) DeleteItem(partitionName, uuidStr string) error {
 		return nil
 	}
 	return errors.New("function DeleteItem() not implemented")
+	/*
+		doiPrefix := fmt.Sprintf("%s:%s/", myfair.RelatedIdentifierTypeDOI, f.dataciteClient.GetPrefix())
+		for _, id := range data.Identifier {
+			if strings.HasPrefix(id, doiPrefix) {
+				doi := strings.TrimPrefix(id, fmt.Sprintf("%s:", myfair.RelatedIdentifierTypeDOI))
+				if _, err := f.dataciteClient.Delete(doi); err != nil {
+					if _, err := f.dataciteClient.SetEvent(doi, datacite.DCEventHide); err != nil {
+						return errors.Wrapf(err, "cannot hide doi %s", doi)
+					}
+				} else {
+					// todo: remove doi from metadata and store it
 
-	doiPrefix := fmt.Sprintf("%s:%s/", myfair.RelatedIdentifierTypeDOI, f.dataciteClient.GetPrefix())
-	for _, id := range data.Identifier {
-		if strings.HasPrefix(id, doiPrefix) {
-			doi := strings.TrimPrefix(id, fmt.Sprintf("%s:", myfair.RelatedIdentifierTypeDOI))
-			if _, err := f.dataciteClient.Delete(doi); err != nil {
-				if _, err := f.dataciteClient.SetEvent(doi, datacite.DCEventHide); err != nil {
-					return errors.Wrapf(err, "cannot hide doi %s", doi)
 				}
-			} else {
-				// todo: remove doi from metadata and store it
-
 			}
 		}
-	}
-	return nil
+		return nil
+	*/
 }
 
 func (f *Fair) RefreshSearch() error {
