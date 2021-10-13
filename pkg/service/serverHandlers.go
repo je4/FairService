@@ -54,7 +54,7 @@ func (s *Server) redirectHandler(w http.ResponseWriter, req *http.Request) {
 		w.Write([]byte(fmt.Sprintf("error loading item %s/%s: %v", pName, uuidStr, err)))
 		return
 	}
-	if data.Deleted {
+	if data.Status != fair.DataStatusActive {
 		tpl := s.templates["deleted"]
 		if err := tpl.Execute(w, struct {
 			Part *fair.Partition

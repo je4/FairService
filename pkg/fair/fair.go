@@ -46,6 +46,20 @@ var DataAccessReverse = map[string]DataAccess{
 	string(DataAccessOpenAccess): DataAccessOpenAccess,
 }
 
+type DataStatus string
+
+const (
+	DataStatusActive   DataStatus = "active"
+	DataStatusDisabled DataStatus = "disabled"
+	DataStatusDeleted  DataStatus = "deleted"
+)
+
+var DataStatusReverse = map[string]DataStatus{
+	string(DataStatusActive):   DataStatusActive,
+	string(DataStatusDisabled): DataStatusDisabled,
+	string(DataStatusDeleted):  DataStatusDeleted,
+}
+
 type ItemData struct {
 	Source     string      `json:"source"`
 	Signature  string      `json:"signature"`
@@ -54,7 +68,7 @@ type ItemData struct {
 	Catalog    []string    `json:"catalog"`
 	Identifier []string    `json:"identifier"`
 	Access     DataAccess  `json:"access"`
-	Deleted    bool        `json:"deleted"`
+	Status     DataStatus  `json:"status"`
 	Seq        int64       `json:"-"`
 	UUID       string      `json:"uuid"`
 	Datestamp  time.Time   `json:"datestamp"`
@@ -210,7 +224,7 @@ func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int
 			return errors.Wrapf(err, "cannot get number of result items [%s] - [%v]", sqlstr, params)
 		}
 	}
-	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, signature, source, deleted, seq, datestamp"+
+	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, signature, source, status, seq, datestamp"+
 		" FROM %s.coreview"+
 		" WHERE %s"+
 		" ORDER BY seq ASC", f.dbSchema, sqlWhere)
@@ -234,10 +248,10 @@ func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int
 		var accessStr string
 		var signature string
 		var source string
-		var deleted bool
+		var statusStr string
 		var seq int64
 		var datestamp time.Time
-		if err := rows.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &source, &deleted, &seq, &datestamp); err != nil {
+		if err := rows.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &source, &statusStr, &seq, &datestamp); err != nil {
 			return errors.Wrapf(err, "cannot scan result of [%s] - [%v]", sqlstr, params)
 		}
 		data := &ItemData{
@@ -247,7 +261,6 @@ func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int
 			Metadata:  myfair.Core{},
 			Set:       set,
 			Catalog:   catalog,
-			Deleted:   deleted,
 			Seq:       seq,
 			Datestamp: datestamp,
 		}
@@ -255,6 +268,10 @@ func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int
 		data.Access, ok = DataAccessReverse[accessStr]
 		if !ok {
 			return errors.New(fmt.Sprintf("[%s] invalid access type %s", uuidStr, accessStr))
+		}
+		data.Status, ok = DataStatusReverse[statusStr]
+		if !ok {
+			return errors.New(fmt.Sprintf("[%s] invalid status type %s", uuidStr, accessStr))
 		}
 		if err := json.Unmarshal([]byte(metaStr), &data.Metadata); err != nil {
 			return errors.Wrapf(err, "[%s] cannot unmarshal core [%s]", uuidStr, metaStr)
@@ -319,7 +336,7 @@ func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 		return nil, errors.New(fmt.Sprintf("partition %s not found", partitionName))
 	}
 
-	sqlstr := fmt.Sprintf("SELECT metadata, setspec, catalog, access, signature, sourcename, deleted, seq, datestamp, identifier"+
+	sqlstr := fmt.Sprintf("SELECT metadata, setspec, catalog, access, signature, sourcename, status, seq, datestamp, identifier"+
 		" FROM %s.coreview"+
 		" WHERE partition=$1 AND uuid=$2", f.dbSchema)
 	params := []interface{}{partition.Name, uuidStr}
@@ -330,11 +347,11 @@ func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 	var accessStr string
 	var signature string
 	var source string
-	var deleted bool
+	var statusStr string
 	var seq int64
 	var datestamp time.Time
 	var identifier []string
-	if err := row.Scan(&metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &source, &deleted, &seq, &datestamp, pq.Array(&identifier)); err != nil {
+	if err := row.Scan(&metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &source, &statusStr, &seq, &datestamp, pq.Array(&identifier)); err != nil {
 		if err != sql.ErrNoRows {
 			return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
@@ -348,7 +365,6 @@ func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 		Set:        set,
 		Catalog:    catalog,
 		Identifier: identifier,
-		Deleted:    deleted,
 		Seq:        seq,
 		Datestamp:  datestamp,
 	}
@@ -358,6 +374,10 @@ func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 	}
 	if err := json.Unmarshal([]byte(metaStr), &data.Metadata); err != nil {
 		return nil, errors.Wrapf(err, "[%s] cannot unmarshal core [%s]", uuidStr, metaStr)
+	}
+	data.Status, ok = DataStatusReverse[statusStr]
+	if !ok {
+		return nil, errors.New(fmt.Sprintf("[%s] invalid status type %s", uuidStr, accessStr))
 	}
 	return data, nil
 }
@@ -374,9 +394,11 @@ func (f *Fair) DeleteItem(partitionName, uuidStr string) error {
 		return errors.Wrapf(err, "cannot get item %s/%s", partitionName, uuidStr)
 	}
 	// if already deleted, don't do anything
-	if data.Deleted {
+	if data.Status != DataStatusActive {
 		return nil
 	}
+	return errors.New("function DeleteItem() not implemented")
+
 	doiPrefix := fmt.Sprintf("%s:%s/", myfair.RelatedIdentifierTypeDOI, f.dataciteClient.GetPrefix())
 	for _, id := range data.Identifier {
 		if strings.HasPrefix(id, doiPrefix) {
@@ -419,7 +441,7 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 		return "", errors.Wrapf(err, "cannot get source %s", data.Source)
 	}
 
-	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, deleted, identifier"+
+	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, status, identifier"+
 		" FROM %s.coreview "+
 		" WHERE source=$1 AND signature=$2", f.dbSchema)
 	params := []interface{}{src.ID, data.Signature}
@@ -429,8 +451,8 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 	var uuidStr string
 	var set, catalog, identifiers []string
 	var accessStr string
-	var deleted bool
-	if err := row.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &deleted, pq.Array(&identifiers)); err != nil {
+	var statusStr string
+	if err := row.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &statusStr, pq.Array(&identifiers)); err != nil {
 		if err != sql.ErrNoRows {
 			return "", errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
@@ -471,8 +493,8 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 			return "", errors.Wrapf(err, "cannot marshal core data [%v]", data.Metadata)
 		}
 		sqlstr := fmt.Sprintf("INSERT INTO %s.core"+
-			" (uuid, datestamp, setspec, metadata, signature, source, access, catalog, seq, deleted, identifier)"+
-			" VALUES($1, NOW(), $2, $3, $4, $5, $6, $7, NEXTVAL('lastchange'), false, $8)", f.dbSchema)
+			" (uuid, datestamp, setspec, metadata, signature, source, access, catalog, seq, status, identifier)"+
+			" VALUES($1, NOW(), $2, $3, $4, $5, $6, $7, NEXTVAL('lastchange'), $8, $9)", f.dbSchema)
 		params := []interface{}{
 			uuidStr, // uuid
 			// datestamp
@@ -483,7 +505,7 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 			data.Access,            // access
 			pq.Array(data.Catalog), // catalog
 			// seq
-			// deleted
+			DataStatusActive,
 			pq.Array(identifiers), // identifier
 		}
 		ret, err := f.db.Exec(sqlstr, params...)
@@ -511,9 +533,14 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 		return uuidStr, nil
 
 	} else {
+		var ok bool
 		access, ok := DataAccessReverse[accessStr]
 		if !ok {
 			return "", errors.Wrapf(err, "[%s] invalid access type %s", uuidStr, accessStr)
+		}
+		status, ok := DataStatusReverse[statusStr]
+		if !ok {
+			return "", errors.Wrapf(err, "[%s] invalid status type %s", uuidStr, accessStr)
 		}
 		sort.Strings(catalog)
 		sort.Strings(set)
@@ -556,7 +583,7 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 		if err := json.Unmarshal([]byte(metaStr), &oldMeta); err != nil {
 			return "", errors.Wrapf(err, "[%s] cannot unmarshal core [%s]", uuidStr, metaStr)
 		}
-		if !deleted &&
+		if status == "active" &&
 			reflect.DeepEqual(oldMeta, data.Metadata) &&
 			equalStrings(set, data.Set) &&
 			equalStrings(catalog, data.Catalog) &&
@@ -580,13 +607,14 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 		}
 
 		sqlstr = fmt.Sprintf("UPDATE %s.core"+
-			" SET setspec=$1, metadata=$2, access=$3, catalog=$4, deleted=false, identifier=$5"+
-			" WHERE uuid=$6", f.dbSchema)
+			" SET setspec=$1, metadata=$2, access=$3, catalog=$4, status=$5, identifier=$6"+
+			" WHERE uuid=$7", f.dbSchema)
 		params := []interface{}{
 			pq.Array(data.Set),
 			string(dataMetaBytes),
 			data.Access,
 			pq.Array(data.Catalog),
+			DataStatusActive,
 			pq.Array(identifiers),
 			uuidStr}
 		if _, err := f.db.Exec(sqlstr, params...); err != nil {
@@ -663,9 +691,9 @@ func (f *Fair) EndUpdate(partitionName string, source string) error {
 		return errors.Wrapf(err, "cannot get source %s", source)
 	}
 	sqlstr := fmt.Sprintf("UPDATE %s.core"+
-		" SET deleted=TRUE"+
-		" WHERE source=$1 AND uuid NOT IN (SELECT uuid FROM %s.core_dirty)", f.dbSchema, f.dbSchema)
-	params := []interface{}{src.ID}
+		" SET status=$1"+
+		" WHERE source=$2 AND uuid NOT IN (SELECT uuid FROM %s.core_dirty)", f.dbSchema, f.dbSchema)
+	params := []interface{}{DataStatusDisabled, src.ID}
 	if _, err := f.db.Exec(sqlstr, params...); err != nil {
 		return errors.Wrapf(err, "cannot execute dirty update - %s - %v", sqlstr, params)
 	}
@@ -687,8 +715,8 @@ func (f *Fair) CreateDOI(partitionName, uuidStr, targetUrl string) (*datacite.AP
 		return nil, errors.New(fmt.Sprintf("item %s/%s not found", partitionName, uuidStr))
 	}
 
-	if data.Deleted {
-		return nil, errors.New(fmt.Sprintf("item %s/%s is deleted", partitionName, uuidStr))
+	if data.Status != DataStatusActive {
+		return nil, errors.New(fmt.Sprintf("item %s/%s is not active", partitionName, uuidStr))
 	}
 
 	var hasDOI string
@@ -745,7 +773,7 @@ var fieldDef = map[string]string{
 	"catalogs":        "array_to_string(s.catalog, '; ') AS catalogs",
 	"signature":       "s.signature AS signature",
 	"access":          "s.access AS access",
-	"deleted":         "s.deleted::TEXT AS deleted",
+	"status":          "s.status::TEXT AS status",
 	"identifiers":     "array_to_string(s.identifier, '; ') AS identifiers",
 	"handle":          "s.handle AS handle",
 	"doi":             "s.doi AS doi",
