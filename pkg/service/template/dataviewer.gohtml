@@ -106,12 +106,12 @@
                 },
                 {
                     targets: 5,
-                    data: 'deleted',
+                    data: 'status',
                     orderable: true,
                     searchable: false,
                     render: function (data, type) {
                         if (type === 'display') {
-                            if(data != 'true') return "";
+                            if(data == 'active') return "";
                             let str = '<img src="static/bootstrap/icons/trash.svg" width="20" />';
                             return str;
                         }

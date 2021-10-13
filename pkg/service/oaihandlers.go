@@ -400,7 +400,7 @@ func (s *Server) oaiHandlerListIdentifiers(w http.ResponseWriter, req *http.Requ
 	itemFunc := func(item *fair.ItemData) error {
 		if count < partition.OAIPagesize {
 			var status oai.RecordHeaderStatusType = oai.RecordHeaderStatusOK
-			if item.Deleted {
+			if item.Status != fair.DataStatusActive {
 				status = oai.RecordHeaderStatusDeleted
 			}
 			header := &oai.RecordHeader{
@@ -549,7 +549,7 @@ func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request,
 	itemFunc := func(item *fair.ItemData) error {
 		if count < partition.OAIPagesize {
 			var status oai.RecordHeaderStatusType = oai.RecordHeaderStatusOK
-			if item.Deleted {
+			if item.Status != fair.DataStatusActive {
 				status = oai.RecordHeaderStatusDeleted
 			}
 			record := &oai.Record{
@@ -560,7 +560,7 @@ func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request,
 					Status:     status,
 				},
 			}
-			if !item.Deleted {
+			if item.Status == fair.DataStatusActive {
 				metadata := &oai.Metadata{}
 				switch metadataPrefix {
 				case "oai_dc":
