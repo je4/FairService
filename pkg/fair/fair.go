@@ -899,8 +899,15 @@ func (f *Fair) Search(partitionName string, dtr *datatable.Request) ([]map[strin
 	}
 
 	if dtr.Search.Value != "" {
-		params = append(params, dtr.Search.Value+":*")
-		sqlWhere += " AND s.fulltext @@ to_tsquery($2) "
+		tsquery := ""
+		for _, fld := range strings.Fields(dtr.Search.Value) {
+			if tsquery != "" {
+				tsquery += " & "
+			}
+			tsquery += fld + ":*"
+		}
+		params = append(params, "simple", tsquery)
+		sqlWhere += " AND s.fulltext @@ to_tsquery($2, $3) "
 		sqlstr = fmt.Sprintf("SELECT COUNT(*) AS num"+
 			" FROM %s.searchable s, %s.source src "+
 			" WHERE %s", f.dbSchema, f.dbSchema, sqlWhere)
