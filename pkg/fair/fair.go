@@ -224,7 +224,7 @@ func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int
 			return errors.Wrapf(err, "cannot get number of result items [%s] - [%v]", sqlstr, params)
 		}
 	}
-	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, signature, source, status, seq, datestamp"+
+	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, signature, source, status, seq, datestamp, identifier"+
 		" FROM %s.coreview"+
 		" WHERE %s"+
 		" ORDER BY seq ASC", f.dbSchema, sqlWhere)
@@ -250,19 +250,21 @@ func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int
 		var source string
 		var statusStr string
 		var seq int64
+		var identifier []string
 		var datestamp time.Time
-		if err := rows.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &source, &statusStr, &seq, &datestamp); err != nil {
+		if err := rows.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &source, &statusStr, &seq, &datestamp, pq.Array(&identifier)); err != nil {
 			return errors.Wrapf(err, "cannot scan result of [%s] - [%v]", sqlstr, params)
 		}
 		data := &ItemData{
-			UUID:      uuidStr,
-			Source:    source,
-			Signature: signature,
-			Metadata:  myfair.Core{},
-			Set:       set,
-			Catalog:   catalog,
-			Seq:       seq,
-			Datestamp: datestamp,
+			UUID:       uuidStr,
+			Source:     source,
+			Signature:  signature,
+			Metadata:   myfair.Core{},
+			Set:        set,
+			Catalog:    catalog,
+			Seq:        seq,
+			Datestamp:  datestamp,
+			Identifier: identifier,
 		}
 		var ok bool
 		data.Access, ok = DataAccessReverse[accessStr]
@@ -276,6 +278,34 @@ func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int
 		if err := json.Unmarshal([]byte(metaStr), &data.Metadata); err != nil {
 			return errors.Wrapf(err, "[%s] cannot unmarshal core [%s]", uuidStr, metaStr)
 		}
+		// add local identifiers
+		for _, id := range data.Identifier {
+			strs := strings.SplitN(id, ":", 2)
+			if len(strs) != 2 {
+				continue
+			}
+
+			idType, ok := myfair.RelatedIdentifierTypeReverse[strs[0]]
+			if !ok {
+				f.log.Warningf("[%s] unknown identifier type %s", uuidStr, id)
+				continue
+			}
+			idStr := strs[1]
+			found := false
+			for _, di := range data.Metadata.Identifier {
+				if di.IdentifierType == idType && di.Value == idStr {
+					found = true
+					break
+				}
+			}
+			if !found {
+				data.Metadata.Identifier = append(data.Metadata.Identifier, myfair.Identifier{
+					Value:          idStr,
+					IdentifierType: idType,
+				})
+			}
+		}
+
 		if err := fn(data); err != nil {
 			return errors.Wrap(err, "error calling fn")
 		}
@@ -379,6 +409,34 @@ func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 	if !ok {
 		return nil, errors.New(fmt.Sprintf("[%s] invalid status type %s", uuidStr, accessStr))
 	}
+	// add local identifiers
+	for _, id := range data.Identifier {
+		strs := strings.SplitN(id, ":", 2)
+		if len(strs) != 2 {
+			continue
+		}
+
+		idType, ok := myfair.RelatedIdentifierTypeReverse[strs[0]]
+		if !ok {
+			f.log.Warningf("[%s] unknown identifier type %s", uuidStr, id)
+			continue
+		}
+		idStr := strs[1]
+		found := false
+		for _, di := range data.Metadata.Identifier {
+			if di.IdentifierType == idType && di.Value == idStr {
+				found = true
+				break
+			}
+		}
+		if !found {
+			data.Metadata.Identifier = append(data.Metadata.Identifier, myfair.Identifier{
+				Value:          idStr,
+				IdentifierType: idType,
+			})
+		}
+	}
+
 	return data, nil
 }
 
@@ -457,7 +515,10 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 		if err != sql.ErrNoRows {
 			return "", errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
-		// do insert here
+
+		//
+		// Create new Entry
+		//
 
 		uuidVal, err := uuid.NewUUID()
 		if err != nil {
@@ -467,6 +528,9 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 		identifiers = []string{}
 		var sqlHandle = sql.NullString{}
 		if f.handle != nil {
+			//
+			// Create Handle and add to local identifier list
+			//
 			next, err := f.nextCounter("handle")
 			if err != nil {
 				return "", errors.Wrap(err, "cannot get next handle value")
@@ -486,7 +550,6 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 				IdentifierType: myfair.RelatedIdentifierTypeHandle,
 			})
 			identifiers = append(identifiers, fmt.Sprintf("%s:%s", myfair.RelatedIdentifierTypeHandle, newHandle))
-
 		}
 
 		coreBytes, err := json.Marshal(data.Metadata)
@@ -547,6 +610,7 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 		sort.Strings(set)
 		sort.Strings(identifiers)
 
+		// add local identifiers
 		for _, id := range identifiers {
 			strs := strings.SplitN(id, ":", 2)
 			if len(strs) != 2 {
@@ -574,10 +638,12 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 			}
 		}
 
-		identifiers = []string{}
-		for _, id := range data.Metadata.Identifier {
-			identifiers = append(identifiers, fmt.Sprintf("%s:%s", id.IdentifierType, id.Value))
-		}
+		/*
+			identifiers = []string{}
+			for _, id := range data.Metadata.Identifier {
+				identifiers = append(identifiers, fmt.Sprintf("%s:%s", id.IdentifierType, id.Value))
+			}
+		*/
 
 		// do update here
 		var oldMeta myfair.Core
@@ -608,15 +674,14 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 		}
 
 		sqlstr = fmt.Sprintf("UPDATE %s.core"+
-			" SET setspec=$1, metadata=$2, access=$3, catalog=$4, status=$5, identifier=$6"+
-			" WHERE uuid=$7", f.dbSchema)
+			" SET setspec=$1, metadata=$2, access=$3, catalog=$4, status=$5, datestamp=NOW(), seq=NEXTVAL('lastchange')"+
+			" WHERE uuid=$6", f.dbSchema)
 		params := []interface{}{
 			pq.Array(data.Set),
 			string(dataMetaBytes),
 			data.Access,
 			pq.Array(data.Catalog),
 			DataStatusActive,
-			pq.Array(identifiers),
 			uuidStr}
 		if _, err := f.db.Exec(sqlstr, params...); err != nil {
 			return "", errors.Wrapf(err, "[%s] cannot update [%s] - [%v]", uuidStr, sqlstr, params)
@@ -753,12 +818,16 @@ func (f *Fair) CreateDOI(partitionName, uuidStr, targetUrl string) (*datacite.AP
 		return nil, errors.Wrap(err, "cannot create doi")
 	}
 
-	data.Metadata.Identifier = append(data.Metadata.Identifier, myfair.Identifier{
-		Value:          doiStr,
-		IdentifierType: myfair.RelatedIdentifierTypeDOI,
-	})
-	if _, err := f.CreateItem(partitionName, data); err != nil {
-		return nil, errors.Wrapf(err, "cannot store item %s/%s", partitionName, uuidStr)
+	data.Identifier = append(data.Identifier, fmt.Sprintf("%s:%s", myfair.RelatedIdentifierTypeDOI, doiStr))
+	sqlstr := fmt.Sprintf("UPDATE %s.core"+
+		" SET identifiers=$1, datestamp=NOW(), seq=NEXTVAL('lastchange')"+
+		" WHERE uuid=$2", f.dbSchema)
+	params := []interface{}{
+		pq.Array(data.Identifier),
+		data.UUID,
+	}
+	if _, err := f.db.Exec(sqlstr, params...); err != nil {
+		return nil, errors.Wrapf(err, "[%s] cannot update [%s] - [%v]", uuidStr, sqlstr, params)
 	}
 	f.RefreshSearch()
 	return api, nil
