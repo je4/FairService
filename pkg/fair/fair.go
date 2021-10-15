@@ -366,78 +366,40 @@ func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 		return nil, errors.New(fmt.Sprintf("partition %s not found", partitionName))
 	}
 
-	sqlstr := fmt.Sprintf("SELECT metadata, setspec, catalog, access, signature, sourcename, status, seq, datestamp, identifier"+
-		" FROM %s.coreview"+
-		" WHERE partition=$1 AND uuid=$2", f.dbSchema)
-	params := []interface{}{partition.Name, uuidStr}
-	row := f.db.QueryRow(sqlstr, params...)
+	var item *ItemData
 
-	var metaStr string
-	var set, catalog []string
-	var accessStr string
-	var signature string
-	var source string
-	var statusStr string
-	var seq int64
-	var datestamp time.Time
-	var identifier []string
-	if err := row.Scan(&metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &source, &statusStr, &seq, &datestamp, pq.Array(&identifier)); err != nil {
-		if err != sql.ErrNoRows {
-			return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
-		}
-		return nil, nil
+	sqlWhere := "partition=$1 AND uuid=$2"
+	params := []interface{}{partition, uuidStr}
+	var completeListSize int64
+	if err := f.getItems(sqlWhere, params, 1, 0, &completeListSize, func(found *ItemData) error {
+		item = found
+		return nil
+	}); err != nil {
+		return nil, errors.Wrapf(err, "error querying item cannot query item %v", uuidStr)
 	}
-	data := &ItemData{
-		UUID:       uuidStr,
-		Source:     source,
-		Signature:  signature,
-		Metadata:   myfair.Core{},
-		Set:        set,
-		Catalog:    catalog,
-		Identifier: identifier,
-		Seq:        seq,
-		Datestamp:  datestamp,
-	}
-	data.Access, ok = DataAccessReverse[accessStr]
+
+	return item, nil
+}
+
+func (f *Fair) GetItemSource(partitionName string, sourceid int64, signature string) (*ItemData, error) {
+	partition, ok := f.partitions[partitionName]
 	if !ok {
-		return nil, errors.New(fmt.Sprintf("[%s] invalid access type %s", uuidStr, accessStr))
-	}
-	if err := json.Unmarshal([]byte(metaStr), &data.Metadata); err != nil {
-		return nil, errors.Wrapf(err, "[%s] cannot unmarshal core [%s]", uuidStr, metaStr)
-	}
-	data.Status, ok = DataStatusReverse[statusStr]
-	if !ok {
-		return nil, errors.New(fmt.Sprintf("[%s] invalid status type %s", uuidStr, accessStr))
-	}
-	// add local identifiers
-	for _, id := range data.Identifier {
-		strs := strings.SplitN(id, ":", 2)
-		if len(strs) != 2 {
-			continue
-		}
-
-		idType, ok := myfair.RelatedIdentifierTypeReverse[strs[0]]
-		if !ok {
-			f.log.Warningf("[%s] unknown identifier type %s", uuidStr, id)
-			continue
-		}
-		idStr := strs[1]
-		found := false
-		for _, di := range data.Metadata.Identifier {
-			if di.IdentifierType == idType && di.Value == idStr {
-				found = true
-				break
-			}
-		}
-		if !found {
-			data.Metadata.Identifier = append(data.Metadata.Identifier, myfair.Identifier{
-				Value:          idStr,
-				IdentifierType: idType,
-			})
-		}
+		return nil, errors.New(fmt.Sprintf("partition %s not found", partitionName))
 	}
 
-	return data, nil
+	var item *ItemData
+
+	sqlWhere := "partition=$1 AND source=$1 AND signature=$2"
+	params := []interface{}{partition, sourceid, signature}
+	var completeListSize int64
+	if err := f.getItems(sqlWhere, params, 1, 0, &completeListSize, func(found *ItemData) error {
+		item = found
+		return nil
+	}); err != nil {
+		return nil, errors.Wrapf(err, "error querying item cannot query item %v.%s", sourceid, signature)
+	}
+
+	return item, nil
 }
 
 func (f *Fair) DeleteItem(partitionName, uuidStr string) error {
@@ -486,10 +448,10 @@ func (f *Fair) RefreshSearch() error {
 	return nil
 }
 
-func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) {
+func (f *Fair) CreateItem(partitionName string, data *ItemData) (*ItemData, error) {
 	partition, ok := f.partitions[partitionName]
 	if !ok {
-		return "", errors.New(fmt.Sprintf("partition %s not found", partitionName))
+		return nil, errors.New(fmt.Sprintf("partition %s not found", partitionName))
 	}
 
 	sort.Strings(data.Catalog)
@@ -497,35 +459,28 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 
 	src, err := f.GetSourceByName(data.Source, partitionName)
 	if err != nil {
-		return "", errors.Wrapf(err, "cannot get source %s", data.Source)
+		return nil, errors.Wrapf(err, "cannot get source %s", data.Source)
 	}
 
-	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, status, identifier"+
-		" FROM %s.coreview "+
-		" WHERE source=$1 AND signature=$2", f.dbSchema)
-	params := []interface{}{src.ID, data.Signature}
-	row := f.db.QueryRow(sqlstr, params...)
+	item, err := f.GetItemSource(partitionName, src.ID, data.Signature)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot get item #%v.%v from partition %s", src.ID, data.Signature, partitionName)
+	}
 
-	var metaStr string
-	var uuidStr string
-	var set, catalog, identifiers []string
-	var accessStr string
-	var statusStr string
-	if err := row.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &statusStr, pq.Array(&identifiers)); err != nil {
-		if err != sql.ErrNoRows {
-			return "", errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
-		}
-
+	// not found
+	if item == nil {
 		//
 		// Create new Entry
 		//
 
+		item = data
+		item.Identifier = []string{}
+
 		uuidVal, err := uuid.NewUUID()
 		if err != nil {
-			return "", errors.Wrap(err, "cannot generate uuid")
+			return nil, errors.Wrap(err, "cannot generate uuid")
 		}
-		uuidStr := uuidVal.String()
-		identifiers = []string{}
+		item.UUID = uuidVal.String()
 		var sqlHandle = sql.NullString{}
 		if f.handle != nil {
 			//
@@ -533,93 +488,84 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 			//
 			next, err := f.nextCounter("handle")
 			if err != nil {
-				return "", errors.Wrap(err, "cannot get next handle value")
+				return nil, errors.Wrap(err, "cannot get next handle value")
 			}
 			newHandle := fmt.Sprintf("%s/%s/%v", partition.HandleID, partition.HandlePrefix, next)
-			newURL, err := url.Parse(fmt.Sprintf("%s/redir/%s", partition.AddrExt, uuidStr))
+			newURL, err := url.Parse(fmt.Sprintf("%s/redir/%s", partition.AddrExt, item.UUID))
 			if err != nil {
-				return "", errors.Wrapf(err, "cannot parse url %s", fmt.Sprintf("%s/redir/%s", partition.AddrExt, uuidStr))
+				return nil, errors.Wrapf(err, "cannot parse url %s", fmt.Sprintf("%s/redir/%s", partition.AddrExt, item.UUID))
 			}
 			if err := f.handle.Create(newHandle, newURL); err != nil {
-				return "", errors.Wrapf(err, "cannot create handle %s for %s", newHandle, newURL.String())
+				return nil, errors.Wrapf(err, "cannot create handle %s for %s", newHandle, newURL.String())
 			}
 			sqlHandle.String = newHandle
 			sqlHandle.Valid = true
-			data.Metadata.Identifier = append(data.Metadata.Identifier, myfair.Identifier{
+			item.Metadata.Identifier = append(item.Metadata.Identifier, myfair.Identifier{
 				Value:          newHandle,
 				IdentifierType: myfair.RelatedIdentifierTypeHandle,
 			})
-			identifiers = append(identifiers, fmt.Sprintf("%s:%s", myfair.RelatedIdentifierTypeHandle, newHandle))
+			item.Identifier = append(item.Identifier, fmt.Sprintf("%s:%s", myfair.RelatedIdentifierTypeHandle, newHandle))
 		}
+		sort.Strings(item.Identifier)
 
-		coreBytes, err := json.Marshal(data.Metadata)
+		coreBytes, err := json.Marshal(item.Metadata)
 		if err != nil {
-			return "", errors.Wrapf(err, "cannot marshal core data [%v]", data.Metadata)
+			return nil, errors.Wrapf(err, "cannot marshal core data [%v]", data.Metadata)
 		}
 		sqlstr := fmt.Sprintf("INSERT INTO %s.core"+
 			" (uuid, datestamp, setspec, metadata, signature, source, access, catalog, seq, status, identifier)"+
 			" VALUES($1, NOW(), $2, $3, $4, $5, $6, $7, NEXTVAL('lastchange'), $8, $9)", f.dbSchema)
 		params := []interface{}{
-			uuidStr, // uuid
+			item.UUID, // uuid
 			// datestamp
-			pq.Array(data.Set),     // setspec
+			pq.Array(item.Set),     // setspec
 			string(coreBytes),      // metadata
-			data.Signature,         // signature
+			item.Signature,         // signature
 			src.ID,                 // source
-			data.Access,            // access
-			pq.Array(data.Catalog), // catalog
+			item.Access,            // access
+			pq.Array(item.Catalog), // catalog
 			// seq
 			DataStatusActive,
-			pq.Array(identifiers), // identifier
+			pq.Array(item.Identifier), // identifier
 		}
 		ret, err := f.db.Exec(sqlstr, params...)
 		if err != nil {
-			return "", errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
+			return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
 		num, err := ret.RowsAffected()
 		if err != nil {
-			return "", errors.Wrap(err, "cannot get affected rows")
+			return nil, errors.Wrap(err, "cannot get affected rows")
 		}
 		if num == 0 {
-			return "", errors.Wrap(err, "no affected rows")
+			return nil, errors.Wrap(err, "no affected rows")
 		}
 		sqlstr = fmt.Sprintf("INSERT INTO %s.core_dirty"+
 			" (uuid)"+
 			" VALUES($1)", f.dbSchema)
 		params = []interface{}{
-			uuidStr, // uuid
+			item.UUID, // uuid
 		}
 		if _, err = f.db.Exec(sqlstr, params...); err != nil {
-			return "", errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
+			return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
-		f.log.Infof("new item [%s] inserted", uuidStr)
+		f.log.Infof("new item [%s] inserted", item.UUID)
 
-		return uuidStr, nil
+		return item, nil
 
 	} else {
-		var ok bool
-		access, ok := DataAccessReverse[accessStr]
-		if !ok {
-			return "", errors.Wrapf(err, "[%s] invalid access type %s", uuidStr, accessStr)
-		}
-		status, ok := DataStatusReverse[statusStr]
-		if !ok {
-			return "", errors.Wrapf(err, "[%s] invalid status type %s", uuidStr, accessStr)
-		}
-		sort.Strings(catalog)
-		sort.Strings(set)
-		sort.Strings(identifiers)
+		sort.Strings(data.Catalog)
+		sort.Strings(data.Set)
 
 		// add local identifiers
-		for _, id := range identifiers {
+		for _, id := range item.Identifier {
 			strs := strings.SplitN(id, ":", 2)
 			if len(strs) != 2 {
-				return "", errors.New(fmt.Sprintf("[%s] invalid identifier format %s", uuidStr, id))
+				return nil, errors.New(fmt.Sprintf("[%s] invalid identifier format %s", item.UUID, id))
 			}
 
 			idType, ok := myfair.RelatedIdentifierTypeReverse[strs[0]]
 			if !ok {
-				f.log.Warningf("[%s] unknown identifier type %s", uuidStr, id)
+				f.log.Warningf("[%s] unknown identifier type %s", item.UUID, id)
 				continue
 			}
 			idStr := strs[1]
@@ -638,42 +584,31 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 			}
 		}
 
-		/*
-			identifiers = []string{}
-			for _, id := range data.Metadata.Identifier {
-				identifiers = append(identifiers, fmt.Sprintf("%s:%s", id.IdentifierType, id.Value))
-			}
-		*/
-
 		// do update here
-		var oldMeta myfair.Core
-		if err := json.Unmarshal([]byte(metaStr), &oldMeta); err != nil {
-			return "", errors.Wrapf(err, "[%s] cannot unmarshal core [%s]", uuidStr, metaStr)
-		}
-		if status == "active" &&
-			reflect.DeepEqual(oldMeta, data.Metadata) &&
-			equalStrings(set, data.Set) &&
-			equalStrings(catalog, data.Catalog) &&
-			access == data.Access {
-			f.log.Infof("no update needed for item [%v]", uuidStr)
-			sqlstr = fmt.Sprintf("INSERT INTO %s.core_dirty"+
+		if item.Status == DataStatusActive &&
+			reflect.DeepEqual(item.Metadata, data.Metadata) &&
+			equalStrings(item.Set, data.Set) &&
+			equalStrings(item.Catalog, data.Catalog) &&
+			item.Access == data.Access {
+			f.log.Infof("no update needed for item [%v]", item.UUID)
+			sqlstr := fmt.Sprintf("INSERT INTO %s.core_dirty"+
 				" (uuid)"+
 				" VALUES($1)", f.dbSchema)
-			params = []interface{}{
-				uuidStr, // uuid
+			params := []interface{}{
+				item.UUID, // uuid
 			}
 			if _, err = f.db.Exec(sqlstr, params...); err != nil {
-				return "", errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
+				return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 			}
-			return uuidStr, nil
+			return item, nil
 		}
 
 		dataMetaBytes, err := json.Marshal(data.Metadata)
 		if err != nil {
-			return "", errors.Wrapf(err, "[%s] cannot unmarshal data core", uuidStr)
+			return nil, errors.Wrapf(err, "[%s] cannot unmarshal data core", item.UUID)
 		}
 
-		sqlstr = fmt.Sprintf("UPDATE %s.core"+
+		sqlstr := fmt.Sprintf("UPDATE %s.core"+
 			" SET setspec=$1, metadata=$2, access=$3, catalog=$4, status=$5, datestamp=NOW(), seq=NEXTVAL('lastchange')"+
 			" WHERE uuid=$6", f.dbSchema)
 		params := []interface{}{
@@ -682,21 +617,27 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (string, error) 
 			data.Access,
 			pq.Array(data.Catalog),
 			DataStatusActive,
-			uuidStr}
+			item.UUID}
 		if _, err := f.db.Exec(sqlstr, params...); err != nil {
-			return "", errors.Wrapf(err, "[%s] cannot update [%s] - [%v]", uuidStr, sqlstr, params)
+			return nil, errors.Wrapf(err, "[%s] cannot update [%s] - [%v]", item.UUID, sqlstr, params)
 		}
 		sqlstr = fmt.Sprintf("INSERT INTO %s.core_dirty"+
 			" (uuid)"+
 			" VALUES($1)", f.dbSchema)
 		params = []interface{}{
-			uuidStr, // uuid
+			item.UUID, // uuid
 		}
 		if _, err = f.db.Exec(sqlstr, params...); err != nil {
-			return "", errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
+			return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
-		f.log.Infof("item [%s] updated", uuidStr)
-		return uuidStr, nil
+		f.log.Infof("item [%s] updated", item.UUID)
+		item.Set = data.Set
+		item.Metadata = data.Metadata
+		item.Access = data.Access
+		item.Catalog = data.Catalog
+		item.Status = DataStatusActive
+		item.Metadata = data.Metadata
+		return item, nil
 	}
 
 }
