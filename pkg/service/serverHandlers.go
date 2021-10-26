@@ -9,6 +9,7 @@ import (
 	"github.com/je4/FairService/v2/pkg/datatable"
 	"github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/FairService/v2/pkg/model/dcmi"
+	"github.com/op/go-logging"
 	"io/ioutil"
 	"net/http"
 	"regexp"
@@ -16,9 +17,28 @@ import (
 )
 
 type CreateResultStatus struct {
-	Status  string `json:"status"`
-	Message string `json:"message,omitempty"`
-	UUID    string `json:"uuid,omitempty"`
+	Status  string         `json:"status"`
+	Message string         `json:"message,omitempty"`
+	Item    *fair.ItemData `json:"uuid,omitempty"`
+}
+
+func sendCreateResult(log *logging.Logger, w http.ResponseWriter, t string, message string, item *fair.ItemData) {
+	if item != nil {
+		if t == "ok" {
+			log.Infof(fmt.Sprintf("%s: %s", message, item.UUID))
+		} else {
+			log.Error(fmt.Sprintf("%s: %s", message, item.UUID))
+		}
+	} else {
+		if t == "ok" {
+			log.Infof(fmt.Sprintf("%s", message))
+		} else {
+			log.Error(fmt.Sprintf("%s", message))
+		}
+	}
+	w.Header().Set("Content-type", "text/json")
+	data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message, Item: item}, "", "  ")
+	w.Write(data)
 }
 
 func BasicAuth(w http.ResponseWriter, r *http.Request, username, password, realm string) bool {
@@ -199,17 +219,7 @@ func (s *Server) partitionOAIHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Server) itemHandler(w http.ResponseWriter, req *http.Request) {
-	sendResult := func(t string, message string, uuid string) {
-		if t == "ok" {
-			s.log.Infof(fmt.Sprintf("%s: %s", message, uuid))
-		} else {
-			w.WriteHeader(http.StatusInternalServerError)
-			s.log.Error(fmt.Sprintf("%s: %s", message, uuid))
-		}
-		w.Header().Set("Content-type", "text/json")
-		data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message, UUID: uuid}, "", "  ")
-		w.Write(data)
-	}
+
 	vars := mux.Vars(req)
 	pName := vars["partition"]
 	uuidStr := vars["uuid"]
@@ -220,7 +230,7 @@ func (s *Server) itemHandler(w http.ResponseWriter, req *http.Request) {
 
 	data, err := s.fair.GetItem(pName, uuidStr)
 	if err != nil {
-		sendResult("error", fmt.Sprintf("error loading item: %v", err), uuidStr)
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("error loading item %v: %v", uuidStr, err), nil)
 		return
 	}
 	if data == nil {
@@ -235,7 +245,7 @@ func (s *Server) itemHandler(w http.ResponseWriter, req *http.Request) {
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(data); err != nil {
-			sendResult("error", fmt.Sprintf("cannot marshal data"), uuidStr)
+			sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot marshal data for %v", uuidStr), nil)
 			return
 		}
 		return
@@ -248,12 +258,12 @@ func (s *Server) itemHandler(w http.ResponseWriter, req *http.Request) {
 		enc.Indent("", "  ")
 		w.Header().Set("Content-type", "text/json")
 		if err := enc.Encode(dcmiData); err != nil {
-			sendResult("error", fmt.Sprintf("cannot marshal data"), uuidStr)
+			sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot marshal data for %v", uuidStr), nil)
 			return
 		}
 		return
 	default:
-		sendResult("error", fmt.Sprintf("invalid output type %s", outputType), uuidStr)
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("invalid output type %s for %v", outputType, uuidStr), nil)
 		return
 	}
 }
@@ -263,32 +273,20 @@ func (s *Server) createDOIHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	sendResult := func(t string, message string, uuid string) {
-		if t == "ok" {
-			s.log.Infof(fmt.Sprintf("%s: %s", message, uuid))
-		} else {
-			w.WriteHeader(http.StatusInternalServerError)
-			s.log.Error(fmt.Sprintf("%s: %s", message, uuid))
-		}
-		w.Header().Set("Content-type", "text/json")
-		data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message, UUID: uuid}, "", "  ")
-		w.Write(data)
-	}
-
 	vars := mux.Vars(req)
 	pName := vars["partition"]
 	uuidStr := vars["uuid"]
 
 	part, err := s.fair.GetPartition(pName)
 	if err != nil {
-		sendResult("error", fmt.Sprintf("cannot get partition %s", pName), uuidStr)
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot get partition %s for %v", pName, uuidStr), nil)
 		return
 	}
 
 	targetUrl := fmt.Sprintf("%s/redir/%s", part.AddrExt, uuidStr)
 	doiResult, err := s.fair.CreateDOI(pName, uuidStr, targetUrl)
 	if err != nil {
-		sendResult("error", err.Error(), uuidStr)
+		sendCreateResult(s.log, w, "error", err.Error(), nil)
 		return
 	}
 
@@ -296,23 +294,13 @@ func (s *Server) createDOIHandler(w http.ResponseWriter, req *http.Request) {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(doiResult); err != nil {
-		sendResult("error", fmt.Sprintf("cannot marshal data"), uuidStr)
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot marshal data for %v", uuidStr), nil)
 		return
 	}
 	return
 }
 
 func (s *Server) startUpdateHandler(w http.ResponseWriter, req *http.Request) {
-	sendResult := func(t string, message string) {
-		if t == "ok" {
-			s.log.Infof(fmt.Sprintf("%s", message))
-		} else {
-			s.log.Error(fmt.Sprintf("%s", message))
-		}
-		w.Header().Set("Content-type", "text/json")
-		data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message, UUID: ""}, "", "  ")
-		w.Write(data)
-	}
 
 	vars := mux.Vars(req)
 	pName := vars["partition"]
@@ -321,28 +309,18 @@ func (s *Server) startUpdateHandler(w http.ResponseWriter, req *http.Request) {
 	var data fair.SourceData
 	err := decoder.Decode(&data)
 	if err != nil {
-		sendResult("error", fmt.Sprintf("cannot parse request body: %v", err))
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot parse request body: %v", err), nil)
 		return
 	}
 
 	if err := s.fair.StartUpdate(pName, data.Source); err != nil {
-		sendResult("error", fmt.Sprintf("cannot start update for %s on %s: %v", data.Source, pName, err))
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot start update for %s on %s: %v", data.Source, pName, err), nil)
 		return
 	}
-	sendResult("ok", fmt.Sprintf("starting update for %s on %s", data.Source, pName))
+	sendCreateResult(s.log, w, "ok", fmt.Sprintf("starting update for %s on %s", data.Source, pName), nil)
 }
 
 func (s *Server) endUpdateHandler(w http.ResponseWriter, req *http.Request) {
-	sendResult := func(t string, message string) {
-		if t == "ok" {
-			s.log.Infof(fmt.Sprintf("%s", message))
-		} else {
-			s.log.Error(fmt.Sprintf("%s", message))
-		}
-		w.Header().Set("Content-type", "text/json")
-		data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message, UUID: ""}, "", "  ")
-		w.Write(data)
-	}
 
 	vars := mux.Vars(req)
 	pName := vars["partition"]
@@ -351,29 +329,18 @@ func (s *Server) endUpdateHandler(w http.ResponseWriter, req *http.Request) {
 	var data fair.SourceData
 	err := decoder.Decode(&data)
 	if err != nil {
-		sendResult("error", fmt.Sprintf("cannot parse request body: %v", err))
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot parse request body: %v", err), nil)
 		return
 	}
 
 	if err := s.fair.EndUpdate(pName, data.Source); err != nil {
-		sendResult("error", fmt.Sprintf("cannot end update for %s on %s: %v", data.Source, pName, err))
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot end update for %s on %s: %v", data.Source, pName, err), nil)
 		return
 	}
-	sendResult("ok", fmt.Sprintf("end update for %s on %s", data.Source, pName))
+	sendCreateResult(s.log, w, "ok", fmt.Sprintf("end update for %s on %s", data.Source, pName), nil)
 }
 
 func (s *Server) abortUpdateHandler(w http.ResponseWriter, req *http.Request) {
-	sendResult := func(t string, message string) {
-		if t == "ok" {
-			s.log.Infof(fmt.Sprintf("%s", message))
-		} else {
-			s.log.Error(fmt.Sprintf("%s", message))
-		}
-		w.Header().Set("Content-type", "text/json")
-		data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message, UUID: ""}, "", "  ")
-		w.Write(data)
-	}
-
 	vars := mux.Vars(req)
 	pName := vars["partition"]
 
@@ -381,29 +348,18 @@ func (s *Server) abortUpdateHandler(w http.ResponseWriter, req *http.Request) {
 	var data fair.SourceData
 	err := decoder.Decode(&data)
 	if err != nil {
-		sendResult("error", fmt.Sprintf("cannot parse request body: %v", err))
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot parse request body: %v", err), nil)
 		return
 	}
 
 	if err := s.fair.AbortUpdate(pName, data.Source); err != nil {
-		sendResult("error", fmt.Sprintf("cannot end update for %s on %s: %v", data.Source, pName, err))
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot end update for %s on %s: %v", data.Source, pName, err), nil)
 		return
 	}
-	sendResult("ok", fmt.Sprintf("abort update for %s on %s", data.Source, pName))
+	sendCreateResult(s.log, w, "ok", fmt.Sprintf("abort update for %s on %s", data.Source, pName), nil)
 }
 
 func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
-	sendResult := func(t string, message string, uuid string) {
-		if t == "ok" {
-			s.log.Infof(fmt.Sprintf("%s: %s", message, uuid))
-		} else {
-			s.log.Error(fmt.Sprintf("%s: %s", message, uuid))
-		}
-		w.Header().Set("Content-type", "text/json")
-		data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message, UUID: uuid}, "", "  ")
-		w.Write(data)
-	}
-
 	vars := mux.Vars(req)
 	pName := vars["partition"]
 
@@ -416,22 +372,22 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 	bdata, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		s.log.Errorf("cannot read request body: %v", err)
-		sendResult("error", fmt.Sprintf("cannot read request body: %v", err), "")
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot read request body: %v", err), nil)
 		return
 	}
 
 	if err := json.Unmarshal(bdata, data); err != nil {
 		s.log.Errorf("cannot unmarshal request body [%s]: %v", string(bdata), err)
-		sendResult("error", fmt.Sprintf("cannot unmarshal request body [%s]: %v", string(bdata), err), "")
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot unmarshal request body [%s]: %v", string(bdata), err), nil)
 		return
 	}
 
-	uuidStr, err := s.fair.CreateItem(pName, data)
+	item, err := s.fair.CreateItem(pName, data)
 	if err != nil {
-		sendResult("error", fmt.Sprintf("cannot create item: %v", err), "")
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot create item: %v", err), nil)
 		return
 	}
-	sendResult("ok", "update done", uuidStr)
+	sendCreateResult(s.log, w, "ok", "update done", item)
 	return
 }
 
@@ -450,35 +406,24 @@ func (s *Server) searchDatatableHandler(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	sendResult := func(t string, message string, uuid string) {
-		if t == "ok" {
-			s.log.Infof(fmt.Sprintf("%s: %s", message, uuid))
-		} else {
-			s.log.Error(fmt.Sprintf("%s: %s", message, uuid))
-		}
-		w.Header().Set("Content-type", "text/json")
-		data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message, UUID: uuid}, "", "  ")
-		w.Write(data)
-	}
-
 	vars := mux.Vars(req)
 	pName := vars["partition"]
 
 	_, err := s.fair.GetPartition(pName)
 	if err != nil {
-		sendResult("error", fmt.Sprintf("invalid partition %s", pName), "")
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("invalid partition %s", pName), nil)
 		return
 	}
 
 	dReq := &datatable.Request{}
 	if err := dReq.FromRequest(req); err != nil {
-		sendResult("error", fmt.Sprintf("cannot eval request parameter: %v", err), "")
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot eval request parameter: %v", err), nil)
 		return
 	}
 
 	result, num, total, err := s.fair.Search(pName, dReq)
 	if err != nil {
-		sendResult("error", fmt.Sprintf("cannot search: %v", err), "")
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot search: %v", err), nil)
 		return
 	}
 
@@ -490,7 +435,7 @@ func (s *Server) searchDatatableHandler(w http.ResponseWriter, req *http.Request
 	}
 	enc := json.NewEncoder(w)
 	if err := enc.Encode(rData); err != nil {
-		sendResult("error", fmt.Sprintf("cannot search: %v", err), "")
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot search: %v", err), nil)
 		return
 	}
 	return
