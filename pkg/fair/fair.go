@@ -389,8 +389,8 @@ func (f *Fair) GetItemSource(partitionName string, sourceid int64, signature str
 
 	var item *ItemData
 
-	sqlWhere := "partition=$1 AND source=$1 AND signature=$2"
-	params := []interface{}{partition, sourceid, signature}
+	sqlWhere := "partition=$1 AND source=$2 AND signature=$3"
+	params := []interface{}{partition.Name, sourceid, signature}
 	var completeListSize int64
 	if err := f.getItems(sqlWhere, params, 1, 0, &completeListSize, func(found *ItemData) error {
 		item = found
