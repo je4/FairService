@@ -15,4 +15,5 @@
 # vendor/
 .idea/
 ~*
-fdp.toml
+configs/fdp.toml
+configs/fdp2.toml
