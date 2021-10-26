@@ -39,15 +39,16 @@ password = "swordfish"
     prefix = "10.26254"
 
 [database]
-servertype = "postgres"
-dsn = "postgres://fairservice:MtgViCEqJoiQoXOP@localhost:5433/fairservice"
-connection_max = 5000
-schema = "public"
+    servertype = "postgres"
+    dsn = "postgres://fairservice:MtgViCEqJoiQoXOP@localhost:5433/fairservice"
+    connection_max = 5000
+    schema = "public"
 
 [handle]
     jwtkey = "secret"
     jwtalg = "HS512"
-    addr = "http://localhost:8444"
+    #addr = "http://localhost:8444"
+    addr = "https://dataverse.hgk.fhnw.ch/handlecreator/"
 
 [_tunnel.ba14ns21403]
     user = "root"
