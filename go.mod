@@ -4,13 +4,14 @@ go 1.16
 
 require (
 	emperror.dev/errors v0.8.0
-	github.com/BurntSushi/toml v0.3.1
+	github.com/BurntSushi/toml v0.4.1
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/bluele/gcache v0.0.2
 	github.com/felixge/httpsnoop v1.0.2 // indirect
 	github.com/google/uuid v1.1.2
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
+	github.com/je4/HandleCreator/v2 v2.0.1
 	github.com/je4/utils/v2 v2.0.0-20210816105524-d30a0aa17c15
 	github.com/lib/pq v1.10.2
 	github.com/op/go-logging v0.0.0-20160315200505-970db520ece7

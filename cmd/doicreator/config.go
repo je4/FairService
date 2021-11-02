@@ -63,9 +63,10 @@ type Partition struct {
 }
 
 type Handle struct {
-	Addr   string `toml:"addr"`
-	JWTKey string `toml:"jwtkey"`
-	JWTAlg string `toml:"jwtalg"`
+	Addr           string `toml:"addr"`
+	JWTKey         string `toml:"jwtkey"`
+	JWTAlg         string `toml:"jwtalg"`
+	SkipCertVerify bool   `toml:"skipcertverify"`
 }
 
 type Datacite struct {

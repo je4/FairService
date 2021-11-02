@@ -10,6 +10,8 @@ import (
 	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/FairService/v2/pkg/model/myfair"
 	"github.com/je4/FairService/v2/pkg/service/datacite"
+	hcClient "github.com/je4/HandleCreator/v2/pkg/client"
+
 	//"github.com/je4/FairService/v2/pkg/service"
 	"github.com/lib/pq"
 	"github.com/op/go-logging"
@@ -93,7 +95,7 @@ func equalStrings(a, b []string) bool {
 type Fair struct {
 	dbSchema       string
 	db             *sql.DB
-	handle         *HandleServiceClient
+	handle         *hcClient.HandleCreatorClient
 	dataciteClient *datacite.Client
 	sourcesMutex   sync.RWMutex
 	sources        map[int64]*Source
@@ -101,7 +103,7 @@ type Fair struct {
 	log            *logging.Logger
 }
 
-func NewFair(db *sql.DB, dbSchema string, handle *HandleServiceClient, dataciteClient *datacite.Client, log *logging.Logger) (*Fair, error) {
+func NewFair(db *sql.DB, dbSchema string, handle *hcClient.HandleCreatorClient, dataciteClient *datacite.Client, log *logging.Logger) (*Fair, error) {
 	f := &Fair{
 		dbSchema:       dbSchema,
 		db:             db,

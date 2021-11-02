@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/BurntSushi/toml"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -63,9 +64,10 @@ type Partition struct {
 }
 
 type Handle struct {
-	Addr   string `toml:"addr"`
-	JWTKey string `toml:"jwtkey"`
-	JWTAlg string `toml:"jwtalg"`
+	Addr           string `toml:"addr"`
+	JWTKey         string `toml:"jwtkey"`
+	JWTAlg         string `toml:"jwtalg"`
+	SkipCertVerify bool   `toml:"skipcertverify"`
 }
 
 type Datacite struct {
@@ -103,5 +105,6 @@ func LoadConfig(filepath string) Config {
 	}
 	//	conf.AddrExt = strings.TrimRight(conf.AddrExt, "/")
 
+	conf.Handle.Addr = strings.TrimRight(conf.Handle.Addr, "/")
 	return conf
 }

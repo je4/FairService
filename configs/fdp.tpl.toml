@@ -44,6 +44,7 @@ schema = "public"
     jwtkey = "secret"
     jwtalg = "HS512"
     addr = "http://localhost:8444"
+    skipcertverify = true
 
 [_tunnel.ba14ns21403]
     user = "root"

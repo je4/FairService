@@ -2,13 +2,12 @@ package main
 
 import (
 	"context"
-	"crypto/sha512"
 	"database/sql"
 	"flag"
 	"github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/FairService/v2/pkg/service"
 	"github.com/je4/FairService/v2/pkg/service/datacite"
-	"github.com/je4/utils/v2/pkg/JWTInterceptor"
+	hcClient "github.com/je4/HandleCreator/v2/pkg/client"
 	lm "github.com/je4/utils/v2/pkg/logger"
 	"github.com/je4/utils/v2/pkg/ssh"
 	_ "github.com/lib/pq"
@@ -131,20 +130,9 @@ func main() {
 			logger.Infof("doi: %v", r)
 		*/
 	}
-	var handle *fair.HandleServiceClient
+	var handle *hcClient.HandleCreatorClient
 	if config.Handle.Addr != "" {
-		tr, err := JWTInterceptor.NewJWTTransport(nil,
-			sha512.New(),
-			"",
-			config.Handle.JWTKey,
-			config.Handle.JWTAlg,
-			30*time.Second)
-		if err != nil {
-			logger.Panicf("cannot create JWTInterceptor.JWTTransport: %v", err)
-			return
-		}
-
-		handle, err = fair.NewHandleServiceClient(config.Handle.Addr, tr, logger)
+		handle, err = hcClient.NewHandleCreatorClient(config.Handle.Addr, config.Handle.JWTKey, config.Handle.JWTAlg, config.Handle.SkipCertVerify, logger)
 		if err != nil {
 			logger.Panicf("cannot create handle service: %v", err)
 			return
