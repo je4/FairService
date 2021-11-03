@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/BurntSushi/toml"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -63,9 +64,11 @@ type Partition struct {
 }
 
 type Handle struct {
-	Addr   string `toml:"addr"`
-	JWTKey string `toml:"jwtkey"`
-	JWTAlg string `toml:"jwtalg"`
+	ServiceName    string `toml:"servicename"`
+	Addr           string `toml:"addr"`
+	JWTKey         string `toml:"jwtkey"`
+	JWTAlg         string `toml:"jwtalg"`
+	SkipCertVerify bool   `toml:"skipcertverify"`
 }
 
 type Datacite struct {
@@ -76,6 +79,7 @@ type Datacite struct {
 }
 
 type Config struct {
+	ServiceName  string               `toml:"servicename"`
 	Logfile      string               `toml:"logfile"`
 	Loglevel     string               `toml:"loglevel"`
 	Logformat    string               `toml:"logformat"`
@@ -97,11 +101,13 @@ type Config struct {
 
 func LoadConfig(filepath string) Config {
 	var conf Config
+	conf.ServiceName = "FairService"
 	_, err := toml.DecodeFile(filepath, &conf)
 	if err != nil {
 		log.Fatalln("Error on loading config: ", err)
 	}
 	//	conf.AddrExt = strings.TrimRight(conf.AddrExt, "/")
 
+	conf.Handle.Addr = strings.TrimRight(conf.Handle.Addr, "/")
 	return conf
 }

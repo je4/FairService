@@ -1,3 +1,4 @@
+servicename = "FairService"
 logfile = "" # log file location
 loglevel = "DEBUG" # CRITICAL|ERROR|WARNING|NOTICE|INFO|DEBUG
 logformat = "%{time:2006-01-02T15:04:05.000} %{module}::%{shortfunc} [%{shortfile}] > %{level:.5s} - %{message}"
@@ -41,9 +42,11 @@ connection_max = 5000
 schema = "public"
 
 [handle]
+    servicename = "HandleCreator"
     jwtkey = "secret"
     jwtalg = "HS512"
     addr = "http://localhost:8444"
+    skipcertverify = true
 
 [_tunnel.ba14ns21403]
     user = "root"

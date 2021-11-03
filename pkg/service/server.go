@@ -24,6 +24,7 @@ import (
 )
 
 type Server struct {
+	service              string
 	host, port           string
 	name, password       string
 	srv                  *http.Server
@@ -37,7 +38,7 @@ type Server struct {
 	resumptionTokenCache gcache.Cache
 }
 
-func NewServer(addr, name, password string, log *logging.Logger, fair *fair.Fair, accessLog io.Writer, jwtKey string, jwtAlg []string, linkTokenExp time.Duration) (*Server, error) {
+func NewServer(service, addr, name, password string, log *logging.Logger, fair *fair.Fair, accessLog io.Writer, jwtKey string, jwtAlg []string, linkTokenExp time.Duration) (*Server, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot split address %s", addr)
@@ -50,6 +51,7 @@ func NewServer(addr, name, password string, log *logging.Logger, fair *fair.Fair
 	*/
 
 	srv := &Server{
+		service:              service,
 		host:                 host,
 		port:                 port,
 		name:                 name,
@@ -161,8 +163,8 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 	router.Handle(
 		"/{partition}/item",
 		handlers.CompressHandler(JWTInterceptor.JWTInterceptor(
+			s.service,
 			func() http.Handler { return http.HandlerFunc(s.createHandler) }(),
-			"",
 			s.jwtKey,
 			s.jwtAlg,
 			sha512.New()))).
@@ -170,8 +172,8 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 	router.Handle(
 		"/{partition}/startupdate",
 		handlers.CompressHandler(JWTInterceptor.JWTInterceptor(
+			s.service,
 			func() http.Handler { return http.HandlerFunc(s.startUpdateHandler) }(),
-			"",
 			s.jwtKey,
 			s.jwtAlg,
 			sha512.New()))).
@@ -179,8 +181,8 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 	router.Handle(
 		"/{partition}/endupdate",
 		handlers.CompressHandler(JWTInterceptor.JWTInterceptor(
+			s.service,
 			func() http.Handler { return http.HandlerFunc(s.endUpdateHandler) }(),
-			"",
 			s.jwtKey,
 			s.jwtAlg,
 			sha512.New()))).
@@ -188,8 +190,8 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 	router.Handle(
 		"/{partition}/abortupdate",
 		handlers.CompressHandler(JWTInterceptor.JWTInterceptor(
+			s.service,
 			func() http.Handler { return http.HandlerFunc(s.abortUpdateHandler) }(),
-			"",
 			s.jwtKey,
 			s.jwtAlg,
 			sha512.New()))).
