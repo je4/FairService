@@ -9,7 +9,6 @@ import (
 	"github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/FairService/v2/pkg/service"
 	"github.com/je4/utils/v2/pkg/JWTInterceptor"
-	"github.com/je4/zsearch/v2/pkg/mediaserver"
 	"github.com/pkg/errors"
 	"io/ioutil"
 	"net/http"
@@ -120,7 +119,7 @@ func (fs *FairClient) AbortUpdate(source string) error {
 
 }
 
-func (fs *FairClient) Create(item fair.ItemData, ms mediaserver.Mediaserver) (*fair.ItemData, error) {
+func (fs *FairClient) Create(item *fair.ItemData) (*fair.ItemData, error) {
 	data, err := json.Marshal(item)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot marshal [%v]", item)
