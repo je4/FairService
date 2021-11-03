@@ -64,6 +64,7 @@ type Partition struct {
 }
 
 type Handle struct {
+	ServiceName    string `toml:"servicename"`
 	Addr           string `toml:"addr"`
 	JWTKey         string `toml:"jwtkey"`
 	JWTAlg         string `toml:"jwtalg"`
@@ -78,6 +79,7 @@ type Datacite struct {
 }
 
 type Config struct {
+	ServiceName  string               `toml:"servicename"`
 	Logfile      string               `toml:"logfile"`
 	Loglevel     string               `toml:"loglevel"`
 	Logformat    string               `toml:"logformat"`
@@ -99,6 +101,7 @@ type Config struct {
 
 func LoadConfig(filepath string) Config {
 	var conf Config
+	conf.ServiceName = "FairService"
 	_, err := toml.DecodeFile(filepath, &conf)
 	if err != nil {
 		log.Fatalln("Error on loading config: ", err)

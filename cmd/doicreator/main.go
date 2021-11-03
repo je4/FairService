@@ -132,7 +132,7 @@ func main() {
 	}
 	var handle *hcClient.HandleCreatorClient
 	if config.Handle.Addr != "" {
-		handle, err = hcClient.NewHandleCreatorClient(config.Handle.Addr, config.Handle.JWTKey, config.Handle.JWTAlg, config.Handle.SkipCertVerify, logger)
+		handle, err = hcClient.NewHandleCreatorClient(config.Handle.ServiceName, config.Handle.Addr, config.Handle.JWTKey, config.Handle.JWTAlg, config.Handle.SkipCertVerify, logger)
 		if err != nil {
 			logger.Panicf("cannot create handle service: %v", err)
 			return
@@ -176,7 +176,7 @@ func main() {
 		fair.AddPartition(p)
 	}
 
-	srv, err := service.NewServer(config.Addr, config.UserName, config.Password, logger, fair, accessLog, config.JWTKey, config.JWTAlg, config.LinkTokenExp.Duration)
+	srv, err := service.NewServer(config.ServiceName, config.Addr, config.UserName, config.Password, logger, fair, accessLog, config.JWTKey, config.JWTAlg, config.LinkTokenExp.Duration)
 	if err != nil {
 		logger.Panicf("cannot initialize server: %v", err)
 	}
