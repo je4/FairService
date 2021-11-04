@@ -43,6 +43,25 @@ func NewFairService(service, address string, certSkipVerify bool, jwtKey string,
 	return fs, nil
 }
 
+func (fs *FairClient) Ping() error {
+	response, err := http.Get(fs.address + "/ping")
+	if err != nil {
+		return errors.Wrapf(err, "cannot post to %s", fs.address)
+	}
+	bodyBytes, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return errors.Wrap(err, "cannot read response body")
+	}
+	result := service.CreateResultStatus{}
+	if err := json.Unmarshal(bodyBytes, &result); err != nil {
+		return errors.Wrapf(err, "cannot decode result %s", string(bodyBytes))
+	}
+	if result.Status != "ok" {
+		return errors.New(fmt.Sprintf("ping error: %s", result.Message))
+	}
+	return nil
+}
+
 func (fs *FairClient) StartUpdate(source string) error {
 	srcData := fair.SourceData{Source: source}
 	data, err := json.Marshal(srcData)

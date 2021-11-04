@@ -141,6 +141,10 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 		},
 	).Methods("GET")
 	router.Handle(
+		"/{partition}/ping",
+		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.pingHandler) }()),
+	).Methods("GET")
+	router.Handle(
 		"/{partition}/",
 		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.partitionHandler) }()),
 	).Methods("GET")
