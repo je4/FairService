@@ -9,7 +9,6 @@ import (
 	"github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/FairService/v2/pkg/service"
 	"github.com/je4/utils/v2/pkg/JWTInterceptor"
-	"github.com/je4/zsearch/v2/pkg/mediaserver"
 	"github.com/pkg/errors"
 	"io/ioutil"
 	"net/http"
@@ -42,6 +41,25 @@ func NewFairService(service, address string, certSkipVerify bool, jwtKey string,
 		client:         &http.Client{Transport: tr},
 	}
 	return fs, nil
+}
+
+func (fs *FairClient) Ping() error {
+	response, err := http.Get(fs.address + "/ping")
+	if err != nil {
+		return errors.Wrapf(err, "cannot post to %s", fs.address)
+	}
+	bodyBytes, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return errors.Wrap(err, "cannot read response body")
+	}
+	result := service.CreateResultStatus{}
+	if err := json.Unmarshal(bodyBytes, &result); err != nil {
+		return errors.Wrapf(err, "cannot decode result %s", string(bodyBytes))
+	}
+	if result.Status != "ok" {
+		return errors.New(fmt.Sprintf("ping error: %s", result.Message))
+	}
+	return nil
 }
 
 func (fs *FairClient) StartUpdate(source string) error {
@@ -120,7 +138,7 @@ func (fs *FairClient) AbortUpdate(source string) error {
 
 }
 
-func (fs *FairClient) Create(item fair.ItemData, ms mediaserver.Mediaserver) (*fair.ItemData, error) {
+func (fs *FairClient) Create(item *fair.ItemData) (*fair.ItemData, error) {
 	data, err := json.Marshal(item)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot marshal [%v]", item)

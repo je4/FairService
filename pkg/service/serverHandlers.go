@@ -320,6 +320,10 @@ func (s *Server) startUpdateHandler(w http.ResponseWriter, req *http.Request) {
 	sendCreateResult(s.log, w, "ok", fmt.Sprintf("starting update for %s on %s", data.Source, pName), nil)
 }
 
+func (s *Server) pingHandler(w http.ResponseWriter, req *http.Request) {
+	sendCreateResult(s.log, w, "ok", "pong", nil)
+}
+
 func (s *Server) endUpdateHandler(w http.ResponseWriter, req *http.Request) {
 
 	vars := mux.Vars(req)
