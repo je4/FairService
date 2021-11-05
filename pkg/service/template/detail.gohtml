@@ -66,6 +66,10 @@
                 </thead>
                 <tbody>
                 <tr>
+                    <td>Status</td>
+                    <td>{{.Data.Status}}</td>
+                </tr>
+                <tr>
                     <td>PublicationYear</td>
                     <td>{{.Data.Metadata.PublicationYear}}</td>
                 </tr>
@@ -88,7 +92,7 @@
                         <td>{{$identifier.Value}}</td>
                     </tr>
                 {{end}}
-                {{if (not $hasDOI)}}
+                {{if and (not $hasDOI) (eq .Data.Status "active")}}
                     <tr>
                         <td>DOI</td>
                         <td>
