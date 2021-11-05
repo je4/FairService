@@ -108,7 +108,7 @@ func (c *Client) Delete(doi string) (*API, error) {
 		return nil, errors.Wrapf(err, "cannot retrieve %s", doi)
 	}
 
-	if doiApi.Data.Type != "draft" {
+	if doiApi.Data.Type != string(DCEventDraft) {
 		return nil, errors.New(fmt.Sprintf("cannot delete dois with type %s", doiApi.Data.Type))
 	}
 	var client http.Client
@@ -151,7 +151,7 @@ func (c *Client) Delete(doi string) (*API, error) {
 	return dc, nil
 }
 
-func (c *Client) CreateDOI(data *dataciteModel.DataCite, doiSuffix, targetUrl string) (*API, error) {
+func (c *Client) CreateDOI(data *dataciteModel.DataCite, doiSuffix, targetUrl string, status DCEvent) (*API, error) {
 	var client http.Client
 
 	xmlBytes, err := xml.Marshal(data)
@@ -164,10 +164,10 @@ func (c *Client) CreateDOI(data *dataciteModel.DataCite, doiSuffix, targetUrl st
 		Id:   doiString,
 		Type: "dois",
 		Attributes: APIDOIDataAttributes{
-			//			Event: "draft", // publish - register - hide
-			DOI: doiString,
-			Xml: Base64String(xmlBytes),
-			Url: targetUrl,
+			Event: string(status), // "draft", // publish - register - hide
+			DOI:   doiString,
+			Xml:   Base64String(xmlBytes),
+			Url:   targetUrl,
 		},
 	}}
 	aJson, err := json.Marshal(a)

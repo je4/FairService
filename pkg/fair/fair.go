@@ -756,14 +756,14 @@ func (f *Fair) CreateDOI(partitionName, uuidStr, targetUrl string) (*datacite.AP
 	dataciteData.InitNamespace()
 	dataciteData.FromCore(data.Metadata)
 
-	api, err := f.dataciteClient.CreateDOI(dataciteData, doiSuffix, targetUrl)
+	api, err := f.dataciteClient.CreateDOI(dataciteData, doiSuffix, targetUrl, datacite.DCEventDraft)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create doi")
 	}
 
 	data.Identifier = append(data.Identifier, fmt.Sprintf("%s:%s", myfair.RelatedIdentifierTypeDOI, doiStr))
 	sqlstr := fmt.Sprintf("UPDATE %s.core"+
-		" SET identifiers=$1, datestamp=NOW(), seq=NEXTVAL('lastchange')"+
+		" SET identifier=$1, datestamp=NOW(), seq=NEXTVAL('lastchange')"+
 		" WHERE uuid=$2", f.dbSchema)
 	params := []interface{}{
 		pq.Array(data.Identifier),
