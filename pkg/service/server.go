@@ -166,39 +166,59 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 	).Methods("GET")
 	router.Handle(
 		"/{partition}/item",
-		handlers.CompressHandler(JWTInterceptor.JWTInterceptor(
-			s.service,
-			func() http.Handler { return http.HandlerFunc(s.createHandler) }(),
-			s.jwtKey,
-			s.jwtAlg,
-			sha512.New()))).
+		handlers.CompressHandler(
+			JWTInterceptor.JWTInterceptor(
+				s.service,
+				"CreateItem",
+				JWTInterceptor.Secure,
+				func() http.Handler { return http.HandlerFunc(s.createHandler) }(),
+				s.jwtKey,
+				s.jwtAlg,
+				sha512.New(),
+				s.log,
+			))).
 		Methods("POST")
 	router.Handle(
 		"/{partition}/startupdate",
-		handlers.CompressHandler(JWTInterceptor.JWTInterceptor(
-			s.service,
-			func() http.Handler { return http.HandlerFunc(s.startUpdateHandler) }(),
-			s.jwtKey,
-			s.jwtAlg,
-			sha512.New()))).
+		handlers.CompressHandler(
+			JWTInterceptor.JWTInterceptor(
+				s.service,
+				"StartUpdate",
+				JWTInterceptor.Secure,
+				func() http.Handler { return http.HandlerFunc(s.startUpdateHandler) }(),
+				s.jwtKey,
+				s.jwtAlg,
+				sha512.New(),
+				s.log,
+			))).
 		Methods("POST")
 	router.Handle(
 		"/{partition}/endupdate",
-		handlers.CompressHandler(JWTInterceptor.JWTInterceptor(
-			s.service,
-			func() http.Handler { return http.HandlerFunc(s.endUpdateHandler) }(),
-			s.jwtKey,
-			s.jwtAlg,
-			sha512.New()))).
+		handlers.CompressHandler(
+			JWTInterceptor.JWTInterceptor(
+				s.service,
+				"EndUpdate",
+				JWTInterceptor.Secure,
+				func() http.Handler { return http.HandlerFunc(s.endUpdateHandler) }(),
+				s.jwtKey,
+				s.jwtAlg,
+				sha512.New(),
+				s.log,
+			))).
 		Methods("POST")
 	router.Handle(
 		"/{partition}/abortupdate",
-		handlers.CompressHandler(JWTInterceptor.JWTInterceptor(
-			s.service,
-			func() http.Handler { return http.HandlerFunc(s.abortUpdateHandler) }(),
-			s.jwtKey,
-			s.jwtAlg,
-			sha512.New()))).
+		handlers.CompressHandler(
+			JWTInterceptor.JWTInterceptor(
+				s.service,
+				"AbortUpdate",
+				JWTInterceptor.Secure,
+				func() http.Handler { return http.HandlerFunc(s.abortUpdateHandler) }(),
+				s.jwtKey,
+				s.jwtAlg,
+				sha512.New(),
+				s.log,
+			))).
 		Methods("POST")
 	router.Handle(
 		"/{partition}/item/{uuid}/{outputType}",
