@@ -21,16 +21,12 @@ type FairClient struct {
 	certSkipVerify bool
 	jwtKey         string
 	jwtAlg         string
-	client         *http.Client
+	jwtLifetime    time.Duration
 }
 
 func NewFairService(service, address string, certSkipVerify bool, jwtKey string, jwtAlg string, jwtLifetime time.Duration) (*FairClient, error) {
 	// create transport with authorization bearer
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: certSkipVerify}
-	tr, err := JWTInterceptor.NewJWTTransport(service, nil, sha512.New(), jwtKey, jwtAlg, jwtLifetime)
-	if err != nil {
-		return nil, errors.Wrapf(err, "cannot create jwt transport")
-	}
 
 	fs := &FairClient{
 		service:        service,
@@ -38,7 +34,7 @@ func NewFairService(service, address string, certSkipVerify bool, jwtKey string,
 		certSkipVerify: certSkipVerify,
 		jwtKey:         jwtKey,
 		jwtAlg:         jwtAlg,
-		client:         &http.Client{Transport: tr},
+		jwtLifetime:    jwtLifetime,
 	}
 	return fs, nil
 }
@@ -63,13 +59,27 @@ func (fs *FairClient) Ping() error {
 }
 
 func (fs *FairClient) StartUpdate(source string) error {
+	tr, err := JWTInterceptor.NewJWTTransport(
+		fs.service,
+		"StartUpdate",
+		JWTInterceptor.Secure,
+		nil,
+		sha512.New(),
+		fs.jwtKey,
+		fs.jwtAlg,
+		fs.jwtLifetime)
+	if err != nil {
+		return errors.Wrapf(err, "cannot create jwt transport")
+	}
+	client := http.Client{Transport: tr}
+
 	srcData := fair.SourceData{Source: source}
 	data, err := json.Marshal(srcData)
 	if err != nil {
 		return errors.Wrapf(err, "cannot marshal [%v]", srcData)
 	}
 
-	response, err := fs.client.Post(fs.address+"/startupdate", "application/json", bytes.NewBuffer(data))
+	response, err := client.Post(fs.address+"/startupdate", "application/json", bytes.NewBuffer(data))
 	if err != nil {
 		return errors.Wrapf(err, "cannot post to %s", fs.address)
 	}
@@ -88,13 +98,27 @@ func (fs *FairClient) StartUpdate(source string) error {
 
 }
 func (fs *FairClient) EndUpdate(source string) error {
+	tr, err := JWTInterceptor.NewJWTTransport(
+		fs.service,
+		"EndUpdate",
+		JWTInterceptor.Secure,
+		nil,
+		sha512.New(),
+		fs.jwtKey,
+		fs.jwtAlg,
+		fs.jwtLifetime)
+	if err != nil {
+		return errors.Wrapf(err, "cannot create jwt transport")
+	}
+	client := http.Client{Transport: tr}
+
 	srcData := fair.SourceData{Source: source}
 	data, err := json.Marshal(srcData)
 	if err != nil {
 		return errors.Wrapf(err, "cannot marshal [%v]", srcData)
 	}
 
-	response, err := fs.client.Post(fs.address+"/endupdate", "application/json", bytes.NewBuffer(data))
+	response, err := client.Post(fs.address+"/endupdate", "application/json", bytes.NewBuffer(data))
 	if err != nil {
 		return errors.Wrapf(err, "cannot post to %s", fs.address)
 	}
@@ -113,13 +137,27 @@ func (fs *FairClient) EndUpdate(source string) error {
 
 }
 func (fs *FairClient) AbortUpdate(source string) error {
+	tr, err := JWTInterceptor.NewJWTTransport(
+		fs.service,
+		"AbortUpdate",
+		JWTInterceptor.Secure,
+		nil,
+		sha512.New(),
+		fs.jwtKey,
+		fs.jwtAlg,
+		fs.jwtLifetime)
+	if err != nil {
+		return errors.Wrapf(err, "cannot create jwt transport")
+	}
+	client := http.Client{Transport: tr}
+
 	srcData := fair.SourceData{Source: source}
 	data, err := json.Marshal(srcData)
 	if err != nil {
 		return errors.Wrapf(err, "cannot marshal [%v]", srcData)
 	}
 
-	response, err := fs.client.Post(fs.address+"/abortupdate", "application/json", bytes.NewBuffer(data))
+	response, err := client.Post(fs.address+"/abortupdate", "application/json", bytes.NewBuffer(data))
 	if err != nil {
 		return errors.Wrapf(err, "cannot post to %s", fs.address)
 	}
@@ -139,12 +177,26 @@ func (fs *FairClient) AbortUpdate(source string) error {
 }
 
 func (fs *FairClient) Create(item *fair.ItemData) (*fair.ItemData, error) {
+	tr, err := JWTInterceptor.NewJWTTransport(
+		fs.service,
+		"CreateItem",
+		JWTInterceptor.Secure,
+		nil,
+		sha512.New(),
+		fs.jwtKey,
+		fs.jwtAlg,
+		fs.jwtLifetime)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot create jwt transport")
+	}
+	client := http.Client{Transport: tr}
+
 	data, err := json.Marshal(item)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot marshal [%v]", item)
 	}
 
-	response, err := fs.client.Post(fs.address+"/item", "application/json", bytes.NewBuffer(data))
+	response, err := client.Post(fs.address+"/item", "application/json", bytes.NewBuffer(data))
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot post to %s", fs.address)
 	}
