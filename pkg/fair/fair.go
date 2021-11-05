@@ -226,7 +226,7 @@ func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int
 			return errors.Wrapf(err, "cannot get number of result items [%s] - [%v]", sqlstr, params)
 		}
 	}
-	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, signature, source, status, seq, datestamp, identifier"+
+	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, signature, sourcename, status, seq, datestamp, identifier"+
 		" FROM %s.coreview"+
 		" WHERE %s"+
 		" ORDER BY seq ASC", f.dbSchema, sqlWhere)
@@ -249,17 +249,17 @@ func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int
 		var set, catalog []string
 		var accessStr string
 		var signature string
-		var source string
+		var sourceName string
 		var statusStr string
 		var seq int64
 		var identifier []string
 		var datestamp time.Time
-		if err := rows.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &source, &statusStr, &seq, &datestamp, pq.Array(&identifier)); err != nil {
+		if err := rows.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &sourceName, &statusStr, &seq, &datestamp, pq.Array(&identifier)); err != nil {
 			return errors.Wrapf(err, "cannot scan result of [%s] - [%v]", sqlstr, params)
 		}
 		data := &ItemData{
 			UUID:       uuidStr,
-			Source:     source,
+			Source:     sourceName,
 			Signature:  signature,
 			Metadata:   myfair.Core{},
 			Set:        set,
@@ -371,7 +371,7 @@ func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
 	var item *ItemData
 
 	sqlWhere := "partition=$1 AND uuid=$2"
-	params := []interface{}{partition, uuidStr}
+	params := []interface{}{partition.Name, uuidStr}
 	var completeListSize int64
 	if err := f.getItems(sqlWhere, params, 1, 0, &completeListSize, func(found *ItemData) error {
 		item = found
