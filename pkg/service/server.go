@@ -179,6 +179,34 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 			))).
 		Methods("POST")
 	router.Handle(
+		"/{partition}/item/{uuid}/originaldata",
+		handlers.CompressHandler(
+			JWTInterceptor.JWTInterceptor(
+				s.service,
+				"originalDataWrite",
+				JWTInterceptor.Secure,
+				func() http.Handler { return http.HandlerFunc(s.originalDataWriteHandler) }(),
+				s.jwtKey,
+				s.jwtAlg,
+				sha512.New(),
+				s.log,
+			))).
+		Methods("POST")
+	router.Handle(
+		"/{partition}/item/{uuid}/originaldata",
+		handlers.CompressHandler(
+			JWTInterceptor.JWTInterceptor(
+				s.service,
+				"originalDataRead",
+				JWTInterceptor.Secure,
+				func() http.Handler { return http.HandlerFunc(s.originalDataReadHandler) }(),
+				s.jwtKey,
+				s.jwtAlg,
+				sha512.New(),
+				s.log,
+			))).
+		Methods("GET")
+	router.Handle(
 		"/{partition}/startupdate",
 		handlers.CompressHandler(
 			JWTInterceptor.JWTInterceptor(
