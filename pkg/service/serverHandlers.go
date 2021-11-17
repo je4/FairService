@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/je4/FairService/v2/pkg/datatable"
 	"github.com/je4/FairService/v2/pkg/fair"
+	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/FairService/v2/pkg/model/dcmi"
 	"github.com/op/go-logging"
 	"io/ioutil"
@@ -239,6 +240,16 @@ func (s *Server) itemHandler(w http.ResponseWriter, req *http.Request) {
 		w.Write([]byte(fmt.Sprintf("item [%s] not found in partition %s", uuidStr, pName)))
 		return
 	}
+	if data.Access != fair.DataAccessOpenAccess && data.Access != fair.DataAccessPublic {
+		w.WriteHeader(http.StatusForbidden)
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("no public access for %v: %v", uuidStr, data.Access), nil)
+		return
+	}
+	if data.Status != fair.DataStatusActive {
+		w.WriteHeader(http.StatusForbidden)
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("status of %v not active: %v", uuidStr, data.Status), nil)
+		return
+	}
 	switch outputType {
 	case "json":
 		w.Header().Set("Content-type", "text/json")
@@ -256,8 +267,19 @@ func (s *Server) itemHandler(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-type", "text/xml")
 		enc := xml.NewEncoder(w)
 		enc.Indent("", "  ")
-		w.Header().Set("Content-type", "text/json")
 		if err := enc.Encode(dcmiData); err != nil {
+			sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot marshal data for %v", uuidStr), nil)
+			return
+		}
+		return
+	case "datacite":
+		dataciteData := &dataciteModel.DataCite{}
+		dataciteData.InitNamespace()
+		dataciteData.FromCore(data.Metadata)
+		w.Header().Set("Content-type", "text/xml")
+		enc := xml.NewEncoder(w)
+		enc.Indent("", "  ")
+		if err := enc.Encode(dataciteData); err != nil {
 			sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot marshal data for %v", uuidStr), nil)
 			return
 		}
@@ -361,6 +383,58 @@ func (s *Server) abortUpdateHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	sendCreateResult(s.log, w, "ok", fmt.Sprintf("abort update for %s on %s", data.Source, pName), nil)
+}
+
+func (s *Server) originalDataReadHandler(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	pName := vars["partition"]
+	uuidStr := vars["uuid"]
+
+	data, t, err := s.fair.GetOriginalData(pName, uuidStr)
+	if err != nil {
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot read original data: %v", err), nil)
+		return
+	}
+	switch t {
+	case "XML":
+		w.Header().Set("Content-Type", "text/xml")
+	case "JSON":
+		w.Header().Set("Content-Type", "application/json")
+	default:
+		w.Header().Set("Content-Type", "text/plain")
+	}
+	w.Write(data)
+}
+
+func (s *Server) originalDataWriteHandler(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	pName := vars["partition"]
+	uuidStr := vars["uuid"]
+
+	bdata, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		s.log.Errorf("cannot read request body: %v", err)
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot read request body: %v", err), nil)
+		return
+	}
+
+	var t string
+	var data interface{}
+	if err := json.Unmarshal(bdata, data); err == nil {
+		t = "JSON"
+	} else {
+		if err := xml.Unmarshal(bdata, data); err == nil {
+			t = "XML"
+		} else {
+			t = "Other"
+		}
+	}
+
+	if err := s.fair.SetOriginalData(pName, uuidStr, t, bdata); err != nil {
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot set original data for %s: %v", uuidStr, err), nil)
+		return
+	}
+	sendCreateResult(s.log, w, "ok", fmt.Sprintf("original metadata for %s stored", uuidStr), nil)
 }
 
 func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
