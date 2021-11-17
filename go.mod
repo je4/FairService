@@ -3,7 +3,7 @@ module github.com/je4/FairService/v2
 go 1.16
 
 replace github.com/je4/FairService/v2 => ./
-replace github.com/je4/utils/v2 => ../utils/
+//replace github.com/je4/utils/v2 => ../utils/
 
 require (
 	emperror.dev/errors v0.8.0
