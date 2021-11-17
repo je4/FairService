@@ -216,3 +216,71 @@ func (fs *FairClient) Create(item *fair.ItemData) (*fair.ItemData, error) {
 	}
 	return result.Item, nil
 }
+
+func (fs *FairClient) WriteOriginalData(item *fair.ItemData, data []byte) error {
+	tr, err := JWTInterceptor.NewJWTTransport(
+		fs.service,
+		"originalDataWrite",
+		JWTInterceptor.Secure,
+		nil,
+		sha512.New(),
+		fs.jwtKey,
+		fs.jwtAlg,
+		fs.jwtLifetime)
+	if err != nil {
+		return errors.Wrapf(err, "cannot create jwt transport")
+	}
+	client := http.Client{Transport: tr}
+
+	urlString := fmt.Sprintf("%s/item/%s/originaldata", fs.address, item.UUID)
+	response, err := client.Post(urlString, "application/json", bytes.NewBuffer(data))
+	if err != nil {
+		return errors.Wrapf(err, "cannot post to %s", fs.address)
+	}
+	bodyBytes, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return errors.Wrap(err, "cannot read response body")
+	}
+	result := service.CreateResultStatus{}
+	if err := json.Unmarshal(bodyBytes, &result); err != nil {
+		return errors.Wrapf(err, "cannot decode result %s", string(bodyBytes))
+	}
+	if result.Status != "ok" {
+		return errors.New(fmt.Sprintf("error creating item: %s", result.Message))
+	}
+	return nil
+}
+
+func (fs *FairClient) ReadOriginalData(item *fair.ItemData) ([]byte, error) {
+	tr, err := JWTInterceptor.NewJWTTransport(
+		fs.service,
+		"originalDataRead",
+		JWTInterceptor.Secure,
+		nil,
+		sha512.New(),
+		fs.jwtKey,
+		fs.jwtAlg,
+		fs.jwtLifetime)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot create jwt transport")
+	}
+	client := http.Client{Transport: tr}
+
+	urlString := fmt.Sprintf("%s/item/%s/originaldata", fs.address, item.UUID)
+	response, err := client.Get(urlString)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot post to %s", fs.address)
+	}
+	bodyBytes, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot read response body")
+	}
+	if response.StatusCode != http.StatusOK {
+		result := service.CreateResultStatus{}
+		if err := json.Unmarshal(bodyBytes, &result); err != nil {
+			return nil, errors.Wrapf(err, "cannot decode result %s", string(bodyBytes))
+		}
+		return nil, errors.New(fmt.Sprintf("error reading original data of item %s: %s", item.UUID, result.Message))
+	}
+	return bodyBytes, nil
+}

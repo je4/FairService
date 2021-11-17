@@ -1,6 +1,8 @@
 package fair
 
 import (
+	"bytes"
+	"compress/gzip"
 	"database/sql"
 	"emperror.dev/errors"
 	"encoding/json"
@@ -11,6 +13,7 @@ import (
 	"github.com/je4/FairService/v2/pkg/model/myfair"
 	"github.com/je4/FairService/v2/pkg/service/datacite"
 	hcClient "github.com/je4/HandleCreator/v2/pkg/client"
+	"io"
 
 	//"github.com/je4/FairService/v2/pkg/service"
 	"github.com/lib/pq"
@@ -642,6 +645,81 @@ func (f *Fair) CreateItem(partitionName string, data *ItemData) (*ItemData, erro
 		return item, nil
 	}
 
+}
+
+func (f *Fair) SetOriginalData(partitionName, uuid string, format string, data []byte) error {
+	_, ok := f.partitions[partitionName]
+	if !ok {
+		return errors.New(fmt.Sprintf("partition %s not found", partitionName))
+	}
+
+	formatOK := false
+	for _, f := range []string{"Other", "XML", "JSON"} {
+		if f == format {
+			formatOK = true
+			break
+		}
+	}
+	if !formatOK {
+		return errors.Errorf("invalid format. only \"Other\", \"XML\", \"JSON\" allowed: %s", format)
+	}
+
+	var compressed = false
+	var target *bytes.Buffer
+	if len(data) < 4*1024 {
+		target = bytes.NewBuffer(data)
+	} else {
+		target = bytes.NewBuffer(nil)
+		w := gzip.NewWriter(target)
+		if _, err := w.Write(data); err != nil {
+			return errors.Wrapf(err, "cannot write compressed metadata")
+		}
+		w.Close()
+		compressed = true
+	}
+	sqlstr := fmt.Sprintf("SELECT COUNT(*) FROM %s.originaldata WHERE uuid=$1", f.dbSchema)
+	var num int64
+	if err := f.db.QueryRow(sqlstr, uuid).Scan(&num); err != nil {
+		return errors.Wrapf(err, "cannot query %s - [%v]", sqlstr, uuid)
+	}
+	if num > 0 {
+		sqlstr = fmt.Sprintf("UPDATE %s.originaldata SET type=$1, data=$2, compressed=$3 WHERE uuid=$4", f.dbSchema)
+	} else {
+		sqlstr = fmt.Sprintf("INSERT INTO %s.originaldata (type, data, compressed, uuid) VALUES( $1, $2, $3, $4)", f.dbSchema)
+	}
+	if _, err := f.db.Exec(sqlstr, format, target.Bytes(), compressed, uuid); err != nil {
+		return errors.Wrapf(err, "cannot query %s - [%v, %v, %v, %v]", sqlstr, format, target, compressed, uuid)
+	}
+	return nil
+}
+
+func (f *Fair) GetOriginalData(partitionName, uuid string) ([]byte, string, error) {
+	_, ok := f.partitions[partitionName]
+	if !ok {
+		return nil, "", errors.New(fmt.Sprintf("partition %s not found", partitionName))
+	}
+
+	sqlstr := fmt.Sprintf("SELECT type, data, compressed FROM %s.originaldata WHERE AND uuid=$1", f.dbSchema)
+	var t string
+	var compressed bool
+	var data []byte
+	if err := f.db.QueryRow(sqlstr, uuid).Scan(&t, &compressed, &data); err != nil {
+		return nil, "", errors.Wrapf(err, "cannot query %s - [%v]", sqlstr, uuid)
+	}
+	if compressed {
+		buf := bytes.NewBuffer(data)
+		reader, err := gzip.NewReader(buf)
+		if err != nil {
+			return nil, "", errors.Wrapf(err, "cannot create gzip reader")
+		}
+		d2, err := io.ReadAll(reader)
+		if err != nil {
+			return nil, "", errors.Wrapf(err, "cannot read zipped data")
+		}
+		return d2, t, nil
+
+	}
+	return data, t, nil
 }
 
 func (f *Fair) GetSets(partitionName string) (map[string]string, error) {

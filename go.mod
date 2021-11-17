@@ -3,6 +3,7 @@ module github.com/je4/FairService/v2
 go 1.16
 
 replace github.com/je4/FairService/v2 => ./
+replace github.com/je4/utils/v2 => ../utils/
 
 require (
 	emperror.dev/errors v0.8.0
@@ -14,7 +15,7 @@ require (
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
 	github.com/je4/HandleCreator/v2 v2.0.3
-	github.com/je4/utils/v2 v2.0.3
+	github.com/je4/utils/v2 v2.0.6
 	github.com/lib/pq v1.10.3
 	github.com/op/go-logging v0.0.0-20160315200505-970db520ece7
 	github.com/pkg/errors v0.9.1

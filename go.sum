@@ -232,8 +232,9 @@ github.com/jackc/puddle v1.1.1/go.mod h1:m4B5Dj62Y0fbyuIc15OsIqK0+JU8nkqQjsgx7dv
 github.com/jackc/puddle v1.1.3/go.mod h1:m4B5Dj62Y0fbyuIc15OsIqK0+JU8nkqQjsgx7dvjSWk=
 github.com/je4/HandleCreator/v2 v2.0.3 h1:gh91SBslwUjsjJMPIj+F9GVivXfPnkjyxYfEUN/Ks+A=
 github.com/je4/HandleCreator/v2 v2.0.3/go.mod h1:yk5bujhq0jcJSJtIJCGGG/RzBAMEaxkM5ndPhN7+Y8g=
-github.com/je4/utils/v2 v2.0.3 h1:H5kPLh9muVnVQcFF9p3Jx/UL5gJerGvc9/01EhRW+tw=
 github.com/je4/utils/v2 v2.0.3/go.mod h1:z6/EFp1UBsGemLImDrWhmYejXRxBQZeuTxAXbNrNDpo=
+github.com/je4/utils/v2 v2.0.6 h1:02PbnTwbbe7br+GabFvxebhgXCrJJXyRLrxN5KaJx4k=
+github.com/je4/utils/v2 v2.0.6/go.mod h1:z6/EFp1UBsGemLImDrWhmYejXRxBQZeuTxAXbNrNDpo=
 github.com/jmespath/go-jmespath v0.4.0/go.mod h1:T8mJZnbsbmF+m6zOOFylbeCJqk5+pHWvzYPziyZiYoo=
 github.com/jmespath/go-jmespath/internal/testify v1.5.1/go.mod h1:L3OGu8Wl2/fWfCI6z80xFu9LTZmf1ZRjMHUOPmWr69U=
 github.com/jonboulle/clockwork v0.1.0/go.mod h1:Ii8DK3G1RaLaWxj9trq07+26W01tbo22gdxWY5EU2bo=
