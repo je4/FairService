@@ -469,6 +469,38 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 	return
 }
 
+func (s *Server) setSourceHandler(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	pName := vars["partition"]
+
+	var data = &fair.Source{}
+	bdata, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		s.log.Errorf("cannot read request body: %v", err)
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot read request body: %v", err), nil)
+		return
+	}
+
+	if err := json.Unmarshal(bdata, data); err != nil {
+		s.log.Errorf("cannot unmarshal request body [%s]: %v", string(bdata), err)
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot unmarshal request body [%s]: %v", string(bdata), err), nil)
+		return
+	}
+	if data.Partition != pName {
+		s.log.Errorf("source and partition do not match %s != %s", data.Partition, pName)
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("source and partition do not match %s != %s", data.Partition, pName), nil)
+		return
+	}
+
+	if err := s.fair.SetSource(data); err != nil {
+		s.log.Errorf("cannot create source %v: %v", data, err)
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot create source %v: %v", data, err), nil)
+		return
+	}
+	sendCreateResult(s.log, w, "ok", fmt.Sprintf("cannot create source %v: %v", data, err), nil)
+
+}
+
 type DataTableResult struct {
 	Draw            int64               `json:"draw"`
 	RecordsTotal    int64               `json:"recordsTotal"`

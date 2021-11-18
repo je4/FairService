@@ -190,6 +190,35 @@ func (f *Fair) GetSourceByName(name string, partitionName string) (*Source, erro
 	return nil, errors.New(fmt.Sprintf("source %s for partition %s not found", name, partitionName))
 }
 
+func (f *Fair) SetSource(src *Source) error {
+	sqlstr := fmt.Sprintf("SELECT sourceid FROM %s.source WHERE name=$1", f.dbSchema)
+	var sourceId int64
+	if err := f.db.QueryRow(sqlstr, src.Name).Scan(&sourceId); err != nil {
+		if err != sql.ErrNoRows {
+			return errors.Wrapf(err, "cannot query database - %s [%v]", sqlstr, src.ID)
+		}
+	}
+	if sourceId > 0 {
+		sqlstr = fmt.Sprintf("UPDATE %s.source "+
+			"SET name=$1, detailurl=$2, description=$3, oai_domain=$4, partition=$5 WHERE sourceid=$6 ", f.dbSchema)
+		values := []interface{}{src.Name, src.DetailURL, src.Description, src.OAIDomain, src.Partition, sourceId}
+		if _, err := f.db.Exec(sqlstr, values...); err != nil {
+			return errors.Wrapf(err, "cannot insert into source database - %s [%v]", sqlstr, values)
+		}
+	} else {
+		sqlstr = fmt.Sprintf("INSERT INTO %s.source (name, detailurl, description, oai_domain, partition) "+
+			"VALUES($1, $2, $3, $4, $5)", f.dbSchema)
+		values := []interface{}{src.Name, src.DetailURL, src.Description, src.OAIDomain, src.Partition}
+		if _, err := f.db.Exec(sqlstr, values...); err != nil {
+			return errors.Wrapf(err, "cannot update source database - %s [%v]", sqlstr, values)
+		}
+	}
+	if err := f.LoadSources(); err != nil {
+		return errors.Wrap(err, "cannot load sources")
+	}
+	return nil
+}
+
 func (f *Fair) GetSourceByOAIDomain(name string) (*Source, error) {
 	f.sourcesMutex.RLock()
 	defer f.sourcesMutex.RUnlock()

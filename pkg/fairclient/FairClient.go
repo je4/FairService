@@ -217,6 +217,44 @@ func (fs *FairClient) Create(item *fair.ItemData) (*fair.ItemData, error) {
 	return result.Item, nil
 }
 
+func (fs *FairClient) SetSource(src *fair.Source) error {
+	tr, err := JWTInterceptor.NewJWTTransport(
+		fs.service,
+		"setSource",
+		JWTInterceptor.Secure,
+		nil,
+		sha512.New(),
+		fs.jwtKey,
+		fs.jwtAlg,
+		fs.jwtLifetime)
+	if err != nil {
+		return errors.Wrapf(err, "cannot create jwt transport")
+	}
+	client := http.Client{Transport: tr}
+
+	data, err := json.Marshal(src)
+	if err != nil {
+		return errors.Wrapf(err, "cannot marshal [%v]", src)
+	}
+
+	response, err := client.Post(fs.address+"/source", "application/json", bytes.NewBuffer(data))
+	if err != nil {
+		return errors.Wrapf(err, "cannot post to %s", fs.address)
+	}
+	bodyBytes, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return errors.Wrap(err, "cannot read response body")
+	}
+	result := service.CreateResultStatus{}
+	if err := json.Unmarshal(bodyBytes, &result); err != nil {
+		return errors.Wrapf(err, "cannot decode result %s", string(bodyBytes))
+	}
+	if result.Status != "ok" {
+		return errors.New(fmt.Sprintf("error creating item: %s", result.Message))
+	}
+	return nil
+}
+
 func (fs *FairClient) WriteOriginalData(item *fair.ItemData, data []byte) error {
 	tr, err := JWTInterceptor.NewJWTTransport(
 		fs.service,
