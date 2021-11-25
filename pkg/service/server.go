@@ -295,17 +295,19 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 		}
 		s.srv.TLSConfig = &tls.Config{Certificates: []tls.Certificate{*cert}}
 		for _, part := range s.fair.GetPartitions() {
-			s.log.Infof("starting FAIR Data Point at %v", part.AddrExt)
+			s.log.Infof("starting FAIR Data Point at %v - https://%s/%s", part.AddrExt, addr, part.Name)
 		}
 		return s.srv.ListenAndServeTLS("", "")
 	} else if cert != "" && key != "" {
 		for _, part := range s.fair.GetPartitions() {
-			s.log.Infof("starting FAIR Data Point at %v", part.AddrExt)
+			//			s.log.Infof("starting FAIR Data Point at %v", part.AddrExt)
+			s.log.Infof("starting FAIR Data Point at %v - https://%s/%s", part.AddrExt, addr, part.Name)
 		}
 		return s.srv.ListenAndServeTLS(cert, key)
 	} else {
 		for _, part := range s.fair.GetPartitions() {
-			s.log.Infof("starting FAIR Data Point at %v", part.AddrExt)
+			//s.log.Infof("starting FAIR Data Point at %v", part.AddrExt)
+			s.log.Infof("starting FAIR Data Point at %v - http://%s/%s", part.AddrExt, addr, part.Name)
 		}
 		return s.srv.ListenAndServe()
 	}
