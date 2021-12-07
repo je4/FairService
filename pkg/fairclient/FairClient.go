@@ -24,6 +24,25 @@ type FairClient struct {
 	jwtLifetime    time.Duration
 }
 
+func postHelper(client http.Client, urlstr string, data []byte) error {
+	response, err := client.Post(urlstr, "application/json", bytes.NewBuffer(data))
+	if err != nil {
+		return errors.Wrapf(err, "cannot post to %s", urlstr)
+	}
+	bodyBytes, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return errors.Wrap(err, "cannot read response body")
+	}
+	result := service.CreateResultStatus{}
+	if err := json.Unmarshal(bodyBytes, &result); err != nil {
+		return errors.Wrapf(err, "cannot decode result %s", string(bodyBytes))
+	}
+	if result.Status != "ok" {
+		return errors.New(fmt.Sprintf("error on POST::%s: %s", urlstr, result.Message))
+	}
+	return nil
+}
+
 func NewFairService(service, address string, certSkipVerify bool, jwtKey string, jwtAlg string, jwtLifetime time.Duration) (*FairClient, error) {
 	// create transport with authorization bearer
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: certSkipVerify}
@@ -79,23 +98,8 @@ func (fs *FairClient) StartUpdate(source string) error {
 		return errors.Wrapf(err, "cannot marshal [%v]", srcData)
 	}
 
-	response, err := client.Post(fs.address+"/startupdate", "application/json", bytes.NewBuffer(data))
-	if err != nil {
-		return errors.Wrapf(err, "cannot post to %s", fs.address)
-	}
-	bodyBytes, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		return errors.Wrap(err, "cannot read response body")
-	}
-	result := service.CreateResultStatus{}
-	if err := json.Unmarshal(bodyBytes, &result); err != nil {
-		return errors.Wrapf(err, "cannot decode result %s", string(bodyBytes))
-	}
-	if result.Status != "ok" {
-		return errors.New(fmt.Sprintf("error starting update: %s", result.Message))
-	}
-	return nil
-
+	urlstr := fs.address + "/startupdate"
+	return postHelper(client, urlstr, data)
 }
 func (fs *FairClient) EndUpdate(source string) error {
 	tr, err := JWTInterceptor.NewJWTTransport(
@@ -118,23 +122,8 @@ func (fs *FairClient) EndUpdate(source string) error {
 		return errors.Wrapf(err, "cannot marshal [%v]", srcData)
 	}
 
-	response, err := client.Post(fs.address+"/endupdate", "application/json", bytes.NewBuffer(data))
-	if err != nil {
-		return errors.Wrapf(err, "cannot post to %s", fs.address)
-	}
-	bodyBytes, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		return errors.Wrap(err, "cannot read response body")
-	}
-	result := service.CreateResultStatus{}
-	if err := json.Unmarshal(bodyBytes, &result); err != nil {
-		return errors.Wrapf(err, "cannot decode result %s", string(bodyBytes))
-	}
-	if result.Status != "ok" {
-		return errors.New(fmt.Sprintf("error starting update: %s", result.Message))
-	}
-	return nil
-
+	urlstr := fs.address + "/endupdate"
+	return postHelper(client, urlstr, data)
 }
 func (fs *FairClient) AbortUpdate(source string) error {
 	tr, err := JWTInterceptor.NewJWTTransport(
@@ -157,23 +146,8 @@ func (fs *FairClient) AbortUpdate(source string) error {
 		return errors.Wrapf(err, "cannot marshal [%v]", srcData)
 	}
 
-	response, err := client.Post(fs.address+"/abortupdate", "application/json", bytes.NewBuffer(data))
-	if err != nil {
-		return errors.Wrapf(err, "cannot post to %s", fs.address)
-	}
-	bodyBytes, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		return errors.Wrap(err, "cannot read response body")
-	}
-	result := service.CreateResultStatus{}
-	if err := json.Unmarshal(bodyBytes, &result); err != nil {
-		return errors.Wrapf(err, "cannot decode result %s", string(bodyBytes))
-	}
-	if result.Status != "ok" {
-		return errors.New(fmt.Sprintf("error starting update: %s", result.Message))
-	}
-	return nil
-
+	urlstr := fs.address + "/abortupdate"
+	return postHelper(client, urlstr, data)
 }
 
 func (fs *FairClient) Create(item *fair.ItemData) (*fair.ItemData, error) {
@@ -237,22 +211,8 @@ func (fs *FairClient) SetSource(src *fair.Source) error {
 		return errors.Wrapf(err, "cannot marshal [%v]", src)
 	}
 
-	response, err := client.Post(fs.address+"/source", "application/json", bytes.NewBuffer(data))
-	if err != nil {
-		return errors.Wrapf(err, "cannot post to %s", fs.address)
-	}
-	bodyBytes, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		return errors.Wrap(err, "cannot read response body")
-	}
-	result := service.CreateResultStatus{}
-	if err := json.Unmarshal(bodyBytes, &result); err != nil {
-		return errors.Wrapf(err, "cannot decode result %s", string(bodyBytes))
-	}
-	if result.Status != "ok" {
-		return errors.New(fmt.Sprintf("error creating item: %s", result.Message))
-	}
-	return nil
+	urlstr := fs.address + "/source"
+	return postHelper(client, urlstr, data)
 }
 
 func (fs *FairClient) WriteOriginalData(item *fair.ItemData, data []byte) error {
@@ -271,22 +231,8 @@ func (fs *FairClient) WriteOriginalData(item *fair.ItemData, data []byte) error 
 	client := http.Client{Transport: tr}
 
 	urlString := fmt.Sprintf("%s/item/%s/originaldata", fs.address, item.UUID)
-	response, err := client.Post(urlString, "application/json", bytes.NewBuffer(data))
-	if err != nil {
-		return errors.Wrapf(err, "cannot post to %s", fs.address)
-	}
-	bodyBytes, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		return errors.Wrap(err, "cannot read response body")
-	}
-	result := service.CreateResultStatus{}
-	if err := json.Unmarshal(bodyBytes, &result); err != nil {
-		return errors.Wrapf(err, "cannot decode result %s", string(bodyBytes))
-	}
-	if result.Status != "ok" {
-		return errors.New(fmt.Sprintf("error creating item: %s", result.Message))
-	}
-	return nil
+	return postHelper(client, urlString, data)
+
 }
 
 func (fs *FairClient) ReadOriginalData(item *fair.ItemData) ([]byte, error) {
@@ -321,4 +267,57 @@ func (fs *FairClient) ReadOriginalData(item *fair.ItemData) ([]byte, error) {
 		return nil, errors.New(fmt.Sprintf("error reading original data of item %s: %s", item.UUID, result.Message))
 	}
 	return bodyBytes, nil
+}
+
+func (fs *FairClient) AddArchive(name, description string) error {
+	tr, err := JWTInterceptor.NewJWTTransport(
+		fs.service,
+		"AddArchive",
+		JWTInterceptor.Secure,
+		nil,
+		sha512.New(),
+		fs.jwtKey,
+		fs.jwtAlg,
+		fs.jwtLifetime)
+	if err != nil {
+		return errors.Wrapf(err, "cannot create jwt transport")
+	}
+	client := http.Client{Transport: tr}
+
+	ar := service.Archive{
+		Name:        name,
+		Description: description,
+	}
+
+	data, err := json.Marshal(ar)
+	if err != nil {
+		return errors.Wrapf(err, "cannot marshal [%v]", ar)
+	}
+
+	urlstr := fs.address + "/archive"
+	return postHelper(client, urlstr, data)
+}
+
+func (fs *FairClient) AddArchiveItem(archive, uuid string) error {
+	tr, err := JWTInterceptor.NewJWTTransport(
+		fs.service,
+		"AddArchiveItem",
+		JWTInterceptor.Secure,
+		nil,
+		sha512.New(),
+		fs.jwtKey,
+		fs.jwtAlg,
+		fs.jwtLifetime)
+	if err != nil {
+		return errors.Wrapf(err, "cannot create jwt transport")
+	}
+	client := http.Client{Transport: tr}
+
+	data, err := json.Marshal(uuid)
+	if err != nil {
+		return errors.Wrapf(err, "cannot marshal [%v]", uuid)
+	}
+
+	urlstr := fmt.Sprintf("%s/archive/%s", fs.address, archive)
+	return postHelper(client, urlstr, data)
 }

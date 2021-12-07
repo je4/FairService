@@ -5,9 +5,7 @@ import (
 	"compress/gzip"
 	"database/sql"
 	"emperror.dev/errors"
-	"encoding/json"
 	"fmt"
-	"github.com/google/uuid"
 	"github.com/je4/FairService/v2/pkg/datatable"
 	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/FairService/v2/pkg/model/myfair"
@@ -18,9 +16,6 @@ import (
 	//"github.com/je4/FairService/v2/pkg/service"
 	"github.com/lib/pq"
 	"github.com/op/go-logging"
-	"net/url"
-	"reflect"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -148,93 +143,7 @@ func (f *Fair) GetPartitions() map[string]*Partition {
 	return f.partitions
 }
 
-func (f *Fair) LoadSources() error {
-	sqlstr := fmt.Sprintf("SELECT sourceid, name, detailurl, description, oai_domain, partition FROM %s.source", f.dbSchema)
-	rows, err := f.db.Query(sqlstr)
-	if err != nil {
-		return errors.Wrapf(err, "cannot execute %s", sqlstr)
-	}
-	defer rows.Close()
-	f.sourcesMutex.Lock()
-	defer f.sourcesMutex.Unlock()
-	f.sources = make(map[int64]*Source)
-	for rows.Next() {
-		src := &Source{}
-		if err := rows.Scan(&src.ID, &src.Name, &src.DetailURL, &src.Description, &src.OAIDomain, &src.Partition); err != nil {
-			return errors.Wrap(err, "cannot scan values")
-		}
-		f.sources[src.ID] = src
-	}
-	return nil
-}
-
-func (f *Fair) GetSourceById(id int64, partitionName string) (*Source, error) {
-	f.sourcesMutex.RLock()
-	defer f.sourcesMutex.RUnlock()
-	if s, ok := f.sources[id]; ok {
-		if s.Partition == partitionName {
-			return s, nil
-		}
-	}
-	return nil, errors.New(fmt.Sprintf("source #%v for partition %s not found", id, partitionName))
-}
-
-func (f *Fair) GetSourceByName(name string, partitionName string) (*Source, error) {
-	f.sourcesMutex.RLock()
-	defer f.sourcesMutex.RUnlock()
-	for _, src := range f.sources {
-		if src.Name == name && src.Partition == partitionName {
-			return src, nil
-		}
-	}
-	return nil, errors.New(fmt.Sprintf("source %s for partition %s not found", name, partitionName))
-}
-
-func (f *Fair) SetSource(src *Source) error {
-	sqlstr := fmt.Sprintf("SELECT sourceid FROM %s.source WHERE name=$1", f.dbSchema)
-	var sourceId int64
-	if err := f.db.QueryRow(sqlstr, src.Name).Scan(&sourceId); err != nil {
-		if err != sql.ErrNoRows {
-			return errors.Wrapf(err, "cannot query database - %s [%v]", sqlstr, src.ID)
-		}
-	}
-	if sourceId > 0 {
-		sqlstr = fmt.Sprintf("UPDATE %s.source "+
-			"SET name=$1, detailurl=$2, description=$3, oai_domain=$4, partition=$5 WHERE sourceid=$6 ", f.dbSchema)
-		values := []interface{}{src.Name, src.DetailURL, src.Description, src.OAIDomain, src.Partition, sourceId}
-		if _, err := f.db.Exec(sqlstr, values...); err != nil {
-			return errors.Wrapf(err, "cannot insert into source database - %s [%v]", sqlstr, values)
-		}
-	} else {
-		sqlstr = fmt.Sprintf("INSERT INTO %s.source (name, detailurl, description, oai_domain, partition) "+
-			"VALUES($1, $2, $3, $4, $5)", f.dbSchema)
-		values := []interface{}{src.Name, src.DetailURL, src.Description, src.OAIDomain, src.Partition}
-		if _, err := f.db.Exec(sqlstr, values...); err != nil {
-			return errors.Wrapf(err, "cannot update source database - %s [%v]", sqlstr, values)
-		}
-	}
-	if err := f.LoadSources(); err != nil {
-		return errors.Wrap(err, "cannot load sources")
-	}
-	return nil
-}
-
-func (f *Fair) GetSourceByOAIDomain(name string) (*Source, error) {
-	f.sourcesMutex.RLock()
-	defer f.sourcesMutex.RUnlock()
-	for _, src := range f.sources {
-		if src.OAIDomain == name {
-			return src, nil
-		}
-	}
-	return nil, errors.New(fmt.Sprintf("source %s not found", name))
-}
-
-func (f *Fair) GetMinimumDatestamp(partitionName string) (time.Time, error) {
-	partition, ok := f.partitions[partitionName]
-	if !ok {
-		return time.Time{}, errors.New(fmt.Sprintf("partition %s not found", partitionName))
-	}
+func (f *Fair) GetMinimumDatestamp(partition *Partition) (time.Time, error) {
 	sqlstr := fmt.Sprintf("SELECT MIN(datestamp) AS mindate"+
 		" FROM %s.coreview"+
 		" WHERE partition=$1", f.dbSchema)
@@ -249,228 +158,6 @@ func (f *Fair) GetMinimumDatestamp(partitionName string) (time.Time, error) {
 	return datestamp, nil
 }
 
-func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int64, completeListSize *int64, fn func(item *ItemData) error) error {
-	if completeListSize != nil {
-		sqlstr := fmt.Sprintf("SELECT COUNT(*) AS num"+
-			" FROM %s.coreview"+
-			" WHERE %s", f.dbSchema, sqlWhere)
-		if err := f.db.QueryRow(sqlstr, params...).Scan(completeListSize); err != nil {
-			return errors.Wrapf(err, "cannot get number of result items [%s] - [%v]", sqlstr, params)
-		}
-	}
-	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, signature, sourcename, status, seq, datestamp, identifier"+
-		" FROM %s.coreview"+
-		" WHERE %s"+
-		" ORDER BY seq ASC", f.dbSchema, sqlWhere)
-	if limit > 0 {
-		sqlstr += fmt.Sprintf(" LIMIT %v", limit)
-	}
-	if offset > 0 {
-		sqlstr += fmt.Sprintf(" OFFSET %v", offset)
-	}
-	rows, err := f.db.Query(sqlstr, params...)
-	if err != nil {
-		if err != sql.ErrNoRows {
-			return errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
-		}
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var uuidStr string
-		var metaStr string
-		var set, catalog []string
-		var accessStr string
-		var signature string
-		var sourceName string
-		var statusStr string
-		var seq int64
-		var identifier []string
-		var datestamp time.Time
-		if err := rows.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &sourceName, &statusStr, &seq, &datestamp, pq.Array(&identifier)); err != nil {
-			return errors.Wrapf(err, "cannot scan result of [%s] - [%v]", sqlstr, params)
-		}
-		data := &ItemData{
-			UUID:       uuidStr,
-			Source:     sourceName,
-			Signature:  signature,
-			Metadata:   myfair.Core{},
-			Set:        set,
-			Catalog:    catalog,
-			Seq:        seq,
-			Datestamp:  datestamp,
-			Identifier: identifier,
-		}
-		var ok bool
-		data.Access, ok = DataAccessReverse[accessStr]
-		if !ok {
-			return errors.New(fmt.Sprintf("[%s] invalid access type %s", uuidStr, accessStr))
-		}
-		data.Status, ok = DataStatusReverse[statusStr]
-		if !ok {
-			return errors.New(fmt.Sprintf("[%s] invalid status type %s", uuidStr, accessStr))
-		}
-		if err := json.Unmarshal([]byte(metaStr), &data.Metadata); err != nil {
-			return errors.Wrapf(err, "[%s] cannot unmarshal core [%s]", uuidStr, metaStr)
-		}
-		// add local identifiers
-		for _, id := range data.Identifier {
-			strs := strings.SplitN(id, ":", 2)
-			if len(strs) != 2 {
-				continue
-			}
-
-			idType, ok := myfair.RelatedIdentifierTypeReverse[strs[0]]
-			if !ok {
-				f.log.Warningf("[%s] unknown identifier type %s", uuidStr, id)
-				continue
-			}
-			idStr := strs[1]
-			found := false
-			for _, di := range data.Metadata.Identifier {
-				if di.IdentifierType == idType && di.Value == idStr {
-					found = true
-					break
-				}
-			}
-			if !found {
-				data.Metadata.Identifier = append(data.Metadata.Identifier, myfair.Identifier{
-					Value:          idStr,
-					IdentifierType: idType,
-				})
-			}
-		}
-
-		if err := fn(data); err != nil {
-			return errors.Wrap(err, "error calling fn")
-		}
-	}
-	return nil
-
-}
-
-func (f *Fair) GetItemsDatestamp(partitionName string, datestamp, until time.Time, access []DataAccess, limit, offset int64, completeListSize *int64, fn func(item *ItemData) error) error {
-	partition, ok := f.partitions[partitionName]
-	if !ok {
-		return errors.New(fmt.Sprintf("partition %s not found", partitionName))
-	}
-
-	sqlWhere := "partition=$1 AND datestamp>=$2"
-	params := []interface{}{partition.Name, datestamp}
-	if len(access) > 0 {
-		var accessList []string
-		for key, acc := range access {
-			accessList = append(accessList, fmt.Sprintf("access=$%v", key+3))
-			params = append(params, acc)
-		}
-		sqlWhere += fmt.Sprintf(" AND (%s)", strings.Join(accessList, " OR "))
-	}
-	if !until.Equal(time.Time{}) {
-		params = append(params, until)
-		sqlWhere += fmt.Sprintf(" AND datestamp<=$%v", len(params))
-	}
-	return f.getItems(sqlWhere, params, limit, offset, completeListSize, fn)
-}
-
-func (f *Fair) GetItemsSeq(partitionName string, seq int64, until time.Time, access []DataAccess, limit, offset int64, completeListSize *int64, fn func(item *ItemData) error) error {
-	partition, ok := f.partitions[partitionName]
-	if !ok {
-		return errors.New(fmt.Sprintf("partition %s not found", partitionName))
-	}
-
-	sqlWhere := "partition=$1 AND seq>=$2"
-	params := []interface{}{partition.Name, seq}
-	if len(access) > 0 {
-		var accessList []string
-		for key, acc := range access {
-			accessList = append(accessList, fmt.Sprintf("access=$%v", key+3))
-			params = append(params, acc)
-		}
-		sqlWhere += fmt.Sprintf(" AND (%s)", strings.Join(accessList, " OR "))
-	}
-	if !until.Equal(time.Time{}) {
-		params = append(params, until)
-		sqlWhere += fmt.Sprintf(" AND datestamp<=$%v", len(params))
-	}
-	return f.getItems(sqlWhere, params, limit, offset, completeListSize, fn)
-}
-
-func (f *Fair) GetItem(partitionName, uuidStr string) (*ItemData, error) {
-	partition, ok := f.partitions[partitionName]
-	if !ok {
-		return nil, errors.New(fmt.Sprintf("partition %s not found", partitionName))
-	}
-
-	var item *ItemData
-
-	sqlWhere := "partition=$1 AND uuid=$2"
-	params := []interface{}{partition.Name, uuidStr}
-	var completeListSize int64
-	if err := f.getItems(sqlWhere, params, 1, 0, &completeListSize, func(found *ItemData) error {
-		item = found
-		return nil
-	}); err != nil {
-		return nil, errors.Wrapf(err, "error querying item cannot query item %v", uuidStr)
-	}
-
-	return item, nil
-}
-
-func (f *Fair) GetItemSource(partitionName string, sourceid int64, signature string) (*ItemData, error) {
-	partition, ok := f.partitions[partitionName]
-	if !ok {
-		return nil, errors.New(fmt.Sprintf("partition %s not found", partitionName))
-	}
-
-	var item *ItemData
-
-	sqlWhere := "partition=$1 AND source=$2 AND signature=$3"
-	params := []interface{}{partition.Name, sourceid, signature}
-	var completeListSize int64
-	if err := f.getItems(sqlWhere, params, 1, 0, &completeListSize, func(found *ItemData) error {
-		item = found
-		return nil
-	}); err != nil {
-		return nil, errors.Wrapf(err, "error querying item cannot query item %v.%s", sourceid, signature)
-	}
-
-	return item, nil
-}
-
-func (f *Fair) DeleteItem(partitionName, uuidStr string) error {
-	/*
-		partition, ok := f.partitions[partitionName]
-		if !ok {
-			return errors.New(fmt.Sprintf("partition %s not found", partitionName))
-		}
-	*/
-	data, err := f.GetItem(partitionName, uuidStr)
-	if err != nil {
-		return errors.Wrapf(err, "cannot get item %s/%s", partitionName, uuidStr)
-	}
-	// if already deleted, don't do anything
-	if data.Status != DataStatusActive {
-		return nil
-	}
-	return errors.New("function DeleteItem() not implemented")
-	/*
-		doiPrefix := fmt.Sprintf("%s:%s/", myfair.RelatedIdentifierTypeDOI, f.dataciteClient.GetPrefix())
-		for _, id := range data.Identifier {
-			if strings.HasPrefix(id, doiPrefix) {
-				doi := strings.TrimPrefix(id, fmt.Sprintf("%s:", myfair.RelatedIdentifierTypeDOI))
-				if _, err := f.dataciteClient.Delete(doi); err != nil {
-					if _, err := f.dataciteClient.SetEvent(doi, datacite.DCEventHide); err != nil {
-						return errors.Wrapf(err, "cannot hide doi %s", doi)
-					}
-				} else {
-					// todo: remove doi from metadata and store it
-
-				}
-			}
-		}
-		return nil
-	*/
-}
-
 func (f *Fair) RefreshSearch() error {
 	f.log.Info("refreshing meterialized view searchable")
 	sqlstr := fmt.Sprintf("SELECT %s.refresh()", f.dbSchema)
@@ -482,205 +169,7 @@ func (f *Fair) RefreshSearch() error {
 	return nil
 }
 
-func (f *Fair) CreateItem(partitionName string, data *ItemData) (*ItemData, error) {
-	partition, ok := f.partitions[partitionName]
-	if !ok {
-		return nil, errors.New(fmt.Sprintf("partition %s not found", partitionName))
-	}
-
-	sort.Strings(data.Catalog)
-	sort.Strings(data.Set)
-
-	src, err := f.GetSourceByName(data.Source, partitionName)
-	if err != nil {
-		return nil, errors.Wrapf(err, "cannot get source %s", data.Source)
-	}
-
-	item, err := f.GetItemSource(partitionName, src.ID, data.Signature)
-	if err != nil {
-		return nil, errors.Wrapf(err, "cannot get item #%v.%v from partition %s", src.ID, data.Signature, partitionName)
-	}
-
-	// not found
-	if item == nil {
-		//
-		// Create new Entry
-		//
-
-		item = data
-		item.Identifier = []string{}
-
-		uuidVal, err := uuid.NewUUID()
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot generate uuid")
-		}
-		item.UUID = uuidVal.String()
-		var sqlHandle = sql.NullString{}
-		if f.handle != nil {
-			//
-			// Create Handle and add to local identifier list
-			//
-			next, err := f.nextCounter("handle")
-			if err != nil {
-				return nil, errors.Wrap(err, "cannot get next handle value")
-			}
-			newHandle := fmt.Sprintf("%s/%s/%v", partition.HandleID, partition.HandlePrefix, next)
-			newURL, err := url.Parse(fmt.Sprintf("%s/redir/%s", partition.AddrExt, item.UUID))
-			if err != nil {
-				return nil, errors.Wrapf(err, "cannot parse url %s", fmt.Sprintf("%s/redir/%s", partition.AddrExt, item.UUID))
-			}
-			if err := f.handle.Create(newHandle, newURL); err != nil {
-				return nil, errors.Wrapf(err, "cannot create handle %s for %s", newHandle, newURL.String())
-			}
-			sqlHandle.String = newHandle
-			sqlHandle.Valid = true
-			item.Metadata.Identifier = append(item.Metadata.Identifier, myfair.Identifier{
-				Value:          newHandle,
-				IdentifierType: myfair.RelatedIdentifierTypeHandle,
-			})
-			item.Identifier = append(item.Identifier, fmt.Sprintf("%s:%s", myfair.RelatedIdentifierTypeHandle, newHandle))
-		}
-		sort.Strings(item.Identifier)
-
-		coreBytes, err := json.Marshal(item.Metadata)
-		if err != nil {
-			return nil, errors.Wrapf(err, "cannot marshal core data [%v]", data.Metadata)
-		}
-		sqlstr := fmt.Sprintf("INSERT INTO %s.core"+
-			" (uuid, datestamp, setspec, metadata, signature, source, access, catalog, seq, status, identifier)"+
-			" VALUES($1, NOW(), $2, $3, $4, $5, $6, $7, NEXTVAL('lastchange'), $8, $9)", f.dbSchema)
-		params := []interface{}{
-			item.UUID, // uuid
-			// datestamp
-			pq.Array(item.Set),     // setspec
-			string(coreBytes),      // metadata
-			item.Signature,         // signature
-			src.ID,                 // source
-			item.Access,            // access
-			pq.Array(item.Catalog), // catalog
-			// seq
-			DataStatusActive,
-			pq.Array(item.Identifier), // identifier
-		}
-		ret, err := f.db.Exec(sqlstr, params...)
-		if err != nil {
-			return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
-		}
-		num, err := ret.RowsAffected()
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot get affected rows")
-		}
-		if num == 0 {
-			return nil, errors.Wrap(err, "no affected rows")
-		}
-		sqlstr = fmt.Sprintf("INSERT INTO %s.core_dirty"+
-			" (uuid)"+
-			" VALUES($1)", f.dbSchema)
-		params = []interface{}{
-			item.UUID, // uuid
-		}
-		if _, err = f.db.Exec(sqlstr, params...); err != nil {
-			return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
-		}
-		f.log.Infof("new item [%s] inserted", item.UUID)
-
-		return item, nil
-
-	} else {
-		sort.Strings(data.Catalog)
-		sort.Strings(data.Set)
-
-		// add local identifiers
-		for _, id := range item.Identifier {
-			strs := strings.SplitN(id, ":", 2)
-			if len(strs) != 2 {
-				return nil, errors.New(fmt.Sprintf("[%s] invalid identifier format %s", item.UUID, id))
-			}
-
-			idType, ok := myfair.RelatedIdentifierTypeReverse[strs[0]]
-			if !ok {
-				f.log.Warningf("[%s] unknown identifier type %s", item.UUID, id)
-				continue
-			}
-			idStr := strs[1]
-			found := false
-			for _, di := range data.Metadata.Identifier {
-				if di.IdentifierType == idType && di.Value == idStr {
-					found = true
-					break
-				}
-			}
-			if !found {
-				data.Metadata.Identifier = append(data.Metadata.Identifier, myfair.Identifier{
-					Value:          idStr,
-					IdentifierType: idType,
-				})
-			}
-		}
-
-		// do update here
-		if item.Status == DataStatusActive &&
-			reflect.DeepEqual(item.Metadata, data.Metadata) &&
-			equalStrings(item.Set, data.Set) &&
-			equalStrings(item.Catalog, data.Catalog) &&
-			item.Access == data.Access {
-			f.log.Infof("no update needed for item [%v]", item.UUID)
-			sqlstr := fmt.Sprintf("INSERT INTO %s.core_dirty"+
-				" (uuid)"+
-				" VALUES($1)", f.dbSchema)
-			params := []interface{}{
-				item.UUID, // uuid
-			}
-			if _, err = f.db.Exec(sqlstr, params...); err != nil {
-				return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
-			}
-			return item, nil
-		}
-
-		dataMetaBytes, err := json.Marshal(data.Metadata)
-		if err != nil {
-			return nil, errors.Wrapf(err, "[%s] cannot unmarshal data core", item.UUID)
-		}
-
-		sqlstr := fmt.Sprintf("UPDATE %s.core"+
-			" SET setspec=$1, metadata=$2, access=$3, catalog=$4, status=$5, datestamp=NOW(), seq=NEXTVAL('lastchange')"+
-			" WHERE uuid=$6", f.dbSchema)
-		params := []interface{}{
-			pq.Array(data.Set),
-			string(dataMetaBytes),
-			data.Access,
-			pq.Array(data.Catalog),
-			DataStatusActive,
-			item.UUID}
-		if _, err := f.db.Exec(sqlstr, params...); err != nil {
-			return nil, errors.Wrapf(err, "[%s] cannot update [%s] - [%v]", item.UUID, sqlstr, params)
-		}
-		sqlstr = fmt.Sprintf("INSERT INTO %s.core_dirty"+
-			" (uuid)"+
-			" VALUES($1)", f.dbSchema)
-		params = []interface{}{
-			item.UUID, // uuid
-		}
-		if _, err = f.db.Exec(sqlstr, params...); err != nil {
-			return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
-		}
-		f.log.Infof("item [%s] updated", item.UUID)
-		item.Set = data.Set
-		item.Metadata = data.Metadata
-		item.Access = data.Access
-		item.Catalog = data.Catalog
-		item.Status = DataStatusActive
-		item.Metadata = data.Metadata
-		return item, nil
-	}
-
-}
-
-func (f *Fair) SetOriginalData(partitionName, uuid string, format string, data []byte) error {
-	_, ok := f.partitions[partitionName]
-	if !ok {
-		return errors.New(fmt.Sprintf("partition %s not found", partitionName))
-	}
+func (f *Fair) SetOriginalData(p *Partition, uuid string, format string, data []byte) error {
 
 	formatOK := false
 	for _, f := range []string{"Other", "XML", "JSON"} {
@@ -722,11 +211,7 @@ func (f *Fair) SetOriginalData(partitionName, uuid string, format string, data [
 	return nil
 }
 
-func (f *Fair) GetOriginalData(partitionName, uuid string) ([]byte, string, error) {
-	_, ok := f.partitions[partitionName]
-	if !ok {
-		return nil, "", errors.New(fmt.Sprintf("partition %s not found", partitionName))
-	}
+func (f *Fair) GetOriginalData(p *Partition, uuid string) ([]byte, string, error) {
 
 	sqlstr := fmt.Sprintf("SELECT type, data, compressed FROM %s.originaldata WHERE AND uuid=$1", f.dbSchema)
 	var t string
@@ -751,11 +236,12 @@ func (f *Fair) GetOriginalData(partitionName, uuid string) ([]byte, string, erro
 	return data, t, nil
 }
 
-func (f *Fair) GetSets(partitionName string) (map[string]string, error) {
+func (f *Fair) GetSets(p *Partition) (map[string]string, error) {
 	sqlstr := fmt.Sprintf("SELECT s.setspec, s.setname"+
 		" FROM (SELECT DISTINCT unnest(setspec) AS setspecx FROM %s.coreview WHERE partition=$1) specs"+
-		" LEFT JOIN %s.set s ON s.setspec=setspecx", f.dbSchema, f.dbSchema)
-	rows, err := f.db.Query(sqlstr, partitionName)
+		" LEFT JOIN %s.set s ON s.setspec=setspecx"+
+		" WHERE s.setspec IS NOT NULL", f.dbSchema, f.dbSchema)
+	rows, err := f.db.Query(sqlstr, p.Name)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot query sets %s", sqlstr)
 	}
@@ -771,8 +257,8 @@ func (f *Fair) GetSets(partitionName string) (map[string]string, error) {
 	return sets, nil
 }
 
-func (f *Fair) StartUpdate(partitionName string, source string) error {
-	src, err := f.GetSourceByName(source, partitionName)
+func (f *Fair) StartUpdate(p *Partition, source string) error {
+	src, err := f.GetSourceByName(p, source)
 	if err != nil {
 		return errors.Wrapf(err, "cannot get source %s", source)
 	}
@@ -785,8 +271,8 @@ func (f *Fair) StartUpdate(partitionName string, source string) error {
 	return nil
 }
 
-func (f *Fair) AbortUpdate(partitionName string, source string) error {
-	return f.StartUpdate(partitionName, source)
+func (f *Fair) AbortUpdate(p *Partition, source string) error {
+	return f.StartUpdate(p, source)
 	/*
 		src, err := f.GetSourceByName(source)
 		if err != nil {
@@ -801,8 +287,8 @@ func (f *Fair) AbortUpdate(partitionName string, source string) error {
 	*/
 }
 
-func (f *Fair) EndUpdate(partitionName string, source string) error {
-	src, err := f.GetSourceByName(source, partitionName)
+func (f *Fair) EndUpdate(p *Partition, source string) error {
+	src, err := f.GetSourceByName(p, source)
 	if err != nil {
 		return errors.Wrapf(err, "cannot get source %s", source)
 	}
@@ -814,25 +300,20 @@ func (f *Fair) EndUpdate(partitionName string, source string) error {
 		return errors.Wrapf(err, "cannot execute dirty update - %s - %v", sqlstr, params)
 	}
 	f.RefreshSearch()
-	return f.StartUpdate(partitionName, source)
+	return f.StartUpdate(p, source)
 }
 
-func (f *Fair) CreateDOI(partitionName, uuidStr, targetUrl string) (*datacite.API, error) {
-	part, err := f.GetPartition(partitionName)
-	if err != nil {
-		return nil, errors.Wrapf(err, "cannot get partition %s", partitionName)
-	}
-
-	data, err := f.GetItem(partitionName, uuidStr)
+func (f *Fair) CreateDOI(p *Partition, uuidStr, targetUrl string) (*datacite.API, error) {
+	data, err := f.GetItem(p, uuidStr)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error loading item")
 	}
 	if data == nil {
-		return nil, errors.New(fmt.Sprintf("item %s/%s not found", partitionName, uuidStr))
+		return nil, errors.New(fmt.Sprintf("item %s/%s not found", p.Name, uuidStr))
 	}
 
 	if data.Status != DataStatusActive {
-		return nil, errors.New(fmt.Sprintf("item %s/%s is not active", partitionName, uuidStr))
+		return nil, errors.New(fmt.Sprintf("item %s/%s is not active", p.Name, uuidStr))
 	}
 
 	var hasDOI string
@@ -852,7 +333,7 @@ func (f *Fair) CreateDOI(partitionName, uuidStr, targetUrl string) (*datacite.AP
 		return nil, errors.Wrap(err, "cannot get next doi sequence value")
 	}
 
-	doiSuffix := fmt.Sprintf("%s/%v", part.HandlePrefix, next)
+	doiSuffix := fmt.Sprintf("%s/%v", p.HandlePrefix, next)
 	doiStr := fmt.Sprintf("%s/%s", f.dataciteClient.GetPrefix(), doiSuffix)
 	_, err = f.dataciteClient.RetrieveDOI(doiStr)
 	if err == nil {
@@ -901,10 +382,10 @@ var fieldDef = map[string]string{
 	"publicationyear": "s.publicationyear AS publicationyear",
 }
 
-func (f *Fair) Search(partitionName string, dtr *datatable.Request) ([]map[string]string, int64, int64, error) {
-	part, err := f.GetPartition(partitionName)
+func (f *Fair) Search(p *Partition, dtr *datatable.Request) ([]map[string]string, int64, int64, error) {
+	part, err := f.GetPartition(p.Name)
 	if err != nil {
-		return nil, 0, 0, errors.Wrapf(err, "cannot get partition %s", partitionName)
+		return nil, 0, 0, errors.Wrapf(err, "cannot get partition %s", p.Name)
 	}
 
 	var fields []string

@@ -6,7 +6,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"github.com/gorilla/mux"
-	"github.com/je4/FairService/v2/pkg/datatable"
 	"github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/FairService/v2/pkg/model/dcmi"
@@ -68,7 +67,7 @@ func (s *Server) redirectHandler(w http.ResponseWriter, req *http.Request) {
 		w.Write([]byte(fmt.Sprintf("partition [%s] not found", pName)))
 		return
 	}
-	data, err := s.fair.GetItem(pName, uuidStr)
+	data, err := s.fair.GetItem(part, uuidStr)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		w.Header().Set("Content-type", "text/plain")
@@ -88,7 +87,7 @@ func (s *Server) redirectHandler(w http.ResponseWriter, req *http.Request) {
 		}
 
 	} else {
-		source, err := s.fair.GetSourceByName(data.Source, part.Name)
+		source, err := s.fair.GetSourceByName(part, data.Source)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Header().Set("Content-type", "text/plain")
@@ -123,7 +122,7 @@ func (s *Server) detailHandler(w http.ResponseWriter, req *http.Request) {
 	message := ""
 	if _, ok := req.URL.Query()["createdoi"]; ok {
 		targetUrl := fmt.Sprintf("%s/redir/%s", part.AddrExt, uuidStr)
-		_, err := s.fair.CreateDOI(pName, uuidStr, targetUrl)
+		_, err := s.fair.CreateDOI(part, uuidStr, targetUrl)
 		if err != nil {
 			doiError = err.Error()
 		} else {
@@ -131,7 +130,7 @@ func (s *Server) detailHandler(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	data, err := s.fair.GetItem(pName, uuidStr)
+	data, err := s.fair.GetItem(part, uuidStr)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		w.Header().Set("Content-type", "text/plain")
@@ -173,31 +172,6 @@ func (s *Server) partitionHandler(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (s *Server) dataviewerHandler(w http.ResponseWriter, req *http.Request) {
-	if !BasicAuth(w, req, s.name, s.password, "FAIR Service") {
-		return
-	}
-
-	vars := mux.Vars(req)
-	pName := vars["partition"]
-
-	part, err := s.fair.GetPartition(pName)
-	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		w.Header().Set("Content-type", "text/plain")
-		w.Write([]byte(fmt.Sprintf("partition [%s] not found", pName)))
-		return
-	}
-
-	tpl := s.templates["dataviewer"]
-	if err := tpl.Execute(w, part); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Header().Set("Content-type", "text/plain")
-		w.Write([]byte(fmt.Sprintf("error executing template %s in partition %s: %v", "partition", pName, err)))
-		return
-	}
-}
-
 func (s *Server) partitionOAIHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	pName := vars["partition"]
@@ -229,7 +203,15 @@ func (s *Server) itemHandler(w http.ResponseWriter, req *http.Request) {
 		outputType = "json"
 	}
 
-	data, err := s.fair.GetItem(pName, uuidStr)
+	part, err := s.fair.GetPartition(pName)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Header().Set("Content-type", "text/plain")
+		w.Write([]byte(fmt.Sprintf("partition [%s] not found", pName)))
+		return
+	}
+
+	data, err := s.fair.GetItem(part, uuidStr)
 	if err != nil {
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("error loading item %v: %v", uuidStr, err), nil)
 		return
@@ -306,7 +288,7 @@ func (s *Server) createDOIHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	targetUrl := fmt.Sprintf("%s/redir/%s", part.AddrExt, uuidStr)
-	doiResult, err := s.fair.CreateDOI(pName, uuidStr, targetUrl)
+	doiResult, err := s.fair.CreateDOI(part, uuidStr, targetUrl)
 	if err != nil {
 		sendCreateResult(s.log, w, "error", err.Error(), nil)
 		return
@@ -327,15 +309,20 @@ func (s *Server) startUpdateHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	pName := vars["partition"]
 
+	part, err := s.fair.GetPartition(pName)
+	if err != nil {
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot get partition %s", pName), nil)
+		return
+	}
+
 	decoder := json.NewDecoder(req.Body)
 	var data fair.SourceData
-	err := decoder.Decode(&data)
-	if err != nil {
+	if err := decoder.Decode(&data); err != nil {
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot parse request body: %v", err), nil)
 		return
 	}
 
-	if err := s.fair.StartUpdate(pName, data.Source); err != nil {
+	if err := s.fair.StartUpdate(part, data.Source); err != nil {
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot start update for %s on %s: %v", data.Source, pName, err), nil)
 		return
 	}
@@ -351,15 +338,20 @@ func (s *Server) endUpdateHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	pName := vars["partition"]
 
+	part, err := s.fair.GetPartition(pName)
+	if err != nil {
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot get partition %s", pName), nil)
+		return
+	}
+
 	decoder := json.NewDecoder(req.Body)
 	var data fair.SourceData
-	err := decoder.Decode(&data)
-	if err != nil {
+	if err := decoder.Decode(&data); err != nil {
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot parse request body: %v", err), nil)
 		return
 	}
 
-	if err := s.fair.EndUpdate(pName, data.Source); err != nil {
+	if err := s.fair.EndUpdate(part, data.Source); err != nil {
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot end update for %s on %s: %v", data.Source, pName, err), nil)
 		return
 	}
@@ -370,15 +362,20 @@ func (s *Server) abortUpdateHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	pName := vars["partition"]
 
+	part, err := s.fair.GetPartition(pName)
+	if err != nil {
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot get partition %s", pName), nil)
+		return
+	}
+
 	decoder := json.NewDecoder(req.Body)
 	var data fair.SourceData
-	err := decoder.Decode(&data)
-	if err != nil {
+	if err := decoder.Decode(&data); err != nil {
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot parse request body: %v", err), nil)
 		return
 	}
 
-	if err := s.fair.AbortUpdate(pName, data.Source); err != nil {
+	if err := s.fair.AbortUpdate(part, data.Source); err != nil {
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot end update for %s on %s: %v", data.Source, pName, err), nil)
 		return
 	}
@@ -390,7 +387,13 @@ func (s *Server) originalDataReadHandler(w http.ResponseWriter, req *http.Reques
 	pName := vars["partition"]
 	uuidStr := vars["uuid"]
 
-	data, t, err := s.fair.GetOriginalData(pName, uuidStr)
+	part, err := s.fair.GetPartition(pName)
+	if err != nil {
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot get partition %s", pName), nil)
+		return
+	}
+
+	data, t, err := s.fair.GetOriginalData(part, uuidStr)
 	if err != nil {
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot read original data: %v", err), nil)
 		return
@@ -411,6 +414,12 @@ func (s *Server) originalDataWriteHandler(w http.ResponseWriter, req *http.Reque
 	pName := vars["partition"]
 	uuidStr := vars["uuid"]
 
+	part, err := s.fair.GetPartition(pName)
+	if err != nil {
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot get partition %s", pName), nil)
+		return
+	}
+
 	bdata, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		s.log.Errorf("cannot read request body: %v", err)
@@ -430,7 +439,7 @@ func (s *Server) originalDataWriteHandler(w http.ResponseWriter, req *http.Reque
 		}
 	}
 
-	if err := s.fair.SetOriginalData(pName, uuidStr, t, bdata); err != nil {
+	if err := s.fair.SetOriginalData(part, uuidStr, t, bdata); err != nil {
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot set original data for %s: %v", uuidStr, err), nil)
 		return
 	}
@@ -440,6 +449,14 @@ func (s *Server) originalDataWriteHandler(w http.ResponseWriter, req *http.Reque
 func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	pName := vars["partition"]
+
+	part, err := s.fair.GetPartition(pName)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Header().Set("Content-type", "text/plain")
+		w.Write([]byte(fmt.Sprintf("partition [%s] not found", pName)))
+		return
+	}
 
 	var data = &fair.ItemData{}
 
@@ -460,7 +477,7 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	item, err := s.fair.CreateItem(pName, data)
+	item, err := s.fair.CreateItem(part, data)
 	if err != nil {
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot create item: %v", err), nil)
 		return
@@ -510,43 +527,3 @@ type DataTableResult struct {
 }
 
 var columnsParam = regexp.MustCompile(`columns\[([0-9]+)\]\[([a-z]+)\]`)
-
-func (s *Server) searchDatatableHandler(w http.ResponseWriter, req *http.Request) {
-	if !BasicAuth(w, req, s.name, s.password, "FAIR Service") {
-		return
-	}
-
-	vars := mux.Vars(req)
-	pName := vars["partition"]
-
-	_, err := s.fair.GetPartition(pName)
-	if err != nil {
-		sendCreateResult(s.log, w, "error", fmt.Sprintf("invalid partition %s", pName), nil)
-		return
-	}
-
-	dReq := &datatable.Request{}
-	if err := dReq.FromRequest(req); err != nil {
-		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot eval request parameter: %v", err), nil)
-		return
-	}
-
-	result, num, total, err := s.fair.Search(pName, dReq)
-	if err != nil {
-		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot search: %v", err), nil)
-		return
-	}
-
-	rData := &DataTableResult{
-		Draw:            dReq.Draw,
-		RecordsTotal:    total,
-		RecordsFiltered: num,
-		Data:            result,
-	}
-	enc := json.NewEncoder(w)
-	if err := enc.Encode(rData); err != nil {
-		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot search: %v", err), nil)
-		return
-	}
-	return
-}

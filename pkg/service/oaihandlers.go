@@ -245,7 +245,7 @@ func (s *Server) oaiHandlerListMetadataFormats(w http.ResponseWriter, req *http.
 }
 
 func (s *Server) oaiHandlerIdentify(w http.ResponseWriter, req *http.Request, partition *fair.Partition, context string) {
-	earliestDatestamp, err := s.fair.GetMinimumDatestamp(partition.Name)
+	earliestDatestamp, err := s.fair.GetMinimumDatestamp(partition)
 	if err != nil {
 		s.log.Errorf("cannot get earliest datestamp: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -291,7 +291,7 @@ func (s *Server) oaiHandlerGetRecord(w http.ResponseWriter, req *http.Request, p
 		sendError(w, oai.ErrorCodeIdDoesNotExist, "", "GetRecord", identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
 		return
 	}
-	data, err := s.fair.GetItem(partition.Name, uuidStr)
+	data, err := s.fair.GetItem(partition, uuidStr)
 	if err != nil {
 		s.log.Infof("cannot get item %s: %v", uuidStr, err)
 		sendError(w, oai.ErrorCodeIdDoesNotExist, "", "GetRecord", identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
@@ -444,7 +444,7 @@ func (s *Server) oaiHandlerListIdentifiers(w http.ResponseWriter, req *http.Requ
 	}
 
 	if rData.seq > 0 {
-		if err := s.fair.GetItemsSeq(partition.Name,
+		if err := s.fair.GetItemsSeq(partition,
 			rData.seq,
 			until,
 			[]fair.DataAccess{fair.DataAccessPublic, fair.DataAccessPublic},
@@ -458,7 +458,7 @@ func (s *Server) oaiHandlerListIdentifiers(w http.ResponseWriter, req *http.Requ
 		}
 
 	} else {
-		if err := s.fair.GetItemsDatestamp(partition.Name,
+		if err := s.fair.GetItemsDatestamp(partition,
 			rData.from,
 			rData.until,
 			[]fair.DataAccess{fair.DataAccessPublic, fair.DataAccessClosedData},
@@ -613,7 +613,7 @@ func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request,
 	}
 
 	if rData.seq > 0 {
-		if err := s.fair.GetItemsSeq(partition.Name,
+		if err := s.fair.GetItemsSeq(partition,
 			rData.seq,
 			until,
 			[]fair.DataAccess{fair.DataAccessPublic, fair.DataAccessPublic},
@@ -627,7 +627,7 @@ func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request,
 		}
 
 	} else {
-		if err := s.fair.GetItemsDatestamp(partition.Name,
+		if err := s.fair.GetItemsDatestamp(partition,
 			rData.from,
 			rData.until,
 			[]fair.DataAccess{fair.DataAccessPublic, fair.DataAccessClosedData},
@@ -667,7 +667,7 @@ func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request,
 
 // todo: add paging with resumption token
 func (s *Server) oaiHandlerListSets(w http.ResponseWriter, req *http.Request, partition *fair.Partition, context string) {
-	sets, err := s.fair.GetSets(partition.Name)
+	sets, err := s.fair.GetSets(partition)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(fmt.Sprintf("cannot read sets from database: %v", err)))

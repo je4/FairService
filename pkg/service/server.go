@@ -150,11 +150,11 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 	).Methods("GET")
 	router.Handle(
 		"/{partition}/viewer",
-		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.dataviewerHandler) }()),
+		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.dataViewerHandler) }()),
 	).Methods("GET")
 	router.Handle(
 		"/{partition}/viewer/search",
-		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.searchDatatableHandler) }()),
+		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.searchViewerHandler) }()),
 	).Methods("GET")
 	router.Handle(
 		"/{partition}/viewer/item/{uuid}",
@@ -242,6 +242,34 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 				"EndUpdate",
 				JWTInterceptor.Secure,
 				func() http.Handler { return http.HandlerFunc(s.endUpdateHandler) }(),
+				s.jwtKey,
+				s.jwtAlg,
+				sha512.New(),
+				s.log,
+			))).
+		Methods("POST")
+	router.Handle(
+		"/{partition}/archive",
+		handlers.CompressHandler(
+			JWTInterceptor.JWTInterceptor(
+				s.service,
+				"AddArchive",
+				JWTInterceptor.Secure,
+				func() http.Handler { return http.HandlerFunc(s.createArchiveHandler) }(),
+				s.jwtKey,
+				s.jwtAlg,
+				sha512.New(),
+				s.log,
+			))).
+		Methods("POST")
+	router.Handle(
+		"/{partition}/archive/{archive}",
+		handlers.CompressHandler(
+			JWTInterceptor.JWTInterceptor(
+				s.service,
+				"AddArchiveItem",
+				JWTInterceptor.Secure,
+				func() http.Handler { return http.HandlerFunc(s.addArchiveItemHandler) }(),
 				s.jwtKey,
 				s.jwtAlg,
 				sha512.New(),
