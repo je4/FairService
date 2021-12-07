@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
+	"github.com/je4/FairService/v2/pkg/fair"
 	"io/ioutil"
 	"net/http"
 )
@@ -51,6 +52,33 @@ func (s *Server) createArchiveHandler(w http.ResponseWriter, req *http.Request) 
 	}
 	sendCreateResult(s.log, w, "ok", "archive %s created", nil)
 	return
+}
+
+func (s *Server) getArchiveItemHandler(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	pName := vars["partition"]
+	archive := vars["archive"]
+
+	part, err := s.fair.GetPartition(pName)
+	if err != nil {
+		s.log.Errorf("partition [%s] not found", pName)
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("partition [%s] not found", pName), nil)
+		return
+		return
+	}
+	var items = []*fair.ItemData{}
+	if err := s.fair.GetArchiveItems(part, archive, false, func(item *fair.ItemData) error {
+		items = append(items, item)
+		return nil
+	}); err != nil {
+		s.log.Errorf("cannot get archive items: %v", err)
+		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot get archive items: %v", err), nil)
+		return
+	}
+
+	w.Header().Set("Content-type", "text/json")
+	data, _ := json.MarshalIndent(CreateResultStatus{Status: "ok", Message: fmt.Sprintf("%s items found", len(items)), Items: items}, "", "  ")
+	w.Write(data)
 }
 
 func (s *Server) addArchiveItemHandler(w http.ResponseWriter, req *http.Request) {

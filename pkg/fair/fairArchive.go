@@ -1,6 +1,7 @@
 package fair
 
 import (
+	"database/sql"
 	"fmt"
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
@@ -20,6 +21,33 @@ func (f *Fair) AddArchive(part *Partition, name, description string) error {
 	} else {
 		if rows != 1 {
 			return errors.New(fmt.Sprintf("invalid number of affected rows: %v", rows))
+		}
+	}
+	return nil
+}
+
+func (f *Fair) GetArchiveItems(part *Partition, archive string, delta bool, fn func(item *ItemData) error) error {
+	sqlstr := fmt.Sprintf("SELECT cv.uuid, cv.metadata, cv.setspec, cv.catalog, cv.access, cv.signature,"+
+		"	 cv.sourcename, cv.status, cv.seq, cv.datestamp, cv.identifier"+
+		" FROM %s.archive a, %s.core_archive ca, %s.coreview cv"+
+		" WHERE a.partition=ca.partition AND a.name=ca.archive_name AND ca.core_uuid=cv.uuid"+
+		"	 AND a.partition=$1 AND a.name=$2"+
+		" ORDER BY seq ASC", f.dbSchema, f.dbSchema, f.dbSchema)
+	params := []interface{}{part.Name, archive}
+	rows, err := f.db.Query(sqlstr, params...)
+	if err != nil {
+		if err != sql.ErrNoRows {
+			return errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
+		}
+	}
+	defer rows.Close()
+	for rows.Next() {
+		data, err := itemDataFromRow(rows)
+		if err != nil {
+			return errors.Wrap(err, "cannot get data from result row")
+		}
+		if err := fn(data); err != nil {
+			return errors.Wrap(err, "error calling fn")
 		}
 	}
 	return nil
