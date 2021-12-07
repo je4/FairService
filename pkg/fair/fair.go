@@ -252,7 +252,11 @@ func (f *Fair) GetSets(p *Partition) (map[string]string, error) {
 		if err := rows.Scan(&setspec, &setname); err != nil {
 			return nil, errors.Wrapf(err, "cannot scan sets query result - %s", sqlstr)
 		}
-		sets[setspec] = setname.String
+		if setname.Valid {
+			sets[setspec] = setname.String
+		} else {
+			sets[setspec] = setspec
+		}
 	}
 	return sets, nil
 }
