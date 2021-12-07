@@ -237,10 +237,9 @@ func (f *Fair) GetOriginalData(p *Partition, uuid string) ([]byte, string, error
 }
 
 func (f *Fair) GetSets(p *Partition) (map[string]string, error) {
-	sqlstr := fmt.Sprintf("SELECT s.setspec, s.setname"+
+	sqlstr := fmt.Sprintf("SELECT specs.setspecx, s.setname"+
 		" FROM (SELECT DISTINCT unnest(setspec) AS setspecx FROM %s.coreview WHERE partition=$1) specs"+
-		" LEFT JOIN %s.set s ON s.setspec=setspecx"+
-		" WHERE s.setspec IS NOT NULL", f.dbSchema, f.dbSchema)
+		" LEFT JOIN %s.set s ON s.setspec=setspecx", f.dbSchema, f.dbSchema)
 	rows, err := f.db.Query(sqlstr, p.Name)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot query sets %s", sqlstr)
