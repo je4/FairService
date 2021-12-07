@@ -247,11 +247,12 @@ func (f *Fair) GetSets(p *Partition) (map[string]string, error) {
 	var sets map[string]string = make(map[string]string)
 	defer rows.Close()
 	for rows.Next() {
-		var setspec, setname string
+		var setspec string
+		var setname sql.NullString
 		if err := rows.Scan(&setspec, &setname); err != nil {
 			return nil, errors.Wrapf(err, "cannot scan sets query result - %s", sqlstr)
 		}
-		sets[setspec] = setname
+		sets[setspec] = setname.String
 	}
 	return sets, nil
 }
