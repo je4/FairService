@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-func itemDataFromRow(row interface{}) (*ItemData, error) {
+func itemDataFromRow(row interface{}, lastCols ...interface{}) (*ItemData, error) {
 	var uuidStr string
 	var metaStr string
 	var set, catalog []string
@@ -26,13 +26,16 @@ func itemDataFromRow(row interface{}) (*ItemData, error) {
 	var seq int64
 	var identifier []string
 	var datestamp time.Time
+	cols := []interface{}{}
+	cols = append(cols, &uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &sourceName, &statusStr, &seq, &datestamp, pq.Array(&identifier))
+	cols = append(cols, lastCols...)
 	switch r := row.(type) {
-	case sql.Row:
-		if err := r.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &sourceName, &statusStr, &seq, &datestamp, pq.Array(&identifier)); err != nil {
+	case *sql.Row:
+		if err := r.Scan(cols...); err != nil {
 			return nil, errors.Wrapf(err, "cannot scan result")
 		}
-	case sql.Rows:
-		if err := r.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &sourceName, &statusStr, &seq, &datestamp, pq.Array(&identifier)); err != nil {
+	case *sql.Rows:
+		if err := r.Scan(cols...); err != nil {
 			return nil, errors.Wrapf(err, "cannot scan result")
 		}
 	default:

@@ -46,11 +46,11 @@ func (s *Server) createArchiveHandler(w http.ResponseWriter, req *http.Request) 
 	}
 
 	name := fmt.Sprintf("%s.%s", part.Name, data.Name)
-	if err := s.fair.AddArchive(part, name, data.Description); err != nil {
+	if err := s.fair.AddArchive(part, fmt.Sprintf("%s.%s", part.Name, name), data.Description); err != nil {
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot create item: %v", err), nil)
 		return
 	}
-	sendCreateResult(s.log, w, "ok", "archive %s created", nil)
+	sendCreateResult(s.log, w, "ok", fmt.Sprintf("archive %s created", name), nil)
 	return
 }
 
@@ -64,10 +64,9 @@ func (s *Server) getArchiveItemHandler(w http.ResponseWriter, req *http.Request)
 		s.log.Errorf("partition [%s] not found", pName)
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("partition [%s] not found", pName), nil)
 		return
-		return
 	}
-	var items = []*fair.ItemData{}
-	if err := s.fair.GetArchiveItems(part, archive, false, func(item *fair.ItemData) error {
+	var items = []*fair.ArchiveItem{}
+	if err := s.fair.GetArchiveItems(part, fmt.Sprintf("%s.%s", part.Name, archive), false, func(item *fair.ArchiveItem) error {
 		items = append(items, item)
 		return nil
 	}); err != nil {
@@ -77,7 +76,7 @@ func (s *Server) getArchiveItemHandler(w http.ResponseWriter, req *http.Request)
 	}
 
 	w.Header().Set("Content-type", "text/json")
-	data, _ := json.MarshalIndent(CreateResultStatus{Status: "ok", Message: fmt.Sprintf("%s items found", len(items)), Items: items}, "", "  ")
+	data, _ := json.MarshalIndent(CreateResultStatus{Status: "ok", Message: fmt.Sprintf("%s items found", len(items)), ArchiveItems: items}, "", "  ")
 	w.Write(data)
 }
 
@@ -120,7 +119,7 @@ func (s *Server) addArchiveItemHandler(w http.ResponseWriter, req *http.Request)
 		decoder := json.NewDecoder(req.Body)
 		err := decoder.Decode(&data)
 	*/
-	if err := s.fair.AddArchiveItem(part, archive, item); err != nil {
+	if err := s.fair.AddArchiveItem(part, fmt.Sprintf("%s.%s", part.Name, archive), item); err != nil {
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot add item %s to %s: %v", item.UUID, archive, err), nil)
 		return
 	}

@@ -17,10 +17,10 @@ import (
 )
 
 type CreateResultStatus struct {
-	Status  string           `json:"status"`
-	Message string           `json:"message,omitempty"`
-	Item    *fair.ItemData   `json:"uuid,omitempty"`
-	Items   []*fair.ItemData `json:"uuids,omitempty"`
+	Status       string              `json:"status"`
+	Message      string              `json:"message,omitempty"`
+	Item         *fair.ItemData      `json:"uuid,omitempty"`
+	ArchiveItems []*fair.ArchiveItem `json:"archiveitems,omitempty"`
 }
 
 func sendCreateResult(log *logging.Logger, w http.ResponseWriter, t string, message string, item *fair.ItemData) {
