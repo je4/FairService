@@ -76,7 +76,7 @@ func (s *Server) getArchiveItemHandler(w http.ResponseWriter, req *http.Request)
 	}
 
 	w.Header().Set("Content-type", "text/json")
-	data, _ := json.MarshalIndent(CreateResultStatus{Status: "ok", Message: fmt.Sprintf("%s items found", len(items)), ArchiveItems: items}, "", "  ")
+	data, _ := json.MarshalIndent(FairResultStatus{Status: "ok", Message: fmt.Sprintf("%s items found", len(items)), ArchiveItems: items}, "", "  ")
 	w.Write(data)
 }
 

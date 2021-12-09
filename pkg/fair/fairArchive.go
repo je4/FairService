@@ -87,9 +87,11 @@ func (f *Fair) GetArchiveItems(part *Partition, archive string, delta bool, fn f
 		for _, m := range data.Metadata.Media {
 			filesAll = append(filesAll, m.Uri)
 		}
+		/* Poster not part of relevant data
 		if data.Metadata.Poster != nil {
 			filesAll = append(filesAll, data.Metadata.Poster.Uri)
 		}
+		*/
 		filesAll = UniqString(filesAll)
 		for _, f1 := range filesAll {
 			var found = false

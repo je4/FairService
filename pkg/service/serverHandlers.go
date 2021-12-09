@@ -16,7 +16,7 @@ import (
 	"strings"
 )
 
-type CreateResultStatus struct {
+type FairResultStatus struct {
 	Status       string              `json:"status"`
 	Message      string              `json:"message,omitempty"`
 	Item         *fair.ItemData      `json:"uuid,omitempty"`
@@ -38,7 +38,7 @@ func sendCreateResult(log *logging.Logger, w http.ResponseWriter, t string, mess
 		}
 	}
 	w.Header().Set("Content-type", "text/json")
-	data, _ := json.MarshalIndent(CreateResultStatus{Status: t, Message: message, Item: item}, "", "  ")
+	data, _ := json.MarshalIndent(FairResultStatus{Status: t, Message: message, Item: item}, "", "  ")
 	w.Write(data)
 }
 
