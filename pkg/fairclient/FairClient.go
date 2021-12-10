@@ -33,7 +33,7 @@ func postHelper(client http.Client, urlstr string, data []byte) error {
 	if err != nil {
 		return errors.Wrap(err, "cannot read response body")
 	}
-	result := service.CreateResultStatus{}
+	result := service.FairResultStatus{}
 	if err := json.Unmarshal(bodyBytes, &result); err != nil {
 		return errors.Wrapf(err, "cannot decode result %s", string(bodyBytes))
 	}
@@ -41,6 +41,25 @@ func postHelper(client http.Client, urlstr string, data []byte) error {
 		return errors.New(fmt.Sprintf("error on POST::%s: %s", urlstr, result.Message))
 	}
 	return nil
+}
+
+func getHelper(client http.Client, urlstr string) (*service.FairResultStatus, error) {
+	response, err := client.Get(urlstr)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot post to %s", urlstr)
+	}
+	bodyBytes, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot read response body")
+	}
+	result := &service.FairResultStatus{}
+	if err := json.Unmarshal(bodyBytes, &result); err != nil {
+		return nil, errors.Wrapf(err, "cannot decode result %s", string(bodyBytes))
+	}
+	if result.Status != "ok" {
+		return nil, errors.New(fmt.Sprintf("error on POST::%s: %s", urlstr, result.Message))
+	}
+	return result, nil
 }
 
 func NewFairService(service, address string, certSkipVerify bool, jwtKey string, jwtAlg string, jwtLifetime time.Duration) (*FairClient, error) {
@@ -67,7 +86,7 @@ func (fs *FairClient) Ping() error {
 	if err != nil {
 		return errors.Wrap(err, "cannot read response body")
 	}
-	result := service.CreateResultStatus{}
+	result := service.FairResultStatus{}
 	if err := json.Unmarshal(bodyBytes, &result); err != nil {
 		return errors.Wrapf(err, "cannot decode result %s", string(bodyBytes))
 	}
@@ -178,7 +197,7 @@ func (fs *FairClient) Create(item *fair.ItemData) (*fair.ItemData, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot read response body")
 	}
-	result := service.CreateResultStatus{}
+	result := service.FairResultStatus{}
 	if err := json.Unmarshal(bodyBytes, &result); err != nil {
 		return nil, errors.Wrapf(err, "cannot decode result %s", string(bodyBytes))
 	}
@@ -260,7 +279,7 @@ func (fs *FairClient) ReadOriginalData(item *fair.ItemData) ([]byte, error) {
 		return nil, errors.Wrap(err, "cannot read response body")
 	}
 	if response.StatusCode != http.StatusOK {
-		result := service.CreateResultStatus{}
+		result := service.FairResultStatus{}
 		if err := json.Unmarshal(bodyBytes, &result); err != nil {
 			return nil, errors.Wrapf(err, "cannot decode result %s", string(bodyBytes))
 		}
@@ -302,6 +321,30 @@ func (fs *FairClient) AddArchiveItem(archive, uuid string) error {
 	tr, err := JWTInterceptor.NewJWTTransport(
 		fs.service,
 		"AddArchiveItem",
+		JWTInterceptor.Secure,
+		nil,
+		sha512.New(),
+		fs.jwtKey,
+		fs.jwtAlg,
+		fs.jwtLifetime)
+	if err != nil {
+		return errors.Wrapf(err, "cannot create jwt transport")
+	}
+	client := http.Client{Transport: tr}
+
+	data, err := json.Marshal(uuid)
+	if err != nil {
+		return errors.Wrapf(err, "cannot marshal [%v]", uuid)
+	}
+
+	urlstr := fmt.Sprintf("%s/archive/%s", fs.address, archive)
+	return postHelper(client, urlstr, data)
+}
+
+func (fs *FairClient) GetArchiveItem(archive, uuid string) error {
+	tr, err := JWTInterceptor.NewJWTTransport(
+		fs.service,
+		"GetArchiveItem",
 		JWTInterceptor.Secure,
 		nil,
 		sha512.New(),

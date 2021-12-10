@@ -15,6 +15,85 @@ import (
 	"time"
 )
 
+func itemDataFromRow(row interface{}, lastCols ...interface{}) (*ItemData, error) {
+	var uuidStr string
+	var metaStr string
+	var set, catalog []string
+	var accessStr string
+	var signature string
+	var sourceName string
+	var statusStr string
+	var seq int64
+	var identifier []string
+	var datestamp time.Time
+	cols := []interface{}{}
+	cols = append(cols, &uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &sourceName, &statusStr, &seq, &datestamp, pq.Array(&identifier))
+	cols = append(cols, lastCols...)
+	switch r := row.(type) {
+	case *sql.Row:
+		if err := r.Scan(cols...); err != nil {
+			return nil, errors.Wrapf(err, "cannot scan result")
+		}
+	case *sql.Rows:
+		if err := r.Scan(cols...); err != nil {
+			return nil, errors.Wrapf(err, "cannot scan result")
+		}
+	default:
+		return nil, errors.New(fmt.Sprintf("invalid type %T for data row", r))
+	}
+	data := &ItemData{
+		UUID:       uuidStr,
+		Source:     sourceName,
+		Signature:  signature,
+		Metadata:   myfair.Core{},
+		Set:        set,
+		Catalog:    catalog,
+		Seq:        seq,
+		Datestamp:  datestamp,
+		Identifier: identifier,
+	}
+	var ok bool
+	data.Access, ok = DataAccessReverse[accessStr]
+	if !ok {
+		return nil, errors.New(fmt.Sprintf("[%s] invalid access type %s", uuidStr, accessStr))
+	}
+	data.Status, ok = DataStatusReverse[statusStr]
+	if !ok {
+		return nil, errors.New(fmt.Sprintf("[%s] invalid status type %s", uuidStr, accessStr))
+	}
+	if err := json.Unmarshal([]byte(metaStr), &data.Metadata); err != nil {
+		return nil, errors.Wrapf(err, "[%s] cannot unmarshal core [%s]", uuidStr, metaStr)
+	}
+	// add local identifiers
+	for _, id := range data.Identifier {
+		strs := strings.SplitN(id, ":", 2)
+		if len(strs) != 2 {
+			continue
+		}
+
+		idType, ok := myfair.RelatedIdentifierTypeReverse[strs[0]]
+		if !ok {
+			//f.log.Warningf("[%s] unknown identifier type %s", uuidStr, id)
+			continue
+		}
+		idStr := strs[1]
+		found := false
+		for _, di := range data.Metadata.Identifier {
+			if di.IdentifierType == idType && di.Value == idStr {
+				found = true
+				break
+			}
+		}
+		if !found {
+			data.Metadata.Identifier = append(data.Metadata.Identifier, myfair.Identifier{
+				Value:          idStr,
+				IdentifierType: idType,
+			})
+		}
+	}
+	return data, nil
+}
+
 func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int64, completeListSize *int64, fn func(item *ItemData) error) error {
 	if completeListSize != nil {
 		sqlstr := fmt.Sprintf("SELECT COUNT(*) AS num"+
@@ -42,72 +121,12 @@ func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var uuidStr string
-		var metaStr string
-		var set, catalog []string
-		var accessStr string
-		var signature string
-		var sourceName string
-		var statusStr string
-		var seq int64
-		var identifier []string
-		var datestamp time.Time
-		if err := rows.Scan(&uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &sourceName, &statusStr, &seq, &datestamp, pq.Array(&identifier)); err != nil {
-			return errors.Wrapf(err, "cannot scan result of [%s] - [%v]", sqlstr, params)
+		data, err := itemDataFromRow(rows)
+		if err != nil {
+			return errors.Wrap(err, "cannot get data from result row")
 		}
-		data := &ItemData{
-			UUID:       uuidStr,
-			Source:     sourceName,
-			Signature:  signature,
-			Metadata:   myfair.Core{},
-			Set:        set,
-			Catalog:    catalog,
-			Seq:        seq,
-			Datestamp:  datestamp,
-			Identifier: identifier,
-		}
-		var ok bool
-		data.Access, ok = DataAccessReverse[accessStr]
-		if !ok {
-			return errors.New(fmt.Sprintf("[%s] invalid access type %s", uuidStr, accessStr))
-		}
-		data.Status, ok = DataStatusReverse[statusStr]
-		if !ok {
-			return errors.New(fmt.Sprintf("[%s] invalid status type %s", uuidStr, accessStr))
-		}
-		if err := json.Unmarshal([]byte(metaStr), &data.Metadata); err != nil {
-			return errors.Wrapf(err, "[%s] cannot unmarshal core [%s]", uuidStr, metaStr)
-		}
-		// add local identifiers
-		for _, id := range data.Identifier {
-			strs := strings.SplitN(id, ":", 2)
-			if len(strs) != 2 {
-				continue
-			}
-
-			idType, ok := myfair.RelatedIdentifierTypeReverse[strs[0]]
-			if !ok {
-				f.log.Warningf("[%s] unknown identifier type %s", uuidStr, id)
-				continue
-			}
-			idStr := strs[1]
-			found := false
-			for _, di := range data.Metadata.Identifier {
-				if di.IdentifierType == idType && di.Value == idStr {
-					found = true
-					break
-				}
-			}
-			if !found {
-				data.Metadata.Identifier = append(data.Metadata.Identifier, myfair.Identifier{
-					Value:          idStr,
-					IdentifierType: idType,
-				})
-			}
-		}
-
 		if err := fn(data); err != nil {
-			return errors.Wrap(err, "error calling fn")
+			return errors.Wrap(err, "error cal	ling fn")
 		}
 	}
 	return nil

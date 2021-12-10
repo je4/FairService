@@ -78,6 +78,14 @@ type SourceData struct {
 	Source string `json:"source"`
 }
 
+type ArchiveItem struct {
+	ItemData
+	NewFiles []string
+}
+
+type Archive struct {
+}
+
 func equalStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
@@ -252,7 +260,11 @@ func (f *Fair) GetSets(p *Partition) (map[string]string, error) {
 		if err := rows.Scan(&setspec, &setname); err != nil {
 			return nil, errors.Wrapf(err, "cannot scan sets query result - %s", sqlstr)
 		}
-		sets[setspec] = setname.String
+		if setname.Valid {
+			sets[setspec] = setname.String
+		} else {
+			sets[setspec] = setspec
+		}
 	}
 	return sets, nil
 }

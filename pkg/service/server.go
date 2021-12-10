@@ -277,6 +277,20 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 			))).
 		Methods("POST")
 	router.Handle(
+		"/{partition}/archive/{archive}",
+		handlers.CompressHandler(
+			JWTInterceptor.JWTInterceptor(
+				s.service,
+				"GetArchiveItem",
+				JWTInterceptor.Secure,
+				func() http.Handler { return http.HandlerFunc(s.getArchiveItemHandler) }(),
+				s.jwtKey,
+				s.jwtAlg,
+				sha512.New(),
+				s.log,
+			))).
+		Methods("GET")
+	router.Handle(
 		"/{partition}/abortupdate",
 		handlers.CompressHandler(
 			JWTInterceptor.JWTInterceptor(
