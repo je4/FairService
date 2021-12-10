@@ -84,6 +84,10 @@ type ArchiveItem struct {
 }
 
 type Archive struct {
+	Name         string
+	CreationDate time.Time
+	LastVersion  int64
+	Description  string
 }
 
 func equalStrings(a, b []string) bool {

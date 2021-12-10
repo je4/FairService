@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
+	"time"
 )
 
 func UniqString(arr []string) []string {
@@ -32,6 +33,27 @@ func UniqString(arr []string) []string {
 		}
 	}
 	return result
+}
+
+func (f *Fair) GetArchive(part *Partition, name string) (*Archive, error) {
+	sqlstr := fmt.Sprintf("SELECT creationdate, lastversion, description FROM %s.archive WHERE partition=$1 AND name=$2", f.dbSchema)
+	var creationdate sql.NullTime
+	var lastversion sql.NullInt64
+	archive := &Archive{}
+	if err := f.db.QueryRow(sqlstr, part.Name, name).Scan(&creationdate, &lastversion, &archive.Description); err != nil {
+		return nil, errors.Wrapf(err, "cannot scan values of %s", sqlstr)
+	}
+	if lastversion.Valid {
+		archive.LastVersion = lastversion.Int64
+	} else {
+		archive.LastVersion = -1
+	}
+	if creationdate.Valid {
+		archive.CreationDate = creationdate.Time
+	} else {
+		archive.CreationDate = time.Time{}
+	}
+	return archive, nil
 }
 
 func (f *Fair) AddArchive(part *Partition, name, description string) error {
