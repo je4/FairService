@@ -34,11 +34,6 @@ func UniqString(arr []string) []string {
 	return result
 }
 
-type ArchiveItem struct {
-	ItemData
-	NewFiles []string
-}
-
 func (f *Fair) AddArchive(part *Partition, name, description string) error {
 	sqlstr := fmt.Sprintf("INSERT INTO %s.archive(partition, name, description) "+
 		" VALUES($1, $2, $3) "+
