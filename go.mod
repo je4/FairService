@@ -7,7 +7,6 @@ replace github.com/je4/FairService/v2 => ./
 //replace github.com/je4/utils/v2 => ../utils/
 
 require (
-	emperror.dev/errors v0.8.0
 	github.com/BurntSushi/toml v0.4.1
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/bluele/gcache v0.0.2
