@@ -5,17 +5,17 @@ import (
 	"compress/gzip"
 	"database/sql"
 	"fmt"
-	"github.com/je4/FairService/v2/pkg/datatable"
 	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/FairService/v2/pkg/model/myfair"
 	"github.com/je4/FairService/v2/pkg/service/datacite"
 	hcClient "github.com/je4/HandleCreator/v2/pkg/client"
+	"github.com/je4/utils/v2/pkg/datatable"
+	"github.com/je4/utils/v2/pkg/zLogger"
 	"github.com/pkg/errors"
 	"io"
 
 	//"github.com/je4/FairService/v2/pkg/service"
 	"github.com/lib/pq"
-	"github.com/op/go-logging"
 	"strings"
 	"sync"
 	"time"
@@ -49,9 +49,10 @@ var DataAccessReverse = map[string]DataAccess{
 type DataStatus string
 
 const (
-	DataStatusActive   DataStatus = "active"
-	DataStatusDisabled DataStatus = "disabled"
-	DataStatusDeleted  DataStatus = "deleted"
+	DataStatusActive      DataStatus = "active"
+	DataStatusDisabled    DataStatus = "disabled"
+	DataStatusDeleted     DataStatus = "deleted"
+	DataStatusDeletedMeta DataStatus = "deleted_meta"
 )
 
 var DataStatusReverse = map[string]DataStatus{
@@ -110,10 +111,10 @@ type Fair struct {
 	sourcesMutex   sync.RWMutex
 	sources        map[int64]*Source
 	partitions     map[string]*Partition
-	log            *logging.Logger
+	log            zLogger.ZLogger
 }
 
-func NewFair(db *sql.DB, dbSchema string, handle *hcClient.HandleCreatorClient, dataciteClient *datacite.Client, log *logging.Logger) (*Fair, error) {
+func NewFair(db *sql.DB, dbSchema string, handle *hcClient.HandleCreatorClient, dataciteClient *datacite.Client, log zLogger.ZLogger) (*Fair, error) {
 	f := &Fair{
 		dbSchema:       dbSchema,
 		db:             db,
@@ -171,11 +172,11 @@ func (f *Fair) GetMinimumDatestamp(partition *Partition) (time.Time, error) {
 }
 
 func (f *Fair) RefreshSearch() error {
-	f.log.Info("refreshing meterialized view searchable")
+	f.log.Info().Msg("refreshing meterialized view searchable")
 	sqlstr := fmt.Sprintf("SELECT %s.refresh()", f.dbSchema)
 	_, err := f.db.Exec(sqlstr)
 	if err != nil {
-		f.log.Errorf("cannot refresh materialized view: %v - %v", sqlstr, err)
+		f.log.Error().Msgf("cannot refresh materialized view: %v - %v", sqlstr, err)
 		return errors.Wrapf(err, "error refreshing search view %s", sqlstr)
 	}
 	return nil
@@ -311,7 +312,7 @@ func (f *Fair) EndUpdate(p *Partition, source string) error {
 	sqlstr := fmt.Sprintf("UPDATE %s.core"+
 		" SET status=$1"+
 		" WHERE source=$2 AND uuid NOT IN (SELECT uuid FROM %s.core_dirty)", f.dbSchema, f.dbSchema)
-	params := []interface{}{DataStatusDisabled, src.ID}
+	params := []interface{}{DataStatusDeletedMeta, src.ID}
 	if _, err := f.db.Exec(sqlstr, params...); err != nil {
 		return errors.Wrapf(err, "cannot execute dirty update - %s - %v", sqlstr, params)
 	}
@@ -477,7 +478,7 @@ func (f *Fair) Search(p *Partition, dtr *datatable.Request) ([]map[string]string
 		" WHERE %s "+
 		" %s "+
 		" LIMIT %v OFFSET %v", sqlFields, f.dbSchema, f.dbSchema, sqlWhere, sqlOrder, dtr.Length, dtr.Start)
-	f.log.Infof("%s - %v", sqlstr, params)
+	f.log.Info().Msgf("%s - %v", sqlstr, params)
 	rows, err := f.db.Query(sqlstr, params...)
 	if err != nil {
 		return nil, 0, 0, errors.Wrapf(err, "cannot execute query %s - %v", sqlstr, params)

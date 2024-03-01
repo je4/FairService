@@ -11,7 +11,7 @@ import (
 	fair "github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/utils/v2/pkg/JWTInterceptor"
 	dcert "github.com/je4/utils/v2/pkg/cert"
-	"github.com/op/go-logging"
+	"github.com/je4/utils/v2/pkg/zLogger"
 	"github.com/pkg/errors"
 	"html/template"
 	"io"
@@ -31,14 +31,14 @@ type Server struct {
 	linkTokenExp         time.Duration
 	jwtKey               string
 	jwtAlg               []string
-	log                  *logging.Logger
+	log                  zLogger.ZLogger
 	accessLog            io.Writer
 	fair                 *fair.Fair
 	templates            map[string]*template.Template
 	resumptionTokenCache gcache.Cache
 }
 
-func NewServer(service, addr, name, password string, log *logging.Logger, fair *fair.Fair, accessLog io.Writer, jwtKey string, jwtAlg []string, linkTokenExp time.Duration) (*Server, error) {
+func NewServer(service, addr, name, password string, log zLogger.ZLogger, fair *fair.Fair, accessLog io.Writer, jwtKey string, jwtAlg []string, linkTokenExp time.Duration) (*Server, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot split address %s", addr)
@@ -330,26 +330,26 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 	}
 
 	if cert == "auto" || key == "auto" {
-		s.log.Info("generating new certificate")
+		s.log.Info().Msg("generating new certificate")
 		cert, err := dcert.DefaultCertificate()
 		if err != nil {
 			return errors.Wrap(err, "cannot generate default certificate")
 		}
 		s.srv.TLSConfig = &tls.Config{Certificates: []tls.Certificate{*cert}}
 		for _, part := range s.fair.GetPartitions() {
-			s.log.Infof("starting FAIR Data Point at %v - https://%s/%s", part.AddrExt, addr, part.Name)
+			s.log.Info().Msgf("starting FAIR Data Point at %v - https://%s/%s", part.AddrExt, addr, part.Name)
 		}
 		return s.srv.ListenAndServeTLS("", "")
 	} else if cert != "" && key != "" {
 		for _, part := range s.fair.GetPartitions() {
-			//			s.log.Infof("starting FAIR Data Point at %v", part.AddrExt)
-			s.log.Infof("starting FAIR Data Point at %v - https://%s/%s", part.AddrExt, addr, part.Name)
+			//			s.log.Info().Msgf("starting FAIR Data Point at %v", part.AddrExt)
+			s.log.Info().Msgf("starting FAIR Data Point at %v - https://%s/%s", part.AddrExt, addr, part.Name)
 		}
 		return s.srv.ListenAndServeTLS(cert, key)
 	} else {
 		for _, part := range s.fair.GetPartitions() {
-			//s.log.Infof("starting FAIR Data Point at %v", part.AddrExt)
-			s.log.Infof("starting FAIR Data Point at %v - http://%s/%s", part.AddrExt, addr, part.Name)
+			//s.log.Info().Msgf("starting FAIR Data Point at %v", part.AddrExt)
+			s.log.Info().Msgf("starting FAIR Data Point at %v - http://%s/%s", part.AddrExt, addr, part.Name)
 		}
 		return s.srv.ListenAndServe()
 	}

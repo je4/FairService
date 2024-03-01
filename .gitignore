@@ -15,5 +15,6 @@
 # vendor/
 .idea/
 ~*
-configs/fdp.toml
-configs/fdp2.toml
+configs/*.toml
+go.work
+*.sum

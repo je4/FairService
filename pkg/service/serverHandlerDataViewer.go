@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
-	"github.com/je4/FairService/v2/pkg/datatable"
+	"github.com/je4/utils/v2/pkg/datatable"
 	"net/http"
 )
 

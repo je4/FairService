@@ -75,6 +75,19 @@ func (s *Server) redirectHandler(w http.ResponseWriter, req *http.Request) {
 		w.Write([]byte(fmt.Sprintf("error loading item %s/%s: %v", pName, uuidStr, err)))
 		return
 	}
+	if data.Status == fair.DataStatusDeletedMeta {
+		tpl := s.templates["detail"]
+		if err := tpl.Execute(w, struct {
+			Part *fair.Partition
+			Data *fair.ItemData
+		}{Part: part, Data: data}); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Header().Set("Content-type", "text/plain")
+			w.Write([]byte(fmt.Sprintf("error executing template %s in partition %s: %v", "partition", pName, err)))
+			return
+		}
+		return
+	}
 	if data.Status != fair.DataStatusActive {
 		tpl := s.templates["deleted"]
 		if err := tpl.Execute(w, struct {
@@ -86,20 +99,19 @@ func (s *Server) redirectHandler(w http.ResponseWriter, req *http.Request) {
 			w.Write([]byte(fmt.Sprintf("error executing template %s in partition %s: %v", "partition", pName, err)))
 			return
 		}
-
-	} else {
-		source, err := s.fair.GetSourceByName(part, data.Source)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Header().Set("Content-type", "text/plain")
-			w.Write([]byte(fmt.Sprintf("error loading source %s for item %s/%s: %v", data.Source, pName, uuidStr, err)))
-			return
-		}
-
-		targetURL := strings.Replace(source.DetailURL, "{signature}", data.Signature, -1)
-
-		http.Redirect(w, req, targetURL, 301)
+		return
 	}
+	source, err := s.fair.GetSourceByName(part, data.Source)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Header().Set("Content-type", "text/plain")
+		w.Write([]byte(fmt.Sprintf("error loading source %s for item %s/%s: %v", data.Source, pName, uuidStr, err)))
+		return
+	}
+
+	targetURL := strings.Replace(source.DetailURL, "{signature}", data.Signature, -1)
+
+	http.Redirect(w, req, targetURL, 301)
 }
 
 func (s *Server) detailHandler(w http.ResponseWriter, req *http.Request) {
