@@ -9,7 +9,7 @@ import (
 	"github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/FairService/v2/pkg/model/dcmi"
-	"github.com/op/go-logging"
+	"github.com/je4/utils/v2/pkg/zLogger"
 	"io/ioutil"
 	"net/http"
 	"regexp"
@@ -23,18 +23,18 @@ type FairResultStatus struct {
 	ArchiveItems []*fair.ArchiveItem `json:"archiveitems,omitempty"`
 }
 
-func sendCreateResult(log *logging.Logger, w http.ResponseWriter, t string, message string, item *fair.ItemData) {
+func sendCreateResult(log zLogger.ZLogger, w http.ResponseWriter, t string, message string, item *fair.ItemData) {
 	if item != nil {
 		if t == "ok" {
-			log.Infof(fmt.Sprintf("%s: %s", message, item.UUID))
+			log.Info().Msgf("%s: %s", message, item.UUID)
 		} else {
-			log.Error(fmt.Sprintf("%s: %s", message, item.UUID))
+			log.Error().Msgf("%s: %s", message, item.UUID)
 		}
 	} else {
 		if t == "ok" {
-			log.Infof(fmt.Sprintf("%s", message))
+			log.Info().Msgf("%s", message)
 		} else {
-			log.Error(fmt.Sprintf("%s", message))
+			log.Error().Msgf("%s", message)
 		}
 	}
 	w.Header().Set("Content-type", "text/json")
@@ -435,7 +435,7 @@ func (s *Server) originalDataWriteHandler(w http.ResponseWriter, req *http.Reque
 
 	bdata, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		s.log.Errorf("cannot read request body: %v", err)
+		s.log.Error().Msgf("cannot read request body: %v", err)
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot read request body: %v", err), nil)
 		return
 	}
@@ -479,13 +479,13 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 	*/
 	bdata, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		s.log.Errorf("cannot read request body: %v", err)
+		s.log.Error().Msgf("cannot read request body: %v", err)
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot read request body: %v", err), nil)
 		return
 	}
 
 	if err := json.Unmarshal(bdata, data); err != nil {
-		s.log.Errorf("cannot unmarshal request body [%s]: %v", string(bdata), err)
+		s.log.Error().Msgf("cannot unmarshal request body [%s]: %v", string(bdata), err)
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot unmarshal request body [%s]: %v", string(bdata), err), nil)
 		return
 	}
@@ -506,24 +506,24 @@ func (s *Server) setSourceHandler(w http.ResponseWriter, req *http.Request) {
 	var data = &fair.Source{}
 	bdata, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		s.log.Errorf("cannot read request body: %v", err)
+		s.log.Error().Msgf("cannot read request body: %v", err)
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot read request body: %v", err), nil)
 		return
 	}
 
 	if err := json.Unmarshal(bdata, data); err != nil {
-		s.log.Errorf("cannot unmarshal request body [%s]: %v", string(bdata), err)
+		s.log.Error().Msgf("cannot unmarshal request body [%s]: %v", string(bdata), err)
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot unmarshal request body [%s]: %v", string(bdata), err), nil)
 		return
 	}
 	if data.Partition != pName {
-		s.log.Errorf("source and partition do not match %s != %s", data.Partition, pName)
+		s.log.Error().Msgf("source and partition do not match %s != %s", data.Partition, pName)
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("source and partition do not match %s != %s", data.Partition, pName), nil)
 		return
 	}
 
 	if err := s.fair.SetSource(data); err != nil {
-		s.log.Errorf("cannot create source %v: %v", data, err)
+		s.log.Error().Msgf("cannot create source %v: %v", data, err)
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot create source %v: %v", data, err), nil)
 		return
 	}
