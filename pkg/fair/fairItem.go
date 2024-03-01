@@ -326,7 +326,7 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 		if _, err = f.db.Exec(sqlstr, params...); err != nil {
 			return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
-		f.log.Infof("new item [%s] inserted", item.UUID)
+		f.log.Info().Msgf("new item [%s] inserted", item.UUID)
 
 		return item, nil
 
@@ -343,7 +343,7 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 
 			idType, ok := myfair.RelatedIdentifierTypeReverse[strs[0]]
 			if !ok {
-				f.log.Warningf("[%s] unknown identifier type %s", item.UUID, id)
+				f.log.Warn().Msgf("[%s] unknown identifier type %s", item.UUID, id)
 				continue
 			}
 			idStr := strs[1]
@@ -368,7 +368,7 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 			equalStrings(item.Set, data.Set) &&
 			equalStrings(item.Catalog, data.Catalog) &&
 			item.Access == data.Access {
-			f.log.Infof("no update needed for item [%v]", item.UUID)
+			f.log.Info().Msgf("no update needed for item [%v]", item.UUID)
 			sqlstr := fmt.Sprintf("INSERT INTO %s.core_dirty"+
 				" (uuid)"+
 				" VALUES($1)", f.dbSchema)
@@ -408,7 +408,7 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 		if _, err = f.db.Exec(sqlstr, params...); err != nil {
 			return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
-		f.log.Infof("item [%s] updated", item.UUID)
+		f.log.Info().Msgf("item [%s] updated", item.UUID)
 		item.Set = data.Set
 		item.Metadata = data.Metadata
 		item.Access = data.Access
