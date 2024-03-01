@@ -34,13 +34,13 @@ func (s *Server) createArchiveHandler(w http.ResponseWriter, req *http.Request) 
 	*/
 	bdata, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		s.log.Errorf("cannot read request body: %v", err)
+		s.log.Error().Msgf("cannot read request body: %v", err)
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot read request body: %v", err), nil)
 		return
 	}
 
 	if err := json.Unmarshal(bdata, data); err != nil {
-		s.log.Errorf("cannot unmarshal request body [%s]: %v", string(bdata), err)
+		s.log.Error().Msgf("cannot unmarshal request body [%s]: %v", string(bdata), err)
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot unmarshal request body [%s]: %v", string(bdata), err), nil)
 		return
 	}
@@ -61,7 +61,7 @@ func (s *Server) getArchiveItemHandler(w http.ResponseWriter, req *http.Request)
 
 	part, err := s.fair.GetPartition(pName)
 	if err != nil {
-		s.log.Errorf("partition [%s] not found", pName)
+		s.log.Error().Msgf("partition [%s] not found", pName)
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("partition [%s] not found", pName), nil)
 		return
 	}
@@ -70,7 +70,7 @@ func (s *Server) getArchiveItemHandler(w http.ResponseWriter, req *http.Request)
 		items = append(items, item)
 		return nil
 	}); err != nil {
-		s.log.Errorf("cannot get archive items: %v", err)
+		s.log.Error().Msgf("cannot get archive items: %v", err)
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot get archive items: %v", err), nil)
 		return
 	}
@@ -97,20 +97,20 @@ func (s *Server) addArchiveItemHandler(w http.ResponseWriter, req *http.Request)
 
 	bdata, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		s.log.Errorf("cannot read request body: %v", err)
+		s.log.Error().Msgf("cannot read request body: %v", err)
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot read request body: %v", err), nil)
 		return
 	}
 
 	if err := json.Unmarshal(bdata, &uuid); err != nil {
-		s.log.Errorf("cannot unmarshal request body [%s]: %v", string(bdata), err)
+		s.log.Error().Msgf("cannot unmarshal request body [%s]: %v", string(bdata), err)
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot unmarshal request body [%s]: %v", string(bdata), err), nil)
 		return
 	}
 
 	item, err := s.fair.GetItem(part, uuid)
 	if err != nil {
-		s.log.Errorf("cannot get item %s/%s: %v", part.Name, uuid, err)
+		s.log.Error().Msgf("cannot get item %s/%s: %v", part.Name, uuid, err)
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot get item %s/%s: %v", part.Name, uuid, err), nil)
 		return
 	}

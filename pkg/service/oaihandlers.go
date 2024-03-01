@@ -240,14 +240,14 @@ func (s *Server) oaiHandlerListMetadataFormats(w http.ResponseWriter, req *http.
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(pmh); err != nil {
-		s.log.Error("cannot encode pmh - %v: %v", pmh, err)
+		s.log.Error().Msgf("cannot encode pmh - %v: %v", pmh, err)
 	}
 }
 
 func (s *Server) oaiHandlerIdentify(w http.ResponseWriter, req *http.Request, partition *fair.Partition, context string) {
 	earliestDatestamp, err := s.fair.GetMinimumDatestamp(partition)
 	if err != nil {
-		s.log.Errorf("cannot get earliest datestamp: %v", err)
+		s.log.Error().Msgf("cannot get earliest datestamp: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(fmt.Sprintf("cannot get earliest datestamp")))
 		return
@@ -280,25 +280,25 @@ func (s *Server) oaiHandlerIdentify(w http.ResponseWriter, req *http.Request, pa
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(pmh); err != nil {
-		s.log.Error("cannot encode pmh - %v: %v", pmh, err)
+		s.log.Error().Msgf("cannot encode pmh - %v: %v", pmh, err)
 	}
 }
 
 func (s *Server) oaiHandlerGetRecord(w http.ResponseWriter, req *http.Request, partition *fair.Partition, context, identifier, metadataPrefix string) {
 	uuidStr := strings.TrimPrefix(identifier, fmt.Sprintf("%s:%s:", partition.OAIScheme, partition.Domain))
 	if uuidStr == identifier {
-		s.log.Infof("invalid identifier for partition %s: %s", partition.Name, identifier)
+		s.log.Info().Msgf("invalid identifier for partition %s: %s", partition.Name, identifier)
 		sendError(w, oai.ErrorCodeIdDoesNotExist, "", "GetRecord", identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
 		return
 	}
 	data, err := s.fair.GetItem(partition, uuidStr)
 	if err != nil {
-		s.log.Infof("cannot get item %s: %v", uuidStr, err)
+		s.log.Info().Msgf("cannot get item %s: %v", uuidStr, err)
 		sendError(w, oai.ErrorCodeIdDoesNotExist, "", "GetRecord", identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
 		return
 	}
 	if data == nil {
-		s.log.Infof("item %s not found", uuidStr)
+		s.log.Info().Msgf("item %s not found", uuidStr)
 		sendError(w, oai.ErrorCodeIdDoesNotExist, "", "GetRecord", identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
 		return
 	}
@@ -318,7 +318,7 @@ func (s *Server) oaiHandlerGetRecord(w http.ResponseWriter, req *http.Request, p
 		dataciteData.FromCore(data.Metadata)
 		metadata.Datacite = dataciteData
 	default:
-		s.log.Infof("invalid metadataPrefix %s", metadataPrefix)
+		s.log.Info().Msgf("invalid metadataPrefix %s", metadataPrefix)
 		sendError(w, oai.ErrorCodeCannotDisseminateFormat, fmt.Sprintf("invalid metadataPrefix %s", metadataPrefix), "GetRecord", identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
 		return
 	}
@@ -344,7 +344,7 @@ func (s *Server) oaiHandlerGetRecord(w http.ResponseWriter, req *http.Request, p
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(pmh); err != nil {
-		s.log.Error("cannot encode pmh - %v: %v", pmh, err)
+		s.log.Error().Msgf("cannot encode pmh - %v: %v", pmh, err)
 	}
 }
 
@@ -372,7 +372,7 @@ func (s *Server) oaiHandlerListIdentifiers(w http.ResponseWriter, req *http.Requ
 		if !ok {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(fmt.Sprintf("invalid resumption data: %v", data)))
-			s.log.Errorf("invalid resumption data: %v", data)
+			s.log.Error().Msgf("invalid resumption data: %v", data)
 			s.resumptionTokenCache.Remove(resumptionToken)
 			return
 		}
@@ -491,7 +491,7 @@ func (s *Server) oaiHandlerListIdentifiers(w http.ResponseWriter, req *http.Requ
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(pmh); err != nil {
-		s.log.Error("cannot encode pmh - %v: %v", pmh, err)
+		s.log.Error().Msgf("cannot encode pmh - %v: %v", pmh, err)
 	}
 
 }
@@ -504,7 +504,7 @@ func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request,
 	case "oai_dc":
 	case "oai_datacite":
 	default:
-		s.log.Infof("invalid metadataPrefix %s", metadataPrefix)
+		s.log.Info().Msgf("invalid metadataPrefix %s", metadataPrefix)
 		sendError(w, oai.ErrorCodeCannotDisseminateFormat, fmt.Sprintf("invalid metadataPrefix %s", metadataPrefix), "ListRecords", "", metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
 		return
 	}
@@ -521,7 +521,7 @@ func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request,
 		if !ok {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(fmt.Sprintf("invalid resumption data: %v", data)))
-			s.log.Errorf("invalid resumption data: %v", data)
+			s.log.Error().Msgf("invalid resumption data: %v", data)
 			s.resumptionTokenCache.Remove(resumptionToken)
 			return
 		}
@@ -660,7 +660,7 @@ func (s *Server) oaiHandlerListRecords(w http.ResponseWriter, req *http.Request,
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(pmh); err != nil {
-		s.log.Error("cannot encode pmh - %v: %v", pmh, err)
+		s.log.Error().Msgf("cannot encode pmh - %v: %v", pmh, err)
 	}
 
 }
@@ -696,6 +696,6 @@ func (s *Server) oaiHandlerListSets(w http.ResponseWriter, req *http.Request, pa
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(pmh); err != nil {
-		s.log.Error("cannot encode pmh - %v: %v", pmh, err)
+		s.log.Error().Msgf("cannot encode pmh - %v: %v", pmh, err)
 	}
 }
