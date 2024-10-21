@@ -10,6 +10,7 @@ import (
 	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/FairService/v2/pkg/model/dcmi"
 	"github.com/je4/utils/v2/pkg/zLogger"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"regexp"
@@ -477,7 +478,7 @@ func (s *Server) createHandler(w http.ResponseWriter, req *http.Request) {
 		decoder := json.NewDecoder(req.Body)
 		err := decoder.Decode(&data)
 	*/
-	bdata, err := ioutil.ReadAll(req.Body)
+	bdata, err := io.ReadAll(req.Body)
 	if err != nil {
 		s.log.Error().Msgf("cannot read request body: %v", err)
 		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot read request body: %v", err), nil)

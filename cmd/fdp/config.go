@@ -2,6 +2,8 @@ package main
 
 import (
 	"github.com/BurntSushi/toml"
+	"github.com/je4/utils/v2/pkg/config"
+	"go.ub.unibas.ch/cloud/certloader/v2/pkg/loader"
 	"log"
 	"strings"
 	"time"
@@ -19,7 +21,7 @@ func (d *duration) UnmarshalText(text []byte) error {
 
 type CfgDatabase struct {
 	ServerType string
-	DSN        string
+	DSN        config.EnvString
 	ConnMax    int `toml:"connection_max"`
 	Schema     string
 }
@@ -85,8 +87,7 @@ type Config struct {
 	Logformat    string               `toml:"logformat"`
 	AccessLog    string               `toml:"accesslog"`
 	Addr         string               `toml:"addr"`
-	CertPEM      string               `toml:"certpem"`
-	KeyPEM       string               `toml:"keypem"`
+	TLSConfig    *loader.Config       `toml:"tls"`
 	JWTKey       string               `toml:"jwtkey"`
 	JWTAlg       []string             `toml:"jwtalg"`
 	LinkTokenExp duration             `toml:"linktokenexp"`

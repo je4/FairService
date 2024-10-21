@@ -10,7 +10,6 @@ import (
 	"github.com/gorilla/mux"
 	fair "github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/utils/v2/pkg/JWTInterceptor"
-	dcert "github.com/je4/utils/v2/pkg/cert"
 	"github.com/je4/utils/v2/pkg/zLogger"
 	"github.com/pkg/errors"
 	"html/template"
@@ -80,7 +79,10 @@ func (s *Server) InitTemplates() error {
 	return nil
 }
 
-func (s *Server) ListenAndServe(cert, key string) (err error) {
+func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
+	if tlsConfig == nil {
+		return errors.New("TLS config is nil")
+	}
 	router := mux.NewRouter()
 
 	fsys, err := fs.Sub(staticFS, "static")
@@ -325,34 +327,15 @@ func (s *Server) ListenAndServe(cert, key string) (err error) {
 	loggedRouter := handlers.CombinedLoggingHandler(s.accessLog, handlers.ProxyHeaders(router))
 	addr := net.JoinHostPort(s.host, s.port)
 	s.srv = &http.Server{
-		Handler: loggedRouter,
-		Addr:    addr,
+		Handler:   loggedRouter,
+		Addr:      addr,
+		TLSConfig: tlsConfig,
 	}
 
-	if cert == "auto" || key == "auto" {
-		s.log.Info().Msg("generating new certificate")
-		cert, err := dcert.DefaultCertificate()
-		if err != nil {
-			return errors.Wrap(err, "cannot generate default certificate")
-		}
-		s.srv.TLSConfig = &tls.Config{Certificates: []tls.Certificate{*cert}}
-		for _, part := range s.fair.GetPartitions() {
-			s.log.Info().Msgf("starting FAIR Data Point at %v - https://%s/%s", part.AddrExt, addr, part.Name)
-		}
-		return s.srv.ListenAndServeTLS("", "")
-	} else if cert != "" && key != "" {
-		for _, part := range s.fair.GetPartitions() {
-			//			s.log.Info().Msgf("starting FAIR Data Point at %v", part.AddrExt)
-			s.log.Info().Msgf("starting FAIR Data Point at %v - https://%s/%s", part.AddrExt, addr, part.Name)
-		}
-		return s.srv.ListenAndServeTLS(cert, key)
-	} else {
-		for _, part := range s.fair.GetPartitions() {
-			//s.log.Info().Msgf("starting FAIR Data Point at %v", part.AddrExt)
-			s.log.Info().Msgf("starting FAIR Data Point at %v - http://%s/%s", part.AddrExt, addr, part.Name)
-		}
-		return s.srv.ListenAndServe()
+	for _, part := range s.fair.GetPartitions() {
+		s.log.Info().Msgf("starting FAIR Data Point at %v - https://%s/%s", part.AddrExt, addr, part.Name)
 	}
+	return s.srv.ListenAndServeTLS("", "")
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {

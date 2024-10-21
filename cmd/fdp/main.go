@@ -4,13 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"flag"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/FairService/v2/pkg/service"
 	"github.com/je4/FairService/v2/pkg/service/datacite"
 	hcClient "github.com/je4/HandleCreator/v2/pkg/client"
 	"github.com/je4/utils/v2/pkg/zLogger"
-	_ "github.com/lib/pq"
 	"github.com/rs/zerolog"
+	"go.ub.unibas.ch/cloud/certloader/v2/pkg/loader"
 	"io"
 	"log"
 	"os"
@@ -40,7 +41,7 @@ func main() {
 	var logger zLogger.ZLogger = &_logger
 
 	// get database connection handle
-	db, err := sql.Open(config.DB.ServerType, config.DB.DSN)
+	db, err := sql.Open(config.DB.ServerType, string(config.DB.DSN))
 	if err != nil {
 		log.Fatalf("error opening database: %v", err)
 	}
@@ -136,12 +137,20 @@ func main() {
 		fair.AddPartition(p)
 	}
 
+	// create TLS Certificate.
+	// the certificate MUST contain <package>.<service> as DNS name
+	serverTLSConfig, serverLoader, err := loader.CreateServerLoader(true, config.TLSConfig, nil, logger)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("cannot create server loader")
+	}
+	defer serverLoader.Close()
+
 	srv, err := service.NewServer(config.ServiceName, config.Addr, config.UserName, config.Password, logger, fair, accessLog, config.JWTKey, config.JWTAlg, config.LinkTokenExp.Duration)
 	if err != nil {
 		logger.Panic().Msgf("cannot initialize server: %v", err)
 	}
 	go func() {
-		if err := srv.ListenAndServe(config.CertPEM, config.KeyPEM); err != nil {
+		if err := srv.ListenAndServe(serverTLSConfig); err != nil {
 			log.Fatalf("server died: %v", err)
 		}
 	}()
