@@ -2,57 +2,135 @@ package main
 
 import (
 	"context"
-	"database/sql"
+	"crypto/tls"
 	"flag"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/FairService/v2/pkg/service"
 	"github.com/je4/FairService/v2/pkg/service/datacite"
 	hcClient "github.com/je4/HandleCreator/v2/pkg/client"
 	"github.com/je4/utils/v2/pkg/zLogger"
-	"github.com/rs/zerolog"
+	ublogger "gitlab.switch.ch/ub-unibas/go-ublogger/v2"
 	"go.ub.unibas.ch/cloud/certloader/v2/pkg/loader"
 	"io"
 	"log"
 	"os"
 	"os/signal"
+	"regexp"
+	"strings"
 	"syscall"
 	"time"
 )
+
+type queryTracer struct {
+	log zLogger.ZLogger
+}
+
+func (tracer *queryTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+	tracer.log.Debug().Msgf("postgreSQL command start '%s' - %v", data.SQL, data.Args)
+	return ctx
+}
+
+func (tracer *queryTracer) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryEndData) {
+	if data.Err != nil {
+		tracer.log.Error().Err(data.Err).Msgf("postgreSQL command error")
+		return
+	}
+	tracer.log.Debug().Msgf("postgreSQL command end: %s (%d)", data.CommandTag.String(), data.CommandTag.RowsAffected())
+}
 
 func main() {
 	cfgFile := flag.String("cfg", "/etc/fdp.toml", "locations of config file")
 	flag.Parse()
 	config := LoadConfig(*cfgFile)
 
-	var out io.Writer = os.Stdout
-	if config.Logfile != "" {
-		fp, err := os.OpenFile(config.Logfile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.Fatalf("cannot get hostname: %v", err)
+	}
+
+	var loggerTLSConfig *tls.Config
+	var loggerLoader io.Closer
+	if config.Log.Stash.TLS != nil {
+		loggerTLSConfig, loggerLoader, err = loader.CreateClientLoader(config.Log.Stash.TLS, nil)
 		if err != nil {
-			log.Fatalf("cannot open logfile %s: %v", config.Logfile, err)
+			log.Fatalf("cannot create client loader: %v", err)
 		}
-		defer fp.Close()
-		out = fp
+		defer loggerLoader.Close()
 	}
 
-	output := zerolog.ConsoleWriter{Out: out, TimeFormat: time.RFC3339}
-	_logger := zerolog.New(output).With().Timestamp().Logger()
-	_logger.Level(zLogger.LogLevel(config.Loglevel))
-	var logger zLogger.ZLogger = &_logger
-
-	// get database connection handle
-	db, err := sql.Open(config.DB.ServerType, string(config.DB.DSN))
+	_logger, _logstash, _logfile, err := ublogger.CreateUbMultiLoggerTLS(config.Log.Level, config.Log.File,
+		ublogger.SetDataset(config.Log.Stash.Dataset),
+		ublogger.SetLogStash(config.Log.Stash.LogstashHost, config.Log.Stash.LogstashPort, config.Log.Stash.Namespace, config.Log.Stash.LogstashTraceLevel),
+		ublogger.SetTLS(config.Log.Stash.TLS != nil),
+		ublogger.SetTLSConfig(loggerTLSConfig),
+	)
 	if err != nil {
-		log.Fatalf("error opening database: %v", err)
+		log.Fatalf("cannot create logger: %v", err)
 	}
-	// close on shutdown
-	defer db.Close()
+	if _logstash != nil {
+		defer _logstash.Close()
+	}
+	if _logfile != nil {
+		defer _logfile.Close()
+	}
 
-	// Open doesn't open a connection. Validate DSN data:
-	err = db.Ping()
+	l2 := _logger.With().Timestamp().Str("host", hostname).Logger() //.Output(output)
+	var logger zLogger.ZLogger = &l2
+
+	pgxConf, err := pgxpool.ParseConfig(string(config.DB.DSN))
 	if err != nil {
-		log.Fatalf("error pinging database: %v", err)
+		logger.Fatal().Err(err).Msg("cannot parse db connection string")
 	}
+	//	pgxConf.TLSConfig = &tls.Config{InsecureSkipVerify: true, ServerName: "dd-pdb3.ub.unibas.ch"}
+	// create prepared queries on each connection
+	/*
+		pgxConf.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+			return service.AfterConnectFunc(ctx, conn, logger)
+		}
+	*/
+	pgxConf.BeforeConnect = func(ctx context.Context, cfg *pgx.ConnConfig) error {
+		cfg.Tracer = &queryTracer{log: logger}
+		return nil
+	}
+	var conn *pgxpool.Pool
+	var dbstrRegexp = regexp.MustCompile(`^postgres://postgres:([^@]+)@.+$`)
+	pws := dbstrRegexp.FindStringSubmatch(string(config.DB.DSN))
+	if len(pws) == 2 {
+		logger.Info().Msgf("connecting to database: %s", strings.Replace(string(config.DB.DSN), pws[1], "xxxxxxxx", -1))
+	} else {
+		logger.Info().Msgf("connecting to database")
+	}
+	db, err := pgxpool.NewWithConfig(context.Background(), pgxConf)
+	//conn, err = pgx.ConnectConfig(context.Background(), pgxConf)
+	if err != nil {
+		logger.Fatal().Err(err).Msgf("cannot connect to database: %s", config.DB.DSN)
+	}
+	defer conn.Close()
+
+	if err := db.Ping(context.Background()); err != nil {
+		logger.Error().Err(err).Msg("cannot ping database")
+	} else {
+		logger.Info().Msg("database connection established")
+	}
+	/*
+		// get database connection handle
+		db, err := sql.Open(config.DB.ServerType, string(config.DB.DSN))
+		if err != nil {
+			log.Fatalf("error opening database: %v", err)
+		}
+		// close on shutdown
+		defer db.Close()
+
+		// Open doesn't open a connection. Validate DSN data:
+		err = db.Ping()
+		if err != nil {
+			log.Fatalf("error pinging database: %v", err)
+		}
+
+	*/
 
 	var accessLog io.Writer
 	var f *os.File

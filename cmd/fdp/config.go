@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/BurntSushi/toml"
 	"github.com/je4/utils/v2/pkg/config"
+	"github.com/je4/utils/v2/pkg/stashconfig"
 	"go.ub.unibas.ch/cloud/certloader/v2/pkg/loader"
 	"log"
 	"strings"
@@ -82,9 +83,7 @@ type Datacite struct {
 
 type Config struct {
 	ServiceName  string               `toml:"servicename"`
-	Logfile      string               `toml:"logfile"`
-	Loglevel     string               `toml:"loglevel"`
-	Logformat    string               `toml:"logformat"`
+	Log          stashconfig.Config   `toml:"log"`
 	AccessLog    string               `toml:"accesslog"`
 	Addr         string               `toml:"addr"`
 	TLSConfig    *loader.Config       `toml:"tls"`

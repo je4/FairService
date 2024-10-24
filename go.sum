@@ -153,11 +153,15 @@ github.com/swaggo/gin-swagger v1.6.0 h1:y8sxvQ3E20/RCyrXeFfg60r6H0Z+SwpTjMYsMm+z
 github.com/swaggo/gin-swagger v1.6.0/go.mod h1:BG00cCEy294xtVpyIAHG6+e2Qzj/xKlRdOqDkvq0uzo=
 github.com/swaggo/swag v1.16.4 h1:clWJtd9LStiG3VeijiCfOVODP6VpHtKdQy9ELFG3s1A=
 github.com/swaggo/swag v1.16.4/go.mod h1:VBsHJRsDvfYvqoiMKnsdwhNV9LEMHgEDZcyVYX0sxPg=
+github.com/telkomdev/go-stash v1.0.6 h1:kWvGHBPdhE+OZMqI50qBF3yTl8jirIvT/SSAH+7dXfM=
+github.com/telkomdev/go-stash v1.0.6/go.mod h1:HpABvMdvmsTtLrqK59YV44lrdfXQtoKX5RPehHD/zQQ=
 github.com/twitchyliquid64/golang-asm v0.15.1 h1:SU5vSMR7hnwNxj24w34ZyCi/FmDZTkS4MhqMhdFk5YI=
 github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2+aY1QWCk3Cedj/Gdt08=
 github.com/ugorji/go/codec v1.2.12 h1:9LC83zGrHhuUA9l16C9AHXAqEV/2wBQ4nkvumAE65EE=
 github.com/ugorji/go/codec v1.2.12/go.mod h1:UNopzCgEMSXjBc6AOMqYvWC1ktqTAfzJZUZgYf6w6lg=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
+gitlab.switch.ch/ub-unibas/go-ublogger/v2 v2.0.1 h1:B/XpfKBC3IwbecBIxX9G6ZZ8GgtsOdkPkV2LuAUIJL0=
+gitlab.switch.ch/ub-unibas/go-ublogger/v2 v2.0.1/go.mod h1:A9W/cBMpdDDiuGCeNiTS9JRlCLRxApXEhi1q/j/mAws=
 go.step.sm/crypto v0.54.0 h1:V8p+12Ld0NRA/RBMYoKXA0dWmVKZSdCwP56IwzweT9g=
 go.step.sm/crypto v0.54.0/go.mod h1:vQJyTngfZDW+UyZdFzOMCY/txWDAmcwViEUC7Gn4YfU=
 go.ub.unibas.ch/cloud/certloader/v2 v2.0.12 h1:vxZZ73oP/m7n9XqjV6AnjFmXXYcf9h8jkm4976f77bI=
