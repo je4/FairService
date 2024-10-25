@@ -160,6 +160,8 @@ github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2
 github.com/ugorji/go/codec v1.2.12 h1:9LC83zGrHhuUA9l16C9AHXAqEV/2wBQ4nkvumAE65EE=
 github.com/ugorji/go/codec v1.2.12/go.mod h1:UNopzCgEMSXjBc6AOMqYvWC1ktqTAfzJZUZgYf6w6lg=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
+gitlab.switch.ch/ub-unibas/go-testhelpers v0.0.0-20231004070116-a92f04ad03a5 h1:+89nmZvA6q0f9KCb06cKxiLzH3I3OiYvakwbdcFe170=
+gitlab.switch.ch/ub-unibas/go-testhelpers v0.0.0-20231004070116-a92f04ad03a5/go.mod h1:5CiTAKHNkvIYjvDJiXjGG662QdWsY6gLmnsdEKbwQKA=
 gitlab.switch.ch/ub-unibas/go-ublogger/v2 v2.0.1 h1:B/XpfKBC3IwbecBIxX9G6ZZ8GgtsOdkPkV2LuAUIJL0=
 gitlab.switch.ch/ub-unibas/go-ublogger/v2 v2.0.1/go.mod h1:A9W/cBMpdDDiuGCeNiTS9JRlCLRxApXEhi1q/j/mAws=
 go.step.sm/crypto v0.54.0 h1:V8p+12Ld0NRA/RBMYoKXA0dWmVKZSdCwP56IwzweT9g=

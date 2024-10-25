@@ -139,7 +139,7 @@ func main() {
 	} else {
 		f, err = os.OpenFile(config.AccessLog, os.O_WRONLY|os.O_CREATE, 0755)
 		if err != nil {
-			logger.Panic().Msgf("cannot open file %s: %v", config.AccessLog, err)
+			logger.Fatal().Msgf("cannot open file %s: %v", config.AccessLog, err)
 			return
 		}
 		defer f.Close()
@@ -154,19 +154,19 @@ func main() {
 			config.Datacite.Password,
 			config.Datacite.Prefix)
 		if err != nil {
-			logger.Panic().Msgf("cannot create datacite client: %v", err)
+			logger.Fatal().Msgf("cannot create datacite client: %v", err)
 			return
 		}
 
 		if err := dataciteClient.Heartbeat(); err != nil {
-			logger.Panic().Msgf("cannot check datacite heartbeat: %v", err)
+			logger.Fatal().Msgf("cannot check datacite heartbeat: %v", err)
 			return
 		}
 
 		/*
 			r, err := dataciteClient.RetrieveDOI("10.5438/0012")
 			if err != nil {
-				logger.Panic().Msgf("cannot get doi: %v", err)
+				logger.Fatal().Msgf("cannot get doi: %v", err)
 				return
 			}
 			logger.Info().Msgf("doi: %v", r)
@@ -176,7 +176,7 @@ func main() {
 	if config.Handle.Addr != "" {
 		handle, err = hcClient.NewHandleCreatorClient(config.Handle.ServiceName, config.Handle.Addr, config.Handle.JWTKey, config.Handle.JWTAlg, config.Handle.SkipCertVerify, logger)
 		if err != nil {
-			logger.Panic().Msgf("cannot create handle service: %v", err)
+			logger.Fatal().Msgf("cannot create handle service: %v", err)
 			return
 		}
 	} else {
@@ -201,7 +201,7 @@ func main() {
 			pconf.JWTKey,
 			pconf.JWTAlg)
 		if err != nil {
-			logger.Panic().Msgf("cannot create partition %s: %v", pconf.Name, err)
+			logger.Fatal().Msgf("cannot create partition %s: %v", pconf.Name, err)
 			return
 		}
 		partitions = append(partitions, p)
@@ -209,7 +209,7 @@ func main() {
 
 	fair, err := fair.NewFair(db, config.DB.Schema, handle, dataciteClient, logger)
 	if err != nil {
-		logger.Panic().Msgf("cannot initialize fair: %v", err)
+		logger.Fatal().Msgf("cannot initialize fair: %v", err)
 	}
 	for _, p := range partitions {
 		fair.AddPartition(p)
@@ -225,7 +225,7 @@ func main() {
 
 	srv, err := service.NewServer(config.ServiceName, config.Addr, config.UserName, config.Password, logger, fair, accessLog, config.JWTKey, config.JWTAlg, config.LinkTokenExp.Duration)
 	if err != nil {
-		logger.Panic().Msgf("cannot initialize server: %v", err)
+		logger.Fatal().Msgf("cannot initialize server: %v", err)
 	}
 	go func() {
 		if err := srv.ListenAndServe(serverTLSConfig); err != nil {

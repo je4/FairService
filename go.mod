@@ -5,6 +5,7 @@ go 1.23.0
 toolchain go1.23.1
 
 require (
+	emperror.dev/errors v0.8.1
 	github.com/BurntSushi/toml v1.4.0
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/bluele/gcache v0.0.2
@@ -17,11 +18,11 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.33.0
+	gitlab.switch.ch/ub-unibas/go-ublogger/v2 v2.0.1
 	go.ub.unibas.ch/cloud/certloader/v2 v2.0.12
 )
 
 require (
-	emperror.dev/errors v0.8.1 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/KyleBanks/depth v1.2.1 // indirect
 	github.com/bytedance/sonic v1.12.3 // indirect
@@ -67,7 +68,6 @@ require (
 	github.com/telkomdev/go-stash v1.0.6 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
-	gitlab.switch.ch/ub-unibas/go-ublogger/v2 v2.0.1 // indirect
 	go.step.sm/crypto v0.54.0 // indirect
 	go.ub.unibas.ch/cloud/minivault/v2 v2.0.5 // indirect
 	go.uber.org/multierr v1.11.0 // indirect

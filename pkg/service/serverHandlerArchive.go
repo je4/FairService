@@ -35,22 +35,22 @@ func (s *Server) createArchiveHandler(w http.ResponseWriter, req *http.Request) 
 	bdata, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		s.log.Error().Msgf("cannot read request body: %v", err)
-		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot read request body: %v", err), nil)
+		sendResult(s.log, w, "error", fmt.Sprintf("cannot read request body: %v", err), nil)
 		return
 	}
 
 	if err := json.Unmarshal(bdata, data); err != nil {
 		s.log.Error().Msgf("cannot unmarshal request body [%s]: %v", string(bdata), err)
-		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot unmarshal request body [%s]: %v", string(bdata), err), nil)
+		sendResult(s.log, w, "error", fmt.Sprintf("cannot unmarshal request body [%s]: %v", string(bdata), err), nil)
 		return
 	}
 
 	name := fmt.Sprintf("%s.%s", part.Name, data.Name)
 	if err := s.fair.AddArchive(part, fmt.Sprintf("%s.%s", part.Name, name), data.Description); err != nil {
-		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot create item: %v", err), nil)
+		sendResult(s.log, w, "error", fmt.Sprintf("cannot create item: %v", err), nil)
 		return
 	}
-	sendCreateResult(s.log, w, "ok", fmt.Sprintf("archive %s created", name), nil)
+	sendResult(s.log, w, "ok", fmt.Sprintf("archive %s created", name), nil)
 	return
 }
 
@@ -62,7 +62,7 @@ func (s *Server) getArchiveItemHandler(w http.ResponseWriter, req *http.Request)
 	part, err := s.fair.GetPartition(pName)
 	if err != nil {
 		s.log.Error().Msgf("partition [%s] not found", pName)
-		sendCreateResult(s.log, w, "error", fmt.Sprintf("partition [%s] not found", pName), nil)
+		sendResult(s.log, w, "error", fmt.Sprintf("partition [%s] not found", pName), nil)
 		return
 	}
 	var items = []*fair.ArchiveItem{}
@@ -71,7 +71,7 @@ func (s *Server) getArchiveItemHandler(w http.ResponseWriter, req *http.Request)
 		return nil
 	}); err != nil {
 		s.log.Error().Msgf("cannot get archive items: %v", err)
-		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot get archive items: %v", err), nil)
+		sendResult(s.log, w, "error", fmt.Sprintf("cannot get archive items: %v", err), nil)
 		return
 	}
 
@@ -98,20 +98,20 @@ func (s *Server) addArchiveItemHandler(w http.ResponseWriter, req *http.Request)
 	bdata, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		s.log.Error().Msgf("cannot read request body: %v", err)
-		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot read request body: %v", err), nil)
+		sendResult(s.log, w, "error", fmt.Sprintf("cannot read request body: %v", err), nil)
 		return
 	}
 
 	if err := json.Unmarshal(bdata, &uuid); err != nil {
 		s.log.Error().Msgf("cannot unmarshal request body [%s]: %v", string(bdata), err)
-		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot unmarshal request body [%s]: %v", string(bdata), err), nil)
+		sendResult(s.log, w, "error", fmt.Sprintf("cannot unmarshal request body [%s]: %v", string(bdata), err), nil)
 		return
 	}
 
 	item, err := s.fair.GetItem(part, uuid)
 	if err != nil {
 		s.log.Error().Msgf("cannot get item %s/%s: %v", part.Name, uuid, err)
-		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot get item %s/%s: %v", part.Name, uuid, err), nil)
+		sendResult(s.log, w, "error", fmt.Sprintf("cannot get item %s/%s: %v", part.Name, uuid, err), nil)
 		return
 	}
 
@@ -120,9 +120,9 @@ func (s *Server) addArchiveItemHandler(w http.ResponseWriter, req *http.Request)
 		err := decoder.Decode(&data)
 	*/
 	if err := s.fair.AddArchiveItem(part, fmt.Sprintf("%s.%s", part.Name, archive), item); err != nil {
-		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot add item %s to %s: %v", item.UUID, archive, err), nil)
+		sendResult(s.log, w, "error", fmt.Sprintf("cannot add item %s to %s: %v", item.UUID, archive, err), nil)
 		return
 	}
-	sendCreateResult(s.log, w, "ok", "archive %s created", nil)
+	sendResult(s.log, w, "ok", "archive %s created", nil)
 	return
 }

@@ -1,12 +1,14 @@
 package fair
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/je4/FairService/v2/pkg/model/myfair"
-	"github.com/lib/pq"
 	"github.com/pkg/errors"
 	"net/url"
 	"reflect"
@@ -18,16 +20,27 @@ import (
 func itemDataFromRow(row interface{}, lastCols ...interface{}) (*ItemData, error) {
 	var uuidStr string
 	var metaStr string
-	var set, catalog []string
 	var accessStr string
 	var signature string
 	var sourceName string
 	var statusStr string
 	var seq int64
-	var identifier []string
 	var datestamp time.Time
+	var setArr, catalogArr, identifierArr pgtype.FlatArray[string]
 	cols := []interface{}{}
-	cols = append(cols, &uuidStr, &metaStr, pq.Array(&set), pq.Array(&catalog), &accessStr, &signature, &sourceName, &statusStr, &seq, &datestamp, pq.Array(&identifier))
+	cols = append(cols,
+		&uuidStr,
+		&metaStr,
+		&setArr,
+		&catalogArr,
+		&accessStr,
+		&signature,
+		&sourceName,
+		&statusStr,
+		&seq,
+		&datestamp,
+		&identifierArr,
+	)
 	cols = append(cols, lastCols...)
 	switch r := row.(type) {
 	case *sql.Row:
@@ -46,11 +59,11 @@ func itemDataFromRow(row interface{}, lastCols ...interface{}) (*ItemData, error
 		Source:     sourceName,
 		Signature:  signature,
 		Metadata:   myfair.Core{},
-		Set:        set,
-		Catalog:    catalog,
+		Set:        setArr,
+		Catalog:    catalogArr,
 		Seq:        seq,
 		Datestamp:  datestamp,
-		Identifier: identifier,
+		Identifier: identifierArr,
 	}
 	var ok bool
 	data.Access, ok = DataAccessReverse[accessStr]
@@ -96,26 +109,35 @@ func itemDataFromRow(row interface{}, lastCols ...interface{}) (*ItemData, error
 
 func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int64, completeListSize *int64, fn func(item *ItemData) error) error {
 	if completeListSize != nil {
+		/*		sqlstr := fmt.Sprintf("SELECT COUNT(*) AS num"+
+				" FROM %s.coreview"+
+				" WHERE %s", f.dbSchema, sqlWhere)
+		*/
 		sqlstr := fmt.Sprintf("SELECT COUNT(*) AS num"+
-			" FROM %s.coreview"+
-			" WHERE %s", f.dbSchema, sqlWhere)
-		if err := f.db.QueryRow(sqlstr, params...).Scan(completeListSize); err != nil {
+			" FROM coreview"+
+			" WHERE %s", sqlWhere)
+		if err := f.db.QueryRow(context.Background(), sqlstr, params...).Scan(completeListSize); err != nil {
 			return errors.Wrapf(err, "cannot get number of result items [%s] - [%v]", sqlstr, params)
 		}
 	}
-	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, signature, sourcename, status, seq, datestamp, identifier"+
+	/*	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, signature, sourcename, status, seq, datestamp, identifier"+
 		" FROM %s.coreview"+
 		" WHERE %s"+
 		" ORDER BY seq ASC", f.dbSchema, sqlWhere)
+	*/
+	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, signature, sourcename, status, seq, datestamp, identifier"+
+		" FROM coreview"+
+		" WHERE %s"+
+		" ORDER BY seq ASC", sqlWhere)
 	if limit > 0 {
 		sqlstr += fmt.Sprintf(" LIMIT %v", limit)
 	}
 	if offset > 0 {
 		sqlstr += fmt.Sprintf(" OFFSET %v", offset)
 	}
-	rows, err := f.db.Query(sqlstr, params...)
+	rows, err := f.db.Query(context.Background(), sqlstr, params...)
 	if err != nil {
-		if err != sql.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
 	}
@@ -290,40 +312,42 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 		if err != nil {
 			return nil, errors.Wrapf(err, "cannot marshal core data [%v]", data.Metadata)
 		}
-		sqlstr := fmt.Sprintf("INSERT INTO %s.core"+
-			" (uuid, datestamp, setspec, metadata, signature, source, access, catalog, seq, status, identifier)"+
-			" VALUES($1, NOW(), $2, $3, $4, $5, $6, $7, NEXTVAL('lastchange'), $8, $9)", f.dbSchema)
+		/*		sqlstr := fmt.Sprintf("INSERT INTO %s.core"+
+				" (uuid, datestamp, setspec, metadata, signature, source, access, catalog, seq, status, identifier)"+
+				" VALUES($1, NOW(), $2, $3, $4, $5, $6, $7, NEXTVAL('lastchange'), $8, $9)", f.dbSchema)
+		*/
+		sqlstr := `INSERT INTO core 
+    				(uuid, datestamp, setspec, metadata, signature, source, access, catalog, seq, status, identifier) 
+					VALUES($1, NOW(), $2, $3, $4, $5, $6, $7, NEXTVAL('lastchange'), $8, $9)`
 		params := []interface{}{
 			item.UUID, // uuid
 			// datestamp
-			pq.Array(item.Set),     // setspec
-			string(coreBytes),      // metadata
-			item.Signature,         // signature
-			src.ID,                 // source
-			item.Access,            // access
-			pq.Array(item.Catalog), // catalog
+			pgtype.FlatArray[string](item.Set),     // setspec
+			string(coreBytes),                      // metadata
+			item.Signature,                         // signature
+			src.ID,                                 // source
+			item.Access,                            // access
+			pgtype.FlatArray[string](item.Catalog), // catalog
 			// seq
 			DataStatusActive,
-			pq.Array(item.Identifier), // identifier
+			pgtype.FlatArray[string](item.Identifier), // identifier
 		}
-		ret, err := f.db.Exec(sqlstr, params...)
+		ret, err := f.db.Exec(context.Background(), sqlstr, params...)
 		if err != nil {
 			return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
-		num, err := ret.RowsAffected()
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot get affected rows")
-		}
-		if num == 0 {
+		if num := ret.RowsAffected(); num == 0 {
 			return nil, errors.Wrap(err, "no affected rows")
 		}
-		sqlstr = fmt.Sprintf("INSERT INTO %s.core_dirty"+
-			" (uuid)"+
-			" VALUES($1)", f.dbSchema)
+		/*		sqlstr = fmt.Sprintf("INSERT INTO %s.core_dirty"+
+				" (uuid)"+
+				" VALUES($1)", f.dbSchema)
+		*/
+		sqlstr = "INSERT INTO core_dirty (uuid) VALUES($1)"
 		params = []interface{}{
 			item.UUID, // uuid
 		}
-		if _, err = f.db.Exec(sqlstr, params...); err != nil {
+		if _, err = f.db.Exec(context.Background(), sqlstr, params...); err != nil {
 			return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
 		f.log.Info().Msgf("new item [%s] inserted", item.UUID)
@@ -369,13 +393,15 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 			equalStrings(item.Catalog, data.Catalog) &&
 			item.Access == data.Access {
 			f.log.Info().Msgf("no update needed for item [%v]", item.UUID)
-			sqlstr := fmt.Sprintf("INSERT INTO %s.core_dirty"+
-				" (uuid)"+
-				" VALUES($1)", f.dbSchema)
+			/*			sqlstr := fmt.Sprintf("INSERT INTO %s.core_dirty"+
+						" (uuid)"+
+						" VALUES($1)", f.dbSchema)
+			*/
+			sqlstr := "INSERT INTO core_dirty (uuid) VALUES($1)"
 			params := []interface{}{
 				item.UUID, // uuid
 			}
-			if _, err = f.db.Exec(sqlstr, params...); err != nil {
+			if _, err = f.db.Exec(context.Background(), sqlstr, params...); err != nil {
 				return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 			}
 			return item, nil
@@ -390,22 +416,24 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 			" SET setspec=$1, metadata=$2, access=$3, catalog=$4, status=$5, datestamp=NOW(), seq=NEXTVAL('lastchange')"+
 			" WHERE uuid=$6", f.dbSchema)
 		params := []interface{}{
-			pq.Array(data.Set),
+			pgtype.FlatArray[string](data.Set),
 			string(dataMetaBytes),
 			data.Access,
-			pq.Array(data.Catalog),
+			pgtype.FlatArray[string](data.Catalog),
 			DataStatusActive,
 			item.UUID}
-		if _, err := f.db.Exec(sqlstr, params...); err != nil {
+		if _, err := f.db.Exec(context.Background(), sqlstr, params...); err != nil {
 			return nil, errors.Wrapf(err, "[%s] cannot update [%s] - [%v]", item.UUID, sqlstr, params)
 		}
-		sqlstr = fmt.Sprintf("INSERT INTO %s.core_dirty"+
-			" (uuid)"+
-			" VALUES($1)", f.dbSchema)
+		/*		sqlstr = fmt.Sprintf("INSERT INTO %s.core_dirty"+
+				" (uuid)"+
+				" VALUES($1)", f.dbSchema)
+		*/
+		sqlstr = "INSERT INTO core_dirty (uuid) VALUES($1)"
 		params = []interface{}{
 			item.UUID, // uuid
 		}
-		if _, err = f.db.Exec(sqlstr, params...); err != nil {
+		if _, err = f.db.Exec(context.Background(), sqlstr, params...); err != nil {
 			return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
 		f.log.Info().Msgf("item [%s] updated", item.UUID)

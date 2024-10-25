@@ -6,8 +6,8 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/bluele/gcache"
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/handlers"
-	"github.com/gorilla/mux"
 	fair "github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/utils/v2/pkg/JWTInterceptor"
 	"github.com/je4/utils/v2/pkg/zLogger"
@@ -17,8 +17,6 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
-	"net/url"
-	"strings"
 	"time"
 )
 
@@ -83,89 +81,136 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 	if tlsConfig == nil {
 		return errors.New("TLS config is nil")
 	}
-	router := mux.NewRouter()
+	//router := mux.NewRouter()
+
+	gin.SetMode(gin.DebugMode)
+	router := gin.Default()
+
+	partition := router.Group("/:partition")
+	partitionAuth := partition.Group("/", gin.BasicAuth(gin.Accounts{
+		s.name: s.password,
+	}))
 
 	fsys, err := fs.Sub(staticFS, "static")
 	if err != nil {
 		return errors.Wrap(err, "cannot get subtree of embedded static")
 	}
-	httpStaticServer := http.FileServer(http.FS(fsys))
-	router.PathPrefix("/{partition}/static").Handler(
-		handlers.CompressHandler(func(prefix string, h http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				vars := mux.Vars(r)
-				partition, ok := vars["partition"]
-				if !ok {
-					http.NotFound(w, r)
+	//router.Use(cors.Default())
+	//httpStaticServer := http.FileServer(http.FS(fsys))
+	partition.StaticFS("/static", http.FS(fsys))
+
+	/*
+		router.PathPrefix("/{partition}/static").Handler(
+			handlers.CompressHandler(func(prefix string, h http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					vars := mux.Vars(r)
+					partition, ok := vars["partition"]
+					if !ok {
+						http.NotFound(w, r)
+						return
+					}
+					fullPrefix := fmt.Sprintf("/%s%s", partition, prefix)
+					p := strings.TrimPrefix(r.URL.Path, fullPrefix)
+					rp := strings.TrimPrefix(r.URL.RawPath, fullPrefix)
+					if len(p) < len(r.URL.Path) && (r.URL.RawPath == "" || len(rp) < len(r.URL.RawPath)) {
+						r2 := new(http.Request)
+						*r2 = *r
+						r2.URL = new(url.URL)
+						*r2.URL = *r.URL
+						r2.URL.Path = p
+						r2.URL.RawPath = rp
+						w.Header().Set("Cache-Control", "max-age=3600")
+						h.ServeHTTP(w, r2)
+					} else {
+						http.NotFound(w, r)
+					}
+				})
+
+			}("/static", httpStaticServer),
+			// http.StripPrefix("/static", httpStaticServer)
+			),
+		).Methods("GET")
+	*/
+
+	partition.Group("/oai", func() gin.HandlerFunc {
+		return func(c *gin.Context) {
+			if c.NegotiateFormat(gin.MIMEXML) == gin.MIMEXML {
+				c.Writer.Write([]byte(xmlHeader))
+			}
+			c.Next()
+		}
+	}()).GET("/:context", s.oaiHandler)
+
+	/*	router.HandleFunc(
+			"/{partition}",
+			func(w http.ResponseWriter, req *http.Request) {
+				vars := mux.Vars(req)
+				pName := vars["partition"]
+
+				part, err := s.fair.GetPartition(pName)
+				if err != nil {
+					w.WriteHeader(http.StatusNotFound)
+					w.Header().Set("Content-type", "text/plain")
+					w.Write([]byte(fmt.Sprintf("partition [%s] not found", pName)))
 					return
 				}
-				fullPrefix := fmt.Sprintf("/%s%s", partition, prefix)
-				p := strings.TrimPrefix(r.URL.Path, fullPrefix)
-				rp := strings.TrimPrefix(r.URL.RawPath, fullPrefix)
-				if len(p) < len(r.URL.Path) && (r.URL.RawPath == "" || len(rp) < len(r.URL.RawPath)) {
-					r2 := new(http.Request)
-					*r2 = *r
-					r2.URL = new(url.URL)
-					*r2.URL = *r.URL
-					r2.URL.Path = p
-					r2.URL.RawPath = rp
-					w.Header().Set("Cache-Control", "max-age=3600")
-					h.ServeHTTP(w, r2)
-				} else {
-					http.NotFound(w, r)
-				}
-			})
-
-		}("/static", httpStaticServer),
-		// http.StripPrefix("/static", httpStaticServer)
-		),
-	).Methods("GET")
-
-	router.Handle(
-		"/{partition}/oai/{context}",
-		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.oaiHandler) }()),
-	).Methods("GET")
-
-	router.HandleFunc(
-		"/{partition}",
-		func(w http.ResponseWriter, req *http.Request) {
-			vars := mux.Vars(req)
-			pName := vars["partition"]
-
+				http.Redirect(w, req, part.AddrExt+"/", http.StatusPermanentRedirect)
+			},
+		).Methods("GET")
+	*/
+	/*	partition.GET("", func(ctx *gin.Context) {
+			pName := ctx.Param("partition")
 			part, err := s.fair.GetPartition(pName)
 			if err != nil {
-				w.WriteHeader(http.StatusNotFound)
-				w.Header().Set("Content-type", "text/plain")
-				w.Write([]byte(fmt.Sprintf("partition [%s] not found", pName)))
+				NewResultMessage(ctx, http.StatusNotFound, errors.Wrapf(err, "partition [%s] not found", pName))
 				return
 			}
-			http.Redirect(w, req, part.AddrExt+"/", http.StatusPermanentRedirect)
-		},
-	).Methods("GET")
-	router.Handle(
-		"/{partition}/ping",
-		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.pingHandler) }()),
-	).Methods("GET")
-	router.Handle(
-		"/{partition}/",
-		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.partitionHandler) }()),
-	).Methods("GET")
-	router.Handle(
-		"/{partition}/viewer",
-		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.dataViewerHandler) }()),
-	).Methods("GET")
-	router.Handle(
-		"/{partition}/viewer/search",
-		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.searchViewerHandler) }()),
-	).Methods("GET")
-	router.Handle(
-		"/{partition}/viewer/item/{uuid}",
-		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.detailHandler) }()),
-	).Methods("GET")
-	router.Handle(
-		"/{partition}/oai/",
-		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.partitionOAIHandler) }()),
-	).Methods("GET")
+			ctx.Redirect(http.StatusPermanentRedirect, part.AddrExt+"/")
+		})
+	*/
+
+	/*	router.Handle(
+			"/{partition}/ping",
+			handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.pingHandler) }()),
+		).Methods("GET")
+	*/
+	partition.GET("/ping", s.pingHandler)
+
+	/*	router.Handle(
+			"/{partition}/",
+			handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.partitionHandler) }()),
+		).Methods("GET")
+	*/
+	partition.GET("/", s.partitionHandler)
+
+	/*	router.Handle(
+			"/{partition}/viewer",
+			handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.dataViewerHandler) }()),
+		).Methods("GET")
+	*/
+	partitionAuth.GET("/viewer", s.dataViewerHandler)
+
+	/*	router.Handle(
+			"/{partition}/viewer/search",
+			handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.searchViewerHandler) }()),
+		).Methods("GET")
+	*/
+	partitionAuth.GET("/viewer/search", s.searchViewerHandler)
+
+	/*	router.Handle(
+			"/{partition}/viewer/item/{uuid}",
+			handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.detailHandler) }()),
+		).Methods("GET")
+	*/
+	partitionAuth.GET("/viewer/item/:uuid", s.detailHandler)
+
+	/*	router.Handle(
+			"/{partition}/oai/",
+			handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.partitionOAIHandler) }()),
+		).Methods("GET")
+	*/
+	partition.GET("/oai/", s.partitionOAIHandler)
+
 	router.Handle(
 		"/{partition}/item",
 		handlers.CompressHandler(
@@ -314,15 +359,20 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 		"/{partition}/item/{uuid}",
 		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.itemHandler) }()),
 	).Methods("GET")
-	router.Handle(
-		"/{partition}/createdoi/{uuid}",
-		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.createDOIHandler) }()),
-	).Methods("GET")
 
-	router.Handle(
-		"/{partition}/redir/{uuid}",
-		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.redirectHandler) }()),
-	).Methods("GET")
+	/*	router.Handle(
+			"/{partition}/createdoi/{uuid}",
+			handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.createDOIHandler) }()),
+		).Methods("GET")
+	*/
+	partitionAuth.GET("/createdoi/:uuid", s.createDOIHandler)
+
+	/*	router.Handle(
+			"/{partition}/redir/{uuid}",
+			handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.redirectHandler) }()),
+		).Methods("GET")
+	*/
+	partition.GET("/redir/:uuid", s.redirectHandler)
 
 	loggedRouter := handlers.CombinedLoggingHandler(s.accessLog, handlers.ProxyHeaders(router))
 	addr := net.JoinHostPort(s.host, s.port)
