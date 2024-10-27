@@ -42,18 +42,26 @@ func itemDataFromRow(row interface{}, lastCols ...interface{}) (*ItemData, error
 		&identifierArr,
 	)
 	cols = append(cols, lastCols...)
-	switch r := row.(type) {
-	case *sql.Row:
-		if err := r.Scan(cols...); err != nil {
-			return nil, errors.Wrapf(err, "cannot scan result")
-		}
-	case *sql.Rows:
-		if err := r.Scan(cols...); err != nil {
-			return nil, errors.Wrapf(err, "cannot scan result")
-		}
-	default:
-		return nil, errors.New(fmt.Sprintf("invalid type %T for data row", r))
+	pgxrow, ok := row.(pgx.Row)
+	if !ok {
+		return nil, errors.New(fmt.Sprintf("invalid type %T for data row", row))
 	}
+	if err := pgxrow.Scan(cols...); err != nil {
+		return nil, errors.Wrapf(err, "cannot scan result")
+	}
+	/*	switch r := row.(type) {
+		case *sql.Row:
+			if err := r.Scan(cols...); err != nil {
+				return nil, errors.Wrapf(err, "cannot scan result")
+			}
+		case *sql.Rows:
+			if err := r.Scan(cols...); err != nil {
+				return nil, errors.Wrapf(err, "cannot scan result")
+			}
+		default:
+			return nil, errors.New(fmt.Sprintf("invalid type %T for data row", r))
+		}
+	*/
 	data := &ItemData{
 		UUID:       uuidStr,
 		Source:     sourceName,
@@ -65,7 +73,6 @@ func itemDataFromRow(row interface{}, lastCols ...interface{}) (*ItemData, error
 		Datestamp:  datestamp,
 		Identifier: identifierArr,
 	}
-	var ok bool
 	data.Access, ok = DataAccessReverse[accessStr]
 	if !ok {
 		return nil, errors.New(fmt.Sprintf("[%s] invalid access type %s", uuidStr, accessStr))

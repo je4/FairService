@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/bluele/gcache"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/handlers"
 	fair "github.com/je4/FairService/v2/pkg/fair"
@@ -86,7 +87,7 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 	gin.SetMode(gin.DebugMode)
 	router := gin.Default()
 
-	partition := router.Group("/:partition")
+	partition := router.Group("/:partition", cors.Default())
 	partitionAuth := partition.Group("/", gin.BasicAuth(gin.Accounts{
 		s.name: s.password,
 	}))
@@ -95,9 +96,10 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 	if err != nil {
 		return errors.Wrap(err, "cannot get subtree of embedded static")
 	}
-	//router.Use(cors.Default())
-	//httpStaticServer := http.FileServer(http.FS(fsys))
-	partition.StaticFS("/static", http.FS(fsys))
+	for _, part := range s.fair.GetPartitions() {
+		router.StaticFS(fmt.Sprintf("/%s/static", part.Name), http.FS(fsys))
+	}
+	//partition.StaticFS("/static", http.FS(fsys))
 
 	/*
 		router.PathPrefix("/{partition}/static").Handler(
@@ -141,237 +143,105 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 		}
 	}()).GET("/:context", s.oaiHandler)
 
-	/*	router.HandleFunc(
-			"/{partition}",
-			func(w http.ResponseWriter, req *http.Request) {
-				vars := mux.Vars(req)
-				pName := vars["partition"]
-
-				part, err := s.fair.GetPartition(pName)
-				if err != nil {
-					w.WriteHeader(http.StatusNotFound)
-					w.Header().Set("Content-type", "text/plain")
-					w.Write([]byte(fmt.Sprintf("partition [%s] not found", pName)))
-					return
-				}
-				http.Redirect(w, req, part.AddrExt+"/", http.StatusPermanentRedirect)
-			},
-		).Methods("GET")
-	*/
-	/*	partition.GET("", func(ctx *gin.Context) {
-			pName := ctx.Param("partition")
-			part, err := s.fair.GetPartition(pName)
-			if err != nil {
-				NewResultMessage(ctx, http.StatusNotFound, errors.Wrapf(err, "partition [%s] not found", pName))
-				return
-			}
-			ctx.Redirect(http.StatusPermanentRedirect, part.AddrExt+"/")
-		})
-	*/
-
-	/*	router.Handle(
-			"/{partition}/ping",
-			handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.pingHandler) }()),
-		).Methods("GET")
-	*/
 	partition.GET("/ping", s.pingHandler)
-
-	/*	router.Handle(
-			"/{partition}/",
-			handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.partitionHandler) }()),
-		).Methods("GET")
-	*/
 	partition.GET("/", s.partitionHandler)
-
-	/*	router.Handle(
-			"/{partition}/viewer",
-			handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.dataViewerHandler) }()),
-		).Methods("GET")
-	*/
 	partitionAuth.GET("/viewer", s.dataViewerHandler)
-
-	/*	router.Handle(
-			"/{partition}/viewer/search",
-			handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.searchViewerHandler) }()),
-		).Methods("GET")
-	*/
 	partitionAuth.GET("/viewer/search", s.searchViewerHandler)
-
-	/*	router.Handle(
-			"/{partition}/viewer/item/{uuid}",
-			handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.detailHandler) }()),
-		).Methods("GET")
-	*/
 	partitionAuth.GET("/viewer/item/:uuid", s.detailHandler)
-
-	/*	router.Handle(
-			"/{partition}/oai/",
-			handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.partitionOAIHandler) }()),
-		).Methods("GET")
-	*/
 	partition.GET("/oai/", s.partitionOAIHandler)
-
-	router.Handle(
-		"/{partition}/item",
-		handlers.CompressHandler(
-			JWTInterceptor.JWTInterceptor(
-				s.service,
-				"CreateItem",
-				JWTInterceptor.Secure,
-				func() http.Handler { return http.HandlerFunc(s.createHandler) }(),
-				s.jwtKey,
-				s.jwtAlg,
-				sha512.New(),
-				s.log,
-			))).
-		Methods("POST")
-	router.Handle(
-		"/{partition}/source",
-		handlers.CompressHandler(
-			JWTInterceptor.JWTInterceptor(
-				s.service,
-				"setSource",
-				JWTInterceptor.Secure,
-				func() http.Handler { return http.HandlerFunc(s.setSourceHandler) }(),
-				s.jwtKey,
-				s.jwtAlg,
-				sha512.New(),
-				s.log,
-			))).
-		Methods("POST")
-	router.Handle(
-		"/{partition}/item/{uuid}/originaldata",
-		handlers.CompressHandler(
-			JWTInterceptor.JWTInterceptor(
-				s.service,
-				"originalDataWrite",
-				JWTInterceptor.Secure,
-				func() http.Handler { return http.HandlerFunc(s.originalDataWriteHandler) }(),
-				s.jwtKey,
-				s.jwtAlg,
-				sha512.New(),
-				s.log,
-			))).
-		Methods("POST")
-	router.Handle(
-		"/{partition}/item/{uuid}/originaldata",
-		handlers.CompressHandler(
-			JWTInterceptor.JWTInterceptor(
-				s.service,
-				"originalDataRead",
-				JWTInterceptor.Secure,
-				func() http.Handler { return http.HandlerFunc(s.originalDataReadHandler) }(),
-				s.jwtKey,
-				s.jwtAlg,
-				sha512.New(),
-				s.log,
-			))).
-		Methods("GET")
-	router.Handle(
-		"/{partition}/startupdate",
-		handlers.CompressHandler(
-			JWTInterceptor.JWTInterceptor(
-				s.service,
-				"StartUpdate",
-				JWTInterceptor.Secure,
-				func() http.Handler { return http.HandlerFunc(s.startUpdateHandler) }(),
-				s.jwtKey,
-				s.jwtAlg,
-				sha512.New(),
-				s.log,
-			))).
-		Methods("POST")
-	router.Handle(
-		"/{partition}/endupdate",
-		handlers.CompressHandler(
-			JWTInterceptor.JWTInterceptor(
-				s.service,
-				"EndUpdate",
-				JWTInterceptor.Secure,
-				func() http.Handler { return http.HandlerFunc(s.endUpdateHandler) }(),
-				s.jwtKey,
-				s.jwtAlg,
-				sha512.New(),
-				s.log,
-			))).
-		Methods("POST")
-	router.Handle(
-		"/{partition}/archive",
-		handlers.CompressHandler(
-			JWTInterceptor.JWTInterceptor(
-				s.service,
-				"AddArchive",
-				JWTInterceptor.Secure,
-				func() http.Handler { return http.HandlerFunc(s.createArchiveHandler) }(),
-				s.jwtKey,
-				s.jwtAlg,
-				sha512.New(),
-				s.log,
-			))).
-		Methods("POST")
-	router.Handle(
-		"/{partition}/archive/{archive}",
-		handlers.CompressHandler(
-			JWTInterceptor.JWTInterceptor(
-				s.service,
-				"AddArchiveItem",
-				JWTInterceptor.Secure,
-				func() http.Handler { return http.HandlerFunc(s.addArchiveItemHandler) }(),
-				s.jwtKey,
-				s.jwtAlg,
-				sha512.New(),
-				s.log,
-			))).
-		Methods("POST")
-	router.Handle(
-		"/{partition}/archive/{archive}",
-		handlers.CompressHandler(
-			JWTInterceptor.JWTInterceptor(
-				s.service,
-				"GetArchiveItem",
-				JWTInterceptor.Secure,
-				func() http.Handler { return http.HandlerFunc(s.getArchiveItemHandler) }(),
-				s.jwtKey,
-				s.jwtAlg,
-				sha512.New(),
-				s.log,
-			))).
-		Methods("GET")
-	router.Handle(
-		"/{partition}/abortupdate",
-		handlers.CompressHandler(
-			JWTInterceptor.JWTInterceptor(
-				s.service,
-				"AbortUpdate",
-				JWTInterceptor.Secure,
-				func() http.Handler { return http.HandlerFunc(s.abortUpdateHandler) }(),
-				s.jwtKey,
-				s.jwtAlg,
-				sha512.New(),
-				s.log,
-			))).
-		Methods("POST")
-	router.Handle(
-		"/{partition}/item/{uuid}/{outputType}",
-		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.itemHandler) }()),
-	).Methods("GET")
-	router.Handle(
-		"/{partition}/item/{uuid}",
-		handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.itemHandler) }()),
-	).Methods("GET")
-
-	/*	router.Handle(
-			"/{partition}/createdoi/{uuid}",
-			handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.createDOIHandler) }()),
-		).Methods("GET")
-	*/
+	partition.POST("/item", JWTInterceptor.JWTInterceptorGIN(
+		s.service,
+		"CreateItem",
+		JWTInterceptor.Secure,
+		s.jwtKey,
+		s.jwtAlg,
+		sha512.New(),
+		s.log,
+	), s.createHandler)
+	partition.POST("/source", JWTInterceptor.JWTInterceptorGIN(
+		s.service,
+		"SetSource",
+		JWTInterceptor.Secure,
+		s.jwtKey,
+		s.jwtAlg,
+		sha512.New(),
+		s.log,
+	), s.setSourceHandler)
+	partition.POST("/item/:uuid/originaldata", JWTInterceptor.JWTInterceptorGIN(
+		s.service,
+		"OriginalDataWrite",
+		JWTInterceptor.Secure,
+		s.jwtKey,
+		s.jwtAlg,
+		sha512.New(),
+		s.log,
+	), s.originalDataWriteHandler)
+	partition.GET("/item/:uuid/originaldata", JWTInterceptor.JWTInterceptorGIN(
+		s.service,
+		"OriginalDataRead",
+		JWTInterceptor.Secure,
+		s.jwtKey,
+		s.jwtAlg,
+		sha512.New(),
+		s.log,
+	), s.originalDataReadHandler)
+	partition.POST("/startupdate", JWTInterceptor.JWTInterceptorGIN(
+		s.service,
+		"StartUpdate",
+		JWTInterceptor.Secure,
+		s.jwtKey,
+		s.jwtAlg,
+		sha512.New(),
+		s.log,
+	), s.startUpdateHandler)
+	partition.POST("/endupdate", JWTInterceptor.JWTInterceptorGIN(
+		s.service,
+		"EndUpdate",
+		JWTInterceptor.Secure,
+		s.jwtKey,
+		s.jwtAlg,
+		sha512.New(),
+		s.log,
+	), s.endUpdateHandler)
+	partition.POST("/abortupdate", JWTInterceptor.JWTInterceptorGIN(
+		s.service,
+		"AbortUpdate",
+		JWTInterceptor.Secure,
+		s.jwtKey,
+		s.jwtAlg,
+		sha512.New(),
+		s.log,
+	), s.abortUpdateHandler)
+	partition.POST("/archive", JWTInterceptor.JWTInterceptorGIN(
+		s.service,
+		"AddArchive",
+		JWTInterceptor.Secure,
+		s.jwtKey,
+		s.jwtAlg,
+		sha512.New(),
+		s.log,
+	), s.createArchiveHandler)
+	partition.POST("/archive/:archive", JWTInterceptor.JWTInterceptorGIN(
+		s.service,
+		"AddArchiveItem",
+		JWTInterceptor.Secure,
+		s.jwtKey,
+		s.jwtAlg,
+		sha512.New(),
+		s.log,
+	), s.addArchiveItemHandler)
+	partition.GET("/archive/:archive", JWTInterceptor.JWTInterceptorGIN(
+		s.service,
+		"GetArchiveItem",
+		JWTInterceptor.Secure,
+		s.jwtKey,
+		s.jwtAlg,
+		sha512.New(),
+		s.log,
+	), s.getArchiveItemHandler)
+	partition.GET("/item/:uuid/:outputType", s.itemHandler)
+	partition.GET("/item/:uuid", s.itemHandler)
 	partitionAuth.GET("/createdoi/:uuid", s.createDOIHandler)
-
-	/*	router.Handle(
-			"/{partition}/redir/{uuid}",
-			handlers.CompressHandler(func() http.Handler { return http.HandlerFunc(s.redirectHandler) }()),
-		).Methods("GET")
-	*/
 	partition.GET("/redir/:uuid", s.redirectHandler)
 
 	loggedRouter := handlers.CombinedLoggingHandler(s.accessLog, handlers.ProxyHeaders(router))

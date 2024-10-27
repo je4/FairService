@@ -217,7 +217,7 @@ func main() {
 
 	// create TLS Certificate.
 	// the certificate MUST contain <package>.<service> as DNS name
-	serverTLSConfig, serverLoader, err := loader.CreateServerLoader(true, config.TLSConfig, nil, logger)
+	serverTLSConfig, serverLoader, err := loader.CreateServerLoader(false, config.TLSConfig, nil, logger)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("cannot create server loader")
 	}

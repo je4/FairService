@@ -3,9 +3,8 @@ package service
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gorilla/mux"
+	"github.com/gin-gonic/gin"
 	"github.com/je4/FairService/v2/pkg/fair"
-	"io/ioutil"
 	"net/http"
 )
 
@@ -14,15 +13,12 @@ type Archive struct {
 	Description string `json:"description"`
 }
 
-func (s *Server) createArchiveHandler(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	pName := vars["partition"]
+func (s *Server) createArchiveHandler(ctx *gin.Context) {
+	pName := ctx.Param("partition")
 
 	part, err := s.fair.GetPartition(pName)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		w.Header().Set("Content-type", "text/plain")
-		w.Write([]byte(fmt.Sprintf("partition [%s] not found", pName)))
+		sendResult(s.log, ctx, http.StatusNotFound, fmt.Sprintf("partition [%s] not found", pName), nil)
 		return
 	}
 
@@ -32,37 +28,33 @@ func (s *Server) createArchiveHandler(w http.ResponseWriter, req *http.Request) 
 		decoder := json.NewDecoder(req.Body)
 		err := decoder.Decode(&data)
 	*/
-	bdata, err := ioutil.ReadAll(req.Body)
+	bdata, err := ctx.GetRawData()
 	if err != nil {
-		s.log.Error().Msgf("cannot read request body: %v", err)
-		sendResult(s.log, w, "error", fmt.Sprintf("cannot read request body: %v", err), nil)
+		sendResult(s.log, ctx, http.StatusInternalServerError, fmt.Sprintf("cannot read request body: %v", err), nil)
 		return
 	}
 
 	if err := json.Unmarshal(bdata, data); err != nil {
-		s.log.Error().Msgf("cannot unmarshal request body [%s]: %v", string(bdata), err)
-		sendResult(s.log, w, "error", fmt.Sprintf("cannot unmarshal request body [%s]: %v", string(bdata), err), nil)
+		sendResult(s.log, ctx, http.StatusInternalServerError, fmt.Sprintf("cannot unmarshal request body [%s]: %v", string(bdata), err), nil)
 		return
 	}
 
 	name := fmt.Sprintf("%s.%s", part.Name, data.Name)
 	if err := s.fair.AddArchive(part, fmt.Sprintf("%s.%s", part.Name, name), data.Description); err != nil {
-		sendResult(s.log, w, "error", fmt.Sprintf("cannot create item: %v", err), nil)
+		sendResult(s.log, ctx, http.StatusInternalServerError, fmt.Sprintf("cannot create archive item: %v", err), nil)
 		return
 	}
-	sendResult(s.log, w, "ok", fmt.Sprintf("archive %s created", name), nil)
+	sendResult(s.log, ctx, http.StatusOK, fmt.Sprintf("archive %s created", name), nil)
 	return
 }
 
-func (s *Server) getArchiveItemHandler(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	pName := vars["partition"]
-	archive := vars["archive"]
+func (s *Server) getArchiveItemHandler(ctx *gin.Context) {
+	pName := ctx.Param("partition")
+	archive := ctx.Param("archive")
 
 	part, err := s.fair.GetPartition(pName)
 	if err != nil {
-		s.log.Error().Msgf("partition [%s] not found", pName)
-		sendResult(s.log, w, "error", fmt.Sprintf("partition [%s] not found", pName), nil)
+		sendResult(s.log, ctx, http.StatusNotFound, fmt.Sprintf("partition [%s] not found", pName), nil)
 		return
 	}
 	var items = []*fair.ArchiveItem{}
@@ -70,59 +62,40 @@ func (s *Server) getArchiveItemHandler(w http.ResponseWriter, req *http.Request)
 		items = append(items, item)
 		return nil
 	}); err != nil {
-		s.log.Error().Msgf("cannot get archive items: %v", err)
-		sendResult(s.log, w, "error", fmt.Sprintf("cannot get archive items: %v", err), nil)
+		sendResult(s.log, ctx, http.StatusInternalServerError, fmt.Sprintf("cannot get archive items: %v", err), nil)
 		return
 	}
 
-	w.Header().Set("Content-type", "text/json")
-	data, _ := json.MarshalIndent(FairResultStatus{Status: "ok", Message: fmt.Sprintf("%v items found", len(items)), ArchiveItems: items}, "", "  ")
-	w.Write(data)
+	ctx.JSON(http.StatusOK, FairResultStatus{Status: "ok", Message: fmt.Sprintf("%v items found", len(items)), ArchiveItems: items})
 }
 
-func (s *Server) addArchiveItemHandler(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	pName := vars["partition"]
-	archive := vars["archive"]
+func (s *Server) addArchiveItemHandler(ctx *gin.Context) {
+	pName := ctx.Param("partition")
+	archive := ctx.Param("archive")
 
 	part, err := s.fair.GetPartition(pName)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		w.Header().Set("Content-type", "text/plain")
-		w.Write([]byte(fmt.Sprintf("partition [%s] not found", pName)))
+		sendResult(s.log, ctx, http.StatusNotFound, fmt.Sprintf("partition [%s] not found", pName), nil)
 		return
 	}
 
 	var uuid string
 
-	bdata, err := ioutil.ReadAll(req.Body)
-	if err != nil {
-		s.log.Error().Msgf("cannot read request body: %v", err)
-		sendResult(s.log, w, "error", fmt.Sprintf("cannot read request body: %v", err), nil)
-		return
-	}
-
-	if err := json.Unmarshal(bdata, &uuid); err != nil {
-		s.log.Error().Msgf("cannot unmarshal request body [%s]: %v", string(bdata), err)
-		sendResult(s.log, w, "error", fmt.Sprintf("cannot unmarshal request body [%s]: %v", string(bdata), err), nil)
+	if err := ctx.ShouldBindJSON(&uuid); err != nil {
+		sendResult(s.log, ctx, http.StatusInternalServerError, fmt.Sprintf("cannot unmarshal request body: %v", err), nil)
 		return
 	}
 
 	item, err := s.fair.GetItem(part, uuid)
 	if err != nil {
-		s.log.Error().Msgf("cannot get item %s/%s: %v", part.Name, uuid, err)
-		sendResult(s.log, w, "error", fmt.Sprintf("cannot get item %s/%s: %v", part.Name, uuid, err), nil)
+		sendResult(s.log, ctx, http.StatusInternalServerError, fmt.Sprintf("cannot get item %s/%s: %v", part.Name, uuid, err), nil)
 		return
 	}
 
-	/*
-		decoder := json.NewDecoder(req.Body)
-		err := decoder.Decode(&data)
-	*/
 	if err := s.fair.AddArchiveItem(part, fmt.Sprintf("%s.%s", part.Name, archive), item); err != nil {
-		sendResult(s.log, w, "error", fmt.Sprintf("cannot add item %s to %s: %v", item.UUID, archive, err), nil)
+		sendResult(s.log, ctx, http.StatusInternalServerError, fmt.Sprintf("cannot add item %s to archive %s: %v", item.UUID, archive, err), nil)
 		return
 	}
-	sendResult(s.log, w, "ok", "archive %s created", nil)
+	sendResult(s.log, ctx, http.StatusOK, fmt.Sprintf("item %s added to archive %s", item.UUID, archive), nil)
 	return
 }

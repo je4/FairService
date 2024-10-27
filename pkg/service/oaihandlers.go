@@ -1,7 +1,6 @@
 package service
 
 import (
-	"encoding/xml"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -23,7 +22,7 @@ const STYLESHEET = "../static/dspace/oai.xsl"
 
 var xmlHeader = fmt.Sprintf("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"%s\"?>", STYLESHEET)
 
-func sendError(ctx *gin.Context, code oai.ErrorCodeType, message, verb, identifier, metadataPrefix, baseURL string) {
+func sendOAIError(ctx *gin.Context, code oai.ErrorCodeType, message, verb, identifier, metadataPrefix, baseURL string) {
 	//	w.Header().Set("Content-type", "text/xml")
 	pmh := &oai.OAIPMH{}
 	pmh.InitNamespace()
@@ -55,8 +54,8 @@ func getVar(key string, values url.Values) (string, bool) {
 
 func additional(arr1, arr2 []string) []string {
 	var add = make([]string, 0)
-	for _, a := range arr2 {
-		if !slices.Contains(arr1, a) {
+	for _, a := range arr1 {
+		if !slices.Contains(arr2, a) {
 			add = append(add, a)
 		}
 	}
@@ -84,7 +83,7 @@ func (s *Server) oaiHandler(ctx *gin.Context) {
 	switch verb {
 	case "ListIdentifiers":
 		if add := additional(params, []string{"verb", "from", "until", "set", "resumptionToken", "metadataPrefix"}); len(add) > 0 {
-			sendError(ctx.Writer, oai.ErrorCodeBadArgument, fmt.Sprintf("unknown parameter %v", add), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
+			sendOAIError(ctx, oai.ErrorCodeBadArgument, fmt.Sprintf("unknown parameter %v", add), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
 			return
 		}
 		fromStr := ctx.Query("from")
@@ -96,21 +95,21 @@ func (s *Server) oaiHandler(ctx *gin.Context) {
 		if fromStr != "" {
 			from, err = time.Parse("2006-01-02T15:04:05Z", fromStr)
 			if err != nil {
-				sendError(ctx.Writer, oai.ErrorCodeBadArgument, fmt.Sprintf("error parsing from [%s]: %v", fromStr, err), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
+				sendOAIError(ctx, oai.ErrorCodeBadArgument, fmt.Sprintf("error parsing from [%s]: %v", fromStr, err), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
 				return
 			}
 		}
 		if untilStr != "" {
 			until, err = time.Parse("2006-01-02T15:04:05Z", untilStr)
 			if err != nil {
-				sendError(ctx.Writer, oai.ErrorCodeBadArgument, fmt.Sprintf("error parsing until [%s]: %v", untilStr, err), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
+				sendOAIError(ctx, oai.ErrorCodeBadArgument, fmt.Sprintf("error parsing until [%s]: %v", untilStr, err), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
 				return
 			}
 		}
 		s.oaiHandlerListIdentifiers(ctx, partition, context, from, until, set, resumptionToken, metadataPrefix)
 	case "ListRecords":
 		if add := additional(params, []string{"verb", "from", "until", "set", "resumptionToken", "metadataPrefix"}); len(add) > 0 {
-			sendError(ctx.Writer, oai.ErrorCodeBadArgument, fmt.Sprintf("unknown parameter %v", add), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
+			sendOAIError(ctx, oai.ErrorCodeBadArgument, fmt.Sprintf("unknown parameter %v", add), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
 			return
 		}
 		fromStr := ctx.Query("from")
@@ -122,50 +121,50 @@ func (s *Server) oaiHandler(ctx *gin.Context) {
 		if fromStr != "" {
 			from, err = time.Parse("2006-01-02T15:04:05Z", fromStr)
 			if err != nil {
-				sendError(ctx.Writer, oai.ErrorCodeBadArgument, fmt.Sprintf("error parsing from [%s]: %v", fromStr, err), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
+				sendOAIError(ctx, oai.ErrorCodeBadArgument, fmt.Sprintf("error parsing from [%s]: %v", fromStr, err), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
 				return
 			}
 		}
 		if untilStr != "" {
 			until, err = time.Parse("2006-01-02T15:04:05Z", untilStr)
 			if err != nil {
-				sendError(ctx.Writer, oai.ErrorCodeBadArgument, fmt.Sprintf("error parsing until [%s]: %v", untilStr, err), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
+				sendOAIError(ctx, oai.ErrorCodeBadArgument, fmt.Sprintf("error parsing until [%s]: %v", untilStr, err), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
 				return
 			}
 		}
 		s.oaiHandlerListRecords(ctx, partition, context, from, until, set, resumptionToken, metadataPrefix)
 	case "GetRecord":
 		if add := additional(params, []string{"verb", "identifier", "metadataPrefix"}); len(add) > 0 {
-			sendError(ctx.Writer, oai.ErrorCodeBadArgument, fmt.Sprintf("unknown parameter %v", add), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
+			sendOAIError(ctx, oai.ErrorCodeBadArgument, fmt.Sprintf("unknown parameter %v", add), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
 			return
 		}
 		identifier := ctx.Query("identifier")
 		metadataPrefix := ctx.Query("metadataPrefix")
 		if identifier == "" || metadataPrefix == "" {
-			sendError(ctx.Writer, oai.ErrorCodeBadArgument, "identifier AND metadataPrefix needed", verb, identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
+			sendOAIError(ctx, oai.ErrorCodeBadArgument, "identifier AND metadataPrefix needed", verb, identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
 			return
 		}
 		s.oaiHandlerGetRecord(ctx, partition, context, identifier, metadataPrefix)
 	case "Identify":
 		if add := additional(params, []string{"verb"}); len(add) > 0 {
-			sendError(ctx.Writer, oai.ErrorCodeBadArgument, fmt.Sprintf("unknown parameter %v", add), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
+			sendOAIError(ctx, oai.ErrorCodeBadArgument, fmt.Sprintf("unknown parameter %v", add), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
 			return
 		}
 		s.oaiHandlerIdentify(ctx, partition, context)
 	case "ListSets":
 		if add := additional(params, []string{"verb"}); len(add) > 0 {
-			sendError(ctx.Writer, oai.ErrorCodeBadArgument, fmt.Sprintf("unknown parameter %v", add), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
+			sendOAIError(ctx, oai.ErrorCodeBadArgument, fmt.Sprintf("unknown parameter %v", add), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
 			return
 		}
 		s.oaiHandlerListSets(ctx, partition, context)
 	case "ListMetadataFormats":
 		if add := additional(params, []string{"verb", "identifier"}); len(add) > 0 {
-			sendError(ctx.Writer, oai.ErrorCodeBadArgument, fmt.Sprintf("unknown parameter %v", add), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
+			sendOAIError(ctx, oai.ErrorCodeBadArgument, fmt.Sprintf("unknown parameter %v", add), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
 			return
 		}
 		s.oaiHandlerListMetadataFormats(ctx, partition, context)
 	default:
-		sendError(ctx.Writer, oai.ErrorCodeBadVerb, fmt.Sprintf("unknown verb: %s", verb), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
+		sendOAIError(ctx, oai.ErrorCodeBadVerb, fmt.Sprintf("unknown verb: %s", verb), verb, "", "", partition.AddrExt+"/"+oai.APIPATH)
 	}
 	return
 }
@@ -200,12 +199,6 @@ func (s *Server) oaiHandlerListMetadataFormats(ctx *gin.Context, partition *fair
 		}
 	*/
 	ctx.XML(http.StatusOK, pmh)
-	w.Write([]byte(fmt.Sprintf("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"%s\"?>", STYLESHEET)))
-	enc := xml.NewEncoder(w)
-	enc.Indent("", "  ")
-	if err := enc.Encode(pmh); err != nil {
-		s.log.Error().Msgf("cannot encode pmh - %v: %v", pmh, err)
-	}
 }
 
 func (s *Server) oaiHandlerIdentify(ctx *gin.Context, partition *fair.Partition, context string) {
@@ -246,18 +239,18 @@ func (s *Server) oaiHandlerGetRecord(ctx *gin.Context, partition *fair.Partition
 	uuidStr := strings.TrimPrefix(identifier, fmt.Sprintf("%s:%s:", partition.OAIScheme, partition.Domain))
 	if uuidStr == identifier {
 		s.log.Info().Msgf("invalid identifier for partition %s: %s", partition.Name, identifier)
-		sendError(ctx.Writer, oai.ErrorCodeIdDoesNotExist, "", "GetRecord", identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
+		sendOAIError(ctx, oai.ErrorCodeIdDoesNotExist, "", "GetRecord", identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
 		return
 	}
 	data, err := s.fair.GetItem(partition, uuidStr)
 	if err != nil {
 		s.log.Info().Msgf("cannot get item %s: %v", uuidStr, err)
-		sendError(ctx.Writer, oai.ErrorCodeIdDoesNotExist, "", "GetRecord", identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
+		sendOAIError(ctx, oai.ErrorCodeIdDoesNotExist, "", "GetRecord", identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
 		return
 	}
 	if data == nil {
 		s.log.Info().Msgf("item %s not found", uuidStr)
-		sendError(ctx.Writer, oai.ErrorCodeIdDoesNotExist, "", "GetRecord", identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
+		sendOAIError(ctx, oai.ErrorCodeIdDoesNotExist, "", "GetRecord", identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
 		return
 	}
 	metadata := &oai.Metadata{}
@@ -277,7 +270,7 @@ func (s *Server) oaiHandlerGetRecord(ctx *gin.Context, partition *fair.Partition
 		metadata.Datacite = dataciteData
 	default:
 		s.log.Info().Msgf("invalid metadataPrefix %s", metadataPrefix)
-		sendError(ctx.Writer, oai.ErrorCodeCannotDisseminateFormat, fmt.Sprintf("invalid metadataPrefix %s", metadataPrefix), "GetRecord", identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
+		sendOAIError(ctx, oai.ErrorCodeCannotDisseminateFormat, fmt.Sprintf("invalid metadataPrefix %s", metadataPrefix), "GetRecord", identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
 		return
 	}
 	pmh := &oai.OAIPMH{}
@@ -317,7 +310,7 @@ func (s *Server) oaiHandlerListIdentifiers(ctx *gin.Context, partition *fair.Par
 	if resumptionToken != "" {
 		data, err := s.resumptionTokenCache.Get(resumptionToken)
 		if err != nil || data == nil {
-			sendError(ctx.Writer, oai.ErrorCodeBadResumptionToken, fmt.Sprintf("cannot load resumption data for %s: %v", resumptionToken, err), "ListenIdentifier", "", "", partition.AddrExt+"/"+oai.APIPATH)
+			sendOAIError(ctx, oai.ErrorCodeBadResumptionToken, fmt.Sprintf("cannot load resumption data for %s: %v", resumptionToken, err), "ListenIdentifier", "", "", partition.AddrExt+"/"+oai.APIPATH)
 			return
 		}
 		var ok bool
@@ -423,7 +416,7 @@ func (s *Server) oaiHandlerListIdentifiers(ctx *gin.Context, partition *fair.Par
 	}
 
 	if len(listIdentifiers.Header) == 0 {
-		sendError(ctx.Writer, oai.ErrorCodeNoRecordsMatch, "no records match", "ListenIdentifier", "", metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
+		sendOAIError(ctx, oai.ErrorCodeNoRecordsMatch, "no records match", "ListenIdentifier", "", metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
 		return
 
 	}
@@ -450,7 +443,7 @@ func (s *Server) oaiHandlerListRecords(ctx *gin.Context, partition *fair.Partiti
 	case "oai_datacite":
 	default:
 		s.log.Info().Msgf("invalid metadataPrefix %s", metadataPrefix)
-		sendError(ctx.Writer, oai.ErrorCodeCannotDisseminateFormat, fmt.Sprintf("invalid metadataPrefix %s", metadataPrefix), "ListRecords", "", metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
+		sendOAIError(ctx, oai.ErrorCodeCannotDisseminateFormat, fmt.Sprintf("invalid metadataPrefix %s", metadataPrefix), "ListRecords", "", metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
 		return
 	}
 
@@ -458,7 +451,7 @@ func (s *Server) oaiHandlerListRecords(ctx *gin.Context, partition *fair.Partiti
 	if resumptionToken != "" {
 		data, err := s.resumptionTokenCache.Get(resumptionToken)
 		if err != nil || data == nil {
-			sendError(ctx.Writer, oai.ErrorCodeBadResumptionToken, fmt.Sprintf("cannot load resumption data for %s: %v", resumptionToken, err), "ListRecords", "", "", partition.AddrExt+"/"+oai.APIPATH)
+			sendOAIError(ctx, oai.ErrorCodeBadResumptionToken, fmt.Sprintf("cannot load resumption data for %s: %v", resumptionToken, err), "ListRecords", "", "", partition.AddrExt+"/"+oai.APIPATH)
 			return
 		}
 		var ok bool
@@ -565,8 +558,7 @@ func (s *Server) oaiHandlerListRecords(ctx *gin.Context, partition *fair.Partiti
 			0,
 			nil,
 			itemFunc); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(fmt.Sprintf("cannot read content from database: %v", err)))
+			sendResult(s.log, ctx, http.StatusInternalServerError, errors.Wrapf(err, "cannot read content from database").Error(), nil)
 			return
 		}
 
@@ -579,14 +571,13 @@ func (s *Server) oaiHandlerListRecords(ctx *gin.Context, partition *fair.Partiti
 			0,
 			&rData.completeListSize,
 			itemFunc); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(fmt.Sprintf("cannot read content from database: %v", err)))
+			sendResult(s.log, ctx, http.StatusInternalServerError, errors.Wrapf(err, "cannot read content from database").Error(), nil)
 			return
 		}
 	}
 
 	if len(listRecords.Record) == 0 {
-		sendError(w, oai.ErrorCodeNoRecordsMatch, "no records match", "ListRecords", "", metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
+		sendOAIError(ctx, oai.ErrorCodeNoRecordsMatch, "no records match", "ListRecords", "", metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
 		return
 
 	}
@@ -600,13 +591,8 @@ func (s *Server) oaiHandlerListRecords(ctx *gin.Context, partition *fair.Partiti
 		Value:          fmt.Sprintf("%s/%s/%s", partition.AddrExt, oai.APIPATH, context),
 	}
 	pmh.ListRecords = listRecords
-	w.Write([]byte(fmt.Sprintf("<?xml version=\"1.0\" ?><?xml-stylesheet type=\"text/xsl\" href=\"%s\"?>", STYLESHEET)))
-	enc := xml.NewEncoder(w)
-	enc.Indent("", "  ")
-	if err := enc.Encode(pmh); err != nil {
-		s.log.Error().Msgf("cannot encode pmh - %v: %v", pmh, err)
-	}
 
+	ctx.XML(http.StatusOK, pmh)
 }
 
 // todo: add paging with resumption token
