@@ -1,61 +1,50 @@
 package service
 
 import (
-	"encoding/json"
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/je4/FairService/v2/pkg/datatable"
+	"github.com/gin-gonic/gin"
+	"github.com/je4/FairService/v2/pkg/fair"
+	"github.com/je4/utils/v2/pkg/datatable"
 	"net/http"
 )
 
-func (s *Server) dataViewerHandler(w http.ResponseWriter, req *http.Request) {
-	if !BasicAuth(w, req, s.name, s.password, "FAIR Service") {
-		return
-	}
-
-	vars := mux.Vars(req)
-	pName := vars["partition"]
+func (s *Server) dataViewerHandler(ctx *gin.Context) {
+	pName := ctx.Param("partition")
 
 	part, err := s.fair.GetPartition(pName)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		w.Header().Set("Content-type", "text/plain")
-		w.Write([]byte(fmt.Sprintf("partition [%s] not found", pName)))
+		sendResult(s.log, ctx, http.StatusNotFound, fmt.Sprintf("partition [%s] not found", pName), nil)
 		return
 	}
 
 	tpl := s.templates["dataviewer"]
-	if err := tpl.Execute(w, part); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Header().Set("Content-type", "text/plain")
-		w.Write([]byte(fmt.Sprintf("error executing template %s in partition %s: %v", "partition", pName, err)))
+	if err := tpl.Execute(ctx.Writer, struct {
+		BaseURL string
+		Part    *fair.Partition
+	}{BaseURL: part.AddrExt + "/", Part: part}); err != nil {
+		sendResult(s.log, ctx, http.StatusInternalServerError, fmt.Sprintf("error executing template %s in partition %s: %v", "partition", pName, err), nil)
 		return
 	}
 }
 
-func (s *Server) searchViewerHandler(w http.ResponseWriter, req *http.Request) {
-	if !BasicAuth(w, req, s.name, s.password, "FAIR Service") {
-		return
-	}
-
-	vars := mux.Vars(req)
-	pName := vars["partition"]
+func (s *Server) searchViewerHandler(ctx *gin.Context) {
+	pName := ctx.Param("partition")
 
 	part, err := s.fair.GetPartition(pName)
 	if err != nil {
-		sendCreateResult(s.log, w, "error", fmt.Sprintf("invalid partition %s", pName), nil)
+		sendResult(s.log, ctx, http.StatusNotFound, fmt.Sprintf("partition [%s] not found", pName), nil)
 		return
 	}
 
 	dReq := &datatable.Request{}
-	if err := dReq.FromRequest(req); err != nil {
-		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot eval request parameter: %v", err), nil)
+	if err := dReq.FromRequest(ctx.Request); err != nil {
+		sendResult(s.log, ctx, http.StatusBadRequest, fmt.Sprintf("cannot eval request parameter: %v", err), nil)
 		return
 	}
 
 	result, num, total, err := s.fair.Search(part, dReq)
 	if err != nil {
-		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot search: %v", err), nil)
+		sendResult(s.log, ctx, http.StatusInternalServerError, fmt.Sprintf("cannot search: %v", err), nil)
 		return
 	}
 
@@ -65,10 +54,7 @@ func (s *Server) searchViewerHandler(w http.ResponseWriter, req *http.Request) {
 		RecordsFiltered: num,
 		Data:            result,
 	}
-	enc := json.NewEncoder(w)
-	if err := enc.Encode(rData); err != nil {
-		sendCreateResult(s.log, w, "error", fmt.Sprintf("cannot search: %v", err), nil)
-		return
-	}
+	ctx.JSON(http.StatusOK, rData)
+
 	return
 }

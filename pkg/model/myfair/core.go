@@ -13,7 +13,7 @@ type NameIdentifier struct {
 	NameIdentifierScheme string `json:"nameIdentifierScheme,omitempty"`
 }
 
-type Person struct {
+type Person struct { // Todo: json anpassen
 	PersonType     PersonType     `json:"personType"`
 	PersonName     Name           `json:"personName"`
 	GivenName      string         `json:"givenName,omitempty"`
@@ -23,11 +23,12 @@ type Person struct {
 }
 
 type Identifier struct {
-	Value          string                `json:"value"`
+	Value          string                `json:"value"` // Todo: value durch identifier ersetzen
 	IdentifierType RelatedIdentifierType `json:"identifierType"`
 }
 
 type Title struct {
+	Lang string        `json:"lang"`
 	Data string        `json:"value"`
 	Type CoreTitleType `json:"type"`
 }
@@ -46,17 +47,17 @@ type Media struct {
 
 type Core struct {
 	// DataCite: #1 Identifier (with mandatory type sub-property)
-	Identifier []Identifier `json:"identifier"`
+	Identifier []Identifier `json:"identifier"` // Todo: identifier druch identifiers ersetzen
 
 	// DataCite: #2 Person (with optional given name, family name, name identifier
 	//              and affiliation sub-properties)
-	Person []Person `json:"person"`
+	Person []Person `json:"person"` // Todo: person durch creators ersetzen
 
 	// DataCite: #3 Title (with optional type sub-properties
-	Title []Title `json:"title"`
+	Title []Title `json:"title"` // todo: json anpassen
 
 	// DataCite: #4 Publisher
-	Publisher string `json:"publisher"`
+	Publisher string `json:"publisher"` // Todo: create struct
 
 	// DataCite: #5 Publicationyear
 	PublicationYear string `json:"publicationYear"`

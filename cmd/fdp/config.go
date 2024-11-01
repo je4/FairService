@@ -2,24 +2,16 @@ package main
 
 import (
 	"github.com/BurntSushi/toml"
+	"github.com/je4/utils/v2/pkg/config"
+	"github.com/je4/utils/v2/pkg/stashconfig"
+	"go.ub.unibas.ch/cloud/certloader/v2/pkg/loader"
 	"log"
 	"strings"
-	"time"
 )
-
-type duration struct {
-	time.Duration
-}
-
-func (d *duration) UnmarshalText(text []byte) error {
-	var err error
-	d.Duration, err = time.ParseDuration(string(text))
-	return err
-}
 
 type CfgDatabase struct {
 	ServerType string
-	DSN        string
+	DSN        config.EnvString
 	ConnMax    int `toml:"connection_max"`
 	Schema     string
 }
@@ -42,61 +34,66 @@ type SSHTunnel struct {
 }
 
 type OAI struct {
-	Pagesize               int64    `toml:"pagesize"`
-	ResumptionTokenTimeout duration `toml:"resumptiontokentimeout"`
-	RepositoryName         string   `toml:"repositoryname"`
-	AdminEmail             []string `toml:"adminemail"`
-	SampleIdentifier       string   `toml:"sampleidentifier"`
-	Delimiter              string   `toml:"delimiter"`
-	Scheme                 string   `toml:"scheme"`
+	Pagesize               int64           `toml:"pagesize"`
+	ResumptionTokenTimeout config.Duration `toml:"resumptiontokentimeout"`
+	RepositoryName         string          `toml:"repositoryname"`
+	AdminEmail             []string        `toml:"adminemail"`
+	SampleIdentifier       string          `toml:"sampleidentifier"`
+	Delimiter              string          `toml:"delimiter"`
+	Scheme                 string          `toml:"scheme"`
 }
 
 type Partition struct {
-	Name         string   `toml:"name"`
-	AddrExt      string   `toml:"addrext"`
-	Description  string   `toml:"description"`
-	Domain       string   `toml:"domain"`
-	HandlePrefix string   `toml:"handleprefix"`
-	OAI          OAI      `toml:"oai"`
-	HandleID     string   `toml:"handleid"`
-	JWTKey       string   `toml:"jwtkey"`
-	JWTAlg       []string `toml:"jwtalg"`
+	Name         string           `toml:"name"`
+	AddrExt      string           `toml:"addrext"`
+	Description  string           `toml:"description"`
+	Domain       string           `toml:"domain"`
+	HandlePrefix string           `toml:"handleprefix"`
+	OAI          OAI              `toml:"oai"`
+	ARK          PartitionARK     `toml:"ark"`
+	HandleID     string           `toml:"handleid"`
+	JWTKey       config.EnvString `toml:"jwtkey"`
+	JWTAlg       []string         `toml:"jwtalg"`
 }
 
-type Handle struct {
-	ServiceName    string `toml:"servicename"`
-	Addr           string `toml:"addr"`
-	JWTKey         string `toml:"jwtkey"`
-	JWTAlg         string `toml:"jwtalg"`
-	SkipCertVerify bool   `toml:"skipcertverify"`
-}
-
-type Datacite struct {
-	Api      string `toml:"api"`
-	User     string `toml:"user"`
-	Password string `toml:"password"`
+type PartitionARK struct {
+	NAAN     string `toml:"naan"`
+	Shoulder string `toml:"shoulder"`
 	Prefix   string `toml:"prefix"`
 }
 
+type Handle struct {
+	ServiceName    string           `toml:"servicename"`
+	Addr           string           `toml:"addr"`
+	JWTKey         config.EnvString `toml:"jwtkey"`
+	JWTAlg         string           `toml:"jwtalg"`
+	SkipCertVerify bool             `toml:"skipcertverify"`
+}
+
+type Datacite struct {
+	Api      string           `toml:"api"`
+	User     config.EnvString `toml:"user"`
+	Password config.EnvString `toml:"password"`
+	Prefix   string           `toml:"prefix"`
+}
+
 type Config struct {
-	ServiceName  string               `toml:"servicename"`
-	Logfile      string               `toml:"logfile"`
-	Loglevel     string               `toml:"loglevel"`
-	Logformat    string               `toml:"logformat"`
-	AccessLog    string               `toml:"accesslog"`
-	Addr         string               `toml:"addr"`
-	CertPEM      string               `toml:"certpem"`
-	KeyPEM       string               `toml:"keypem"`
-	JWTKey       string               `toml:"jwtkey"`
-	JWTAlg       []string             `toml:"jwtalg"`
-	LinkTokenExp duration             `toml:"linktokenexp"`
-	DB           CfgDatabase          `toml:"database"`
-	Tunnel       map[string]SSHTunnel `toml:"tunnel"`
-	Partition    []Partition          `toml:"partition"`
-	Handle       Handle               `toml:"handle"`
-	Datacite     Datacite             `toml:"datacite"`
-	UserName     string               `toml:"username"`
-	Password     string               `toml:"password"`
+	ServiceName  string             `toml:"servicename"`
+	Log          stashconfig.Config `toml:"log"`
+	AccessLog    string             `toml:"accesslog"`
+	Addr         string             `toml:"addr"`
+	AddrExt      string             `toml:"addrext"`
+	TLSConfig    *loader.Config     `toml:"tls"`
+	JWTKey       config.EnvString   `toml:"jwtkey"`
+	JWTAlg       []string           `toml:"jwtalg"`
+	LinkTokenExp config.Duration    `toml:"linktokenexp"`
+	DB           CfgDatabase        `toml:"database"`
+	//Tunnel       map[string]SSHTunnel `toml:"tunnel"`
+	Partition []Partition      `toml:"partition"`
+	Handle    Handle           `toml:"handle"`
+	Datacite  Datacite         `toml:"datacite"`
+	UserName  string           `toml:"username"`
+	Password  config.EnvString `toml:"password"`
 }
 
 func LoadConfig(filepath string) Config {

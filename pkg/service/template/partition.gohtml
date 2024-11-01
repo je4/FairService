@@ -1,15 +1,16 @@
 <!doctype html>
 <html lang="en">
 <head>
+    {{ $baseURL := .BaseURL }}
     <!-- Required meta tags -->
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="author" content="Jürgen Enge, info-age GmbH Basel">
 
     <!-- Bootstrap CSS -->
-    <link href="static/bootstrap/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-KyZXEAg3QhqLMpG8r+8fhAXLRk2vvoC2f3B09zVXn8CA5QIVfZOJ3BCsw2P0p/We" crossorigin="anonymous">
+    <link href="{{$baseURL}}static/bootstrap/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-KyZXEAg3QhqLMpG8r+8fhAXLRk2vvoC2f3B09zVXn8CA5QIVfZOJ3BCsw2P0p/We" crossorigin="anonymous">
 
-    <title>Fair Service: {{.Name}}</title>
+    <title>Fair Service: {{.Part.Name}}</title>
 </head>
 <body>
 <div class="container py-4">
@@ -21,8 +22,8 @@
 
     <div class="p-5 mb-4 bg-light rounded-3">
         <div class="container-fluid py-5">
-            <h1 class="display-5 fw-bold">{{.OAIRepositoryName}}</h1>
-            <p class="col-md-8 fs-4">{{.Description}}</p>
+            <h1 class="display-5 fw-bold">{{.Part.OAIRepositoryName}}</h1>
+            <p class="col-md-8 fs-4">{{.Part.Description}}</p>
             <a class="btn btn-secondary btn-lg" href="oai/" role="button">OAI-PMH Interface</a>
             <a class="btn btn-secondary btn-lg" href="viewer" role="button">Data Viewer</a>
         </div>
@@ -31,7 +32,7 @@
 <!-- Optional JavaScript; choose one of the two! -->
 
 <!-- Option 1: Bootstrap Bundle with Popper -->
-<script src="static/bootstrap/js/bootstrap.bundle.min.js" integrity="sha384-U1DAWAznBHeqEIlVSCgzq+c9gqGAJn5c/t99JyeKa9xxaYpSvHU5awsuZVVFIhvj" crossorigin="anonymous"></script>
+<script src="{{$baseURL}}static/bootstrap/js/bootstrap.bundle.min.js" integrity="sha384-U1DAWAznBHeqEIlVSCgzq+c9gqGAJn5c/t99JyeKa9xxaYpSvHU5awsuZVVFIhvj" crossorigin="anonymous"></script>
 
 </body>
 </html>

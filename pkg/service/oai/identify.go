@@ -21,10 +21,12 @@ func (ident *Identifier) InitNamespace() {
 
 /*
 <oai-identifier xmlns="http://www.openarchives.org/OAI/2.0/oai-identifier" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/oai-identifier http://www.openarchives.org/OAI/2.0/oai-identifier.xsd">
+
 	<scheme>oai</scheme>
 	<repositoryIdentifier>www.research-collection.ethz.ch</repositoryIdentifier>
 	<delimiter>:</delimiter>
 	<sampleIdentifier>oai:www.research-collection.ethz.ch:20.500.11850/1234</sampleIdentifier>
+
 </oai-identifier>
 */
 type Description struct {

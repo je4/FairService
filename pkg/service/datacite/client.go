@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/pkg/errors"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -50,7 +51,7 @@ func (c *Client) Heartbeat() error {
 	if err != nil {
 		return errors.Wrapf(err, "cannot query %s", urlStr)
 	}
-	rData, err := ioutil.ReadAll(resp.Body)
+	rData, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return errors.Wrapf(err, "cannot get result data of %s", urlStr)
 	}
@@ -80,7 +81,7 @@ func (c *Client) RetrieveDOI(doi string) (*API, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot query %s", urlStr)
 	}
-	rData, err := ioutil.ReadAll(resp.Body)
+	rData, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot get result data of %s", urlStr)
 	}
@@ -129,7 +130,7 @@ func (c *Client) Delete(doi string) (*API, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot query %s", urlStr)
 	}
-	rData, err := ioutil.ReadAll(resp.Body)
+	rData, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot get result data of %s", urlStr)
 	}
@@ -193,7 +194,7 @@ func (c *Client) CreateDOI(data *dataciteModel.DataCite, doiSuffix, targetUrl st
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot request url %s", urlStr)
 	}
-	rData, err := ioutil.ReadAll(resp.Body)
+	rData, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot get result data of %s", urlStr)
 	}
@@ -249,7 +250,7 @@ func (c *Client) SetEvent(doiSuffix string, event DCEvent) (*API, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot request url %s", urlStr)
 	}
-	rData, err := ioutil.ReadAll(resp.Body)
+	rData, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot get result data of %s", urlStr)
 	}

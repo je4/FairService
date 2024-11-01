@@ -10,6 +10,7 @@ import (
 	"github.com/je4/FairService/v2/pkg/service"
 	"github.com/je4/utils/v2/pkg/JWTInterceptor"
 	"github.com/pkg/errors"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -48,7 +49,7 @@ func getHelper(client http.Client, urlstr string) (*service.FairResultStatus, er
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot post to %s", urlstr)
 	}
-	bodyBytes, err := ioutil.ReadAll(response.Body)
+	bodyBytes, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot read response body")
 	}

@@ -19,6 +19,9 @@ type Partition struct {
 	OAISampleIdentifier string
 	OAIDelimiter        string
 	OAIScheme           string
+	ARKNAAN             string
+	ARKShoulder         string
+	ARKPrefix           string
 
 	ResumptionTokenTimeout time.Duration
 	HandleID               string
@@ -34,6 +37,9 @@ func NewPartition(
 	OAISampleIdentifier,
 	OAIDelimiter string,
 	OAIScheme string,
+	ARKNAAN string,
+	ARKShoulder string,
+	ARKPrefix string,
 	HandleID string,
 	Description string,
 	pagesize int64,
@@ -52,6 +58,9 @@ func NewPartition(
 		OAISampleIdentifier:    OAISampleIdentifier,
 		OAIDelimiter:           OAIDelimiter,
 		OAIScheme:              OAIScheme,
+		ARKNAAN:                ARKNAAN,
+		ARKShoulder:            ARKShoulder,
+		ARKPrefix:              ARKPrefix,
 		HandleID:               HandleID,
 		ResumptionTokenTimeout: resumptionTokenTimeout,
 		JWTKey:                 JWTKey,

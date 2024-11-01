@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/BurntSushi/toml"
+	"go.ub.unibas.ch/cloud/certloader/v2/pkg/loader"
 	"log"
 	"time"
 )
@@ -84,7 +85,7 @@ type Config struct {
 	Logformat    string               `toml:"logformat"`
 	AccessLog    string               `toml:"accesslog"`
 	Addr         string               `toml:"addr"`
-	CertPEM      string               `toml:"certpem"`
+	TLSConfig    *loader.Config       `toml:"tls"`
 	KeyPEM       string               `toml:"keypem"`
 	JWTKey       string               `toml:"jwtkey"`
 	JWTAlg       []string             `toml:"jwtalg"`

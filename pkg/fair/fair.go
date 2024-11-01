@@ -3,19 +3,22 @@ package fair
 import (
 	"bytes"
 	"compress/gzip"
-	"database/sql"
+	"context"
+	"emperror.dev/errors"
 	"fmt"
-	"github.com/je4/FairService/v2/pkg/datatable"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgtype/zeronull"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/FairService/v2/pkg/model/myfair"
+	"github.com/je4/FairService/v2/pkg/service/ark"
 	"github.com/je4/FairService/v2/pkg/service/datacite"
 	hcClient "github.com/je4/HandleCreator/v2/pkg/client"
-	"github.com/pkg/errors"
+	"github.com/je4/utils/v2/pkg/datatable"
+	"github.com/je4/utils/v2/pkg/zLogger"
 	"io"
 
-	//"github.com/je4/FairService/v2/pkg/service"
-	"github.com/lib/pq"
-	"github.com/op/go-logging"
 	"strings"
 	"sync"
 	"time"
@@ -49,9 +52,10 @@ var DataAccessReverse = map[string]DataAccess{
 type DataStatus string
 
 const (
-	DataStatusActive   DataStatus = "active"
-	DataStatusDisabled DataStatus = "disabled"
-	DataStatusDeleted  DataStatus = "deleted"
+	DataStatusActive      DataStatus = "active"
+	DataStatusDisabled    DataStatus = "disabled"
+	DataStatusDeleted     DataStatus = "deleted"
+	DataStatusDeletedMeta DataStatus = "deleted_meta"
 )
 
 var DataStatusReverse = map[string]DataStatus{
@@ -62,6 +66,7 @@ var DataStatusReverse = map[string]DataStatus{
 
 type ItemData struct {
 	Source     string      `json:"source"`
+	Partition  string      `json:"partition"`
 	Signature  string      `json:"signature"`
 	Metadata   myfair.Core `json:"metadata"`
 	Set        []string    `json:"set"`
@@ -72,6 +77,7 @@ type ItemData struct {
 	Seq        int64       `json:"-"`
 	UUID       string      `json:"uuid"`
 	Datestamp  time.Time   `json:"datestamp"`
+	URL        string
 }
 
 type SourceData struct {
@@ -104,20 +110,22 @@ func equalStrings(a, b []string) bool {
 
 type Fair struct {
 	dbSchema       string
-	db             *sql.DB
+	db             *pgxpool.Pool
 	handle         *hcClient.HandleCreatorClient
+	ark            *ark.Service
 	dataciteClient *datacite.Client
 	sourcesMutex   sync.RWMutex
 	sources        map[int64]*Source
 	partitions     map[string]*Partition
-	log            *logging.Logger
+	log            zLogger.ZLogger
 }
 
-func NewFair(db *sql.DB, dbSchema string, handle *hcClient.HandleCreatorClient, dataciteClient *datacite.Client, log *logging.Logger) (*Fair, error) {
+func NewFair(db *pgxpool.Pool, dbSchema string, handle *hcClient.HandleCreatorClient, ark *ark.Service, dataciteClient *datacite.Client, log zLogger.ZLogger) (*Fair, error) {
 	f := &Fair{
 		dbSchema:       dbSchema,
 		db:             db,
 		handle:         handle,
+		ark:            ark,
 		dataciteClient: dataciteClient,
 		sourcesMutex:   sync.RWMutex{},
 		sources:        map[int64]*Source{},
@@ -131,9 +139,10 @@ func NewFair(db *sql.DB, dbSchema string, handle *hcClient.HandleCreatorClient, 
 }
 
 func (f *Fair) nextCounter(name string) (int64, error) {
-	sqlStr := fmt.Sprintf("SELECT NEXTVAL('%s.%s')", f.dbSchema, name)
+	//	sqlStr := fmt.Sprintf("SELECT NEXTVAL('%s.%s')", f.dbSchema, name)
+	sqlStr := fmt.Sprintf("SELECT NEXTVAL('%s')", name)
 	var next int64
-	if err := f.db.QueryRow(sqlStr).Scan(&next); err != nil {
+	if err := f.db.QueryRow(context.Background(), sqlStr).Scan(&next); err != nil {
 		return 0, errors.Wrapf(err, "cannot execute %s", sqlStr)
 	}
 	return next, nil
@@ -156,13 +165,16 @@ func (f *Fair) GetPartitions() map[string]*Partition {
 }
 
 func (f *Fair) GetMinimumDatestamp(partition *Partition) (time.Time, error) {
-	sqlstr := fmt.Sprintf("SELECT MIN(datestamp) AS mindate"+
+	/*	sqlstr := fmt.Sprintf("SELECT MIN(datestamp) AS mindate"+
 		" FROM %s.coreview"+
 		" WHERE partition=$1", f.dbSchema)
+	*/sqlstr := "SELECT MIN(datestamp) AS mindate" +
+		" FROM coreview" +
+		" WHERE partition=$1"
 	params := []interface{}{partition.Name}
 	var datestamp time.Time
-	if err := f.db.QueryRow(sqlstr, params...).Scan(&datestamp); err != nil {
-		if err != sql.ErrNoRows {
+	if err := f.db.QueryRow(context.Background(), sqlstr, params...).Scan(&datestamp); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return time.Time{}, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}
 		return time.Now(), nil
@@ -171,18 +183,18 @@ func (f *Fair) GetMinimumDatestamp(partition *Partition) (time.Time, error) {
 }
 
 func (f *Fair) RefreshSearch() error {
-	f.log.Info("refreshing meterialized view searchable")
-	sqlstr := fmt.Sprintf("SELECT %s.refresh()", f.dbSchema)
-	_, err := f.db.Exec(sqlstr)
+	f.log.Info().Msg("refreshing meterialized view searchable")
+	//	sqlstr := fmt.Sprintf("SELECT %s.refresh()", f.dbSchema)
+	sqlstr := "SELECT refresh()"
+	_, err := f.db.Exec(context.Background(), sqlstr)
 	if err != nil {
-		f.log.Errorf("cannot refresh materialized view: %v - %v", sqlstr, err)
+		f.log.Error().Msgf("cannot refresh materialized view: %v - %v", sqlstr, err)
 		return errors.Wrapf(err, "error refreshing search view %s", sqlstr)
 	}
 	return nil
 }
 
 func (f *Fair) SetOriginalData(p *Partition, uuid string, format string, data []byte) error {
-
 	formatOK := false
 	for _, f := range []string{"Other", "XML", "JSON"} {
 		if f == format {
@@ -207,17 +219,20 @@ func (f *Fair) SetOriginalData(p *Partition, uuid string, format string, data []
 		w.Close()
 		compressed = true
 	}
-	sqlstr := fmt.Sprintf("SELECT COUNT(*) FROM %s.originaldata WHERE uuid=$1", f.dbSchema)
+	//	sqlstr := fmt.Sprintf("SELECT COUNT(*) FROM %s.originaldata WHERE uuid=$1", f.dbSchema)
+	sqlstr := "SELECT COUNT(*) FROM originaldata WHERE uuid=$1"
 	var num int64
-	if err := f.db.QueryRow(sqlstr, uuid).Scan(&num); err != nil {
+	if err := f.db.QueryRow(context.Background(), sqlstr, uuid).Scan(&num); err != nil {
 		return errors.Wrapf(err, "cannot query %s - [%v]", sqlstr, uuid)
 	}
 	if num > 0 {
-		sqlstr = fmt.Sprintf("UPDATE %s.originaldata SET type=$1, data=$2, compressed=$3 WHERE uuid=$4", f.dbSchema)
+		//sqlstr = fmt.Sprintf("UPDATE %s.originaldata SET type=$1, data=$2, compressed=$3 WHERE uuid=$4", f.dbSchema)
+		sqlstr = "UPDATE originaldata SET type=$1, data=$2, compressed=$3 WHERE uuid=$4"
 	} else {
-		sqlstr = fmt.Sprintf("INSERT INTO %s.originaldata (type, data, compressed, uuid) VALUES( $1, $2, $3, $4)", f.dbSchema)
+		// sqlstr = fmt.Sprintf("INSERT INTO %s.originaldata (type, data, compressed, uuid) VALUES( $1, $2, $3, $4)", f.dbSchema)
+		sqlstr = "INSERT INTO originaldata (type, data, compressed, uuid) VALUES( $1, $2, $3, $4)"
 	}
-	if _, err := f.db.Exec(sqlstr, format, target.Bytes(), compressed, uuid); err != nil {
+	if _, err := f.db.Exec(context.Background(), sqlstr, format, target.Bytes(), compressed, uuid); err != nil {
 		return errors.Wrapf(err, "cannot query %s - [%v, %v, %v, %v]", sqlstr, format, target, compressed, uuid)
 	}
 	return nil
@@ -225,11 +240,12 @@ func (f *Fair) SetOriginalData(p *Partition, uuid string, format string, data []
 
 func (f *Fair) GetOriginalData(p *Partition, uuid string) ([]byte, string, error) {
 
-	sqlstr := fmt.Sprintf("SELECT type, data, compressed FROM %s.originaldata WHERE AND uuid=$1", f.dbSchema)
+	// sqlstr := fmt.Sprintf("SELECT type, data, compressed FROM %s.originaldata WHERE uuid=$1", f.dbSchema)
+	sqlstr := "SELECT type, data, compressed FROM originaldata WHERE uuid=$1"
 	var t string
 	var compressed bool
 	var data []byte
-	if err := f.db.QueryRow(sqlstr, uuid).Scan(&t, &compressed, &data); err != nil {
+	if err := f.db.QueryRow(context.Background(), sqlstr, uuid).Scan(&t, &compressed, &data); err != nil {
 		return nil, "", errors.Wrapf(err, "cannot query %s - [%v]", sqlstr, uuid)
 	}
 	if compressed {
@@ -249,10 +265,14 @@ func (f *Fair) GetOriginalData(p *Partition, uuid string) ([]byte, string, error
 }
 
 func (f *Fair) GetSets(p *Partition) (map[string]string, error) {
-	sqlstr := fmt.Sprintf("SELECT specs.setspecx, s.setname"+
+	/*	sqlstr := fmt.Sprintf("SELECT specs.setspecx, s.setname"+
 		" FROM (SELECT DISTINCT unnest(setspec) AS setspecx FROM %s.coreview WHERE partition=$1) specs"+
 		" LEFT JOIN %s.set s ON s.setspec=setspecx", f.dbSchema, f.dbSchema)
-	rows, err := f.db.Query(sqlstr, p.Name)
+	*/
+	sqlstr := "SELECT specs.setspecx, s.setname" +
+		" FROM (SELECT DISTINCT unnest(setspec) AS setspecx FROM coreview WHERE partition=$1) specs" +
+		" LEFT JOIN set s ON s.setspec=setspecx"
+	rows, err := f.db.Query(context.Background(), sqlstr, p.Name)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot query sets %s", sqlstr)
 	}
@@ -260,28 +280,26 @@ func (f *Fair) GetSets(p *Partition) (map[string]string, error) {
 	defer rows.Close()
 	for rows.Next() {
 		var setspec string
-		var setname sql.NullString
+		var setname zeronull.Text
 		if err := rows.Scan(&setspec, &setname); err != nil {
 			return nil, errors.Wrapf(err, "cannot scan sets query result - %s", sqlstr)
 		}
-		if setname.Valid {
-			sets[setspec] = setname.String
-		} else {
-			sets[setspec] = setspec
-		}
+		sets[setspec] = setspec
 	}
 	return sets, nil
 }
 
 func (f *Fair) StartUpdate(p *Partition, source string) error {
-	src, err := f.GetSourceByName(p, source)
+	src, err := f.GetSourceByName(p.Name, source)
 	if err != nil {
 		return errors.Wrapf(err, "cannot get source %s", source)
 	}
-	sqlstr := fmt.Sprintf("DELETE FROM %s.core_dirty"+
+	/*	sqlstr := fmt.Sprintf("DELETE FROM %s.core_dirty"+
 		" WHERE uuid IN (SELECT uuid FROM %s.core WHERE source=$1)", f.dbSchema, f.dbSchema)
+	*/
+	sqlstr := "DELETE FROM core_dirty WHERE uuid IN (SELECT uuid FROM core WHERE source=$1)"
 	params := []interface{}{src.ID}
-	if _, err := f.db.Exec(sqlstr, params...); err != nil {
+	if _, err := f.db.Exec(context.Background(), sqlstr, params...); err != nil {
 		return errors.Wrapf(err, "cannot execute dirty update - %s - %v", sqlstr, params)
 	}
 	return nil
@@ -304,15 +322,17 @@ func (f *Fair) AbortUpdate(p *Partition, source string) error {
 }
 
 func (f *Fair) EndUpdate(p *Partition, source string) error {
-	src, err := f.GetSourceByName(p, source)
+	src, err := f.GetSourceByName(p.Name, source)
 	if err != nil {
 		return errors.Wrapf(err, "cannot get source %s", source)
 	}
-	sqlstr := fmt.Sprintf("UPDATE %s.core"+
+	/*	sqlstr := fmt.Sprintf("UPDATE %s.core"+
 		" SET status=$1"+
 		" WHERE source=$2 AND uuid NOT IN (SELECT uuid FROM %s.core_dirty)", f.dbSchema, f.dbSchema)
-	params := []interface{}{DataStatusDisabled, src.ID}
-	if _, err := f.db.Exec(sqlstr, params...); err != nil {
+	*/
+	sqlstr := "UPDATE core SET status=$1 WHERE source=$2 AND uuid NOT IN (SELECT uuid FROM core_dirty)"
+	params := []interface{}{DataStatusDeletedMeta, src.ID}
+	if _, err := f.db.Exec(context.Background(), sqlstr, params...); err != nil {
 		return errors.Wrapf(err, "cannot execute dirty update - %s - %v", sqlstr, params)
 	}
 	f.RefreshSearch()
@@ -366,14 +386,18 @@ func (f *Fair) CreateDOI(p *Partition, uuidStr, targetUrl string) (*datacite.API
 	}
 
 	data.Identifier = append(data.Identifier, fmt.Sprintf("%s:%s", myfair.RelatedIdentifierTypeDOI, doiStr))
-	sqlstr := fmt.Sprintf("UPDATE %s.core"+
+	/*	sqlstr := fmt.Sprintf("UPDATE %s.core"+
 		" SET identifier=$1, datestamp=NOW(), seq=NEXTVAL('lastchange')"+
 		" WHERE uuid=$2", f.dbSchema)
+	*/
+	sqlstr := "UPDATE core" +
+		" SET identifier=$1, datestamp=NOW(), seq=NEXTVAL('lastchange')" +
+		" WHERE uuid=$2"
 	params := []interface{}{
-		pq.Array(data.Identifier),
+		pgtype.FlatArray[string](data.Identifier),
 		data.UUID,
 	}
-	if _, err := f.db.Exec(sqlstr, params...); err != nil {
+	if _, err := f.db.Exec(context.Background(), sqlstr, params...); err != nil {
 		return nil, errors.Wrapf(err, "[%s] cannot update [%s] - [%v]", uuidStr, sqlstr, params)
 	}
 	f.RefreshSearch()
@@ -437,11 +461,15 @@ func (f *Fair) Search(p *Partition, dtr *datatable.Request) ([]map[string]string
 	var params = []interface{}{part.Name}
 	sqlWhere := "s.source=src.sourceid AND src.partition=$1 "
 
-	sqlstr := fmt.Sprintf("SELECT COUNT(*) AS num"+
+	/*	sqlstr := fmt.Sprintf("SELECT COUNT(*) AS num"+
 		" FROM %s.searchable s, %s.source src "+
 		" WHERE %s", f.dbSchema, f.dbSchema, sqlWhere)
+	*/
+	sqlstr := fmt.Sprintf("SELECT COUNT(*) AS num"+
+		" FROM searchable s, source src "+
+		" WHERE %s", sqlWhere)
 	var num, total int64
-	if err := f.db.QueryRow(sqlstr, params...).Scan(&total); err != nil {
+	if err := f.db.QueryRow(context.Background(), sqlstr, params...).Scan(&total); err != nil {
 		return nil, 0, 0, errors.Wrapf(err, "cannot execute query %s - %v", sqlstr, params)
 	}
 
@@ -455,12 +483,16 @@ func (f *Fair) Search(p *Partition, dtr *datatable.Request) ([]map[string]string
 		}
 		params = append(params, "simple", tsquery)
 		sqlWhere += " AND s.fulltext @@ to_tsquery($2, $3) "
+		/*		sqlstr = fmt.Sprintf("SELECT COUNT(*) AS num"+
+				" FROM %s.searchable s, %s.source src "+
+				" WHERE %s", f.dbSchema, f.dbSchema, sqlWhere)
+		*/
 		sqlstr = fmt.Sprintf("SELECT COUNT(*) AS num"+
-			" FROM %s.searchable s, %s.source src "+
-			" WHERE %s", f.dbSchema, f.dbSchema, sqlWhere)
-	}
-	if err := f.db.QueryRow(sqlstr, params...).Scan(&num); err != nil {
-		return nil, 0, 0, errors.Wrapf(err, "cannot execute query %s - %v", sqlstr, params)
+			" FROM searchable s, source src "+
+			" WHERE %s", sqlWhere)
+		if err := f.db.QueryRow(context.Background(), sqlstr, params...).Scan(&num); err != nil {
+			return nil, 0, 0, errors.Wrapf(err, "cannot execute query %s - %v", sqlstr, params)
+		}
 	}
 
 	if dtr.Start >= num {
@@ -472,13 +504,19 @@ func (f *Fair) Search(p *Partition, dtr *datatable.Request) ([]map[string]string
 		sqlOrder = fmt.Sprintf("ORDER BY %s", strings.Join(orderList, ", "))
 	}
 
-	sqlstr = fmt.Sprintf("SELECT %s "+
+	/*	sqlstr = fmt.Sprintf("SELECT %s "+
 		" FROM %s.searchable s, %s.source src "+
 		" WHERE %s "+
 		" %s "+
 		" LIMIT %v OFFSET %v", sqlFields, f.dbSchema, f.dbSchema, sqlWhere, sqlOrder, dtr.Length, dtr.Start)
-	f.log.Infof("%s - %v", sqlstr, params)
-	rows, err := f.db.Query(sqlstr, params...)
+	*/
+	sqlstr = fmt.Sprintf("SELECT %s "+
+		" FROM searchable s, source src "+
+		" WHERE %s "+
+		" %s "+
+		" LIMIT %v OFFSET %v", sqlFields, sqlWhere, sqlOrder, dtr.Length, dtr.Start)
+	f.log.Info().Msgf("%s - %v", sqlstr, params)
+	rows, err := f.db.Query(context.Background(), sqlstr, params...)
 	if err != nil {
 		return nil, 0, 0, errors.Wrapf(err, "cannot execute query %s - %v", sqlstr, params)
 	}
@@ -494,4 +532,82 @@ func (f *Fair) Search(p *Partition, dtr *datatable.Request) ([]map[string]string
 		result = append(result, rLine)
 	}
 	return result, num, total, nil
+}
+
+func (f *Fair) ARKMintAll() error {
+	var doRefresh = false
+	defer func() {
+		if doRefresh {
+			f.RefreshSearch()
+		}
+	}()
+	sqlStr := "SELECT coreview.uuid FROM coreview LEFT JOIN ark ON coreview.uuid = ark.uuid WHERE coreview.partition=$1 AND ark.uuid IS NULL LIMIT 1000"
+	for _, p := range f.partitions {
+		for {
+			var uuids = make([]string, 0, 1000)
+			rows, err := f.db.Query(context.Background(), sqlStr, p.Name)
+			if err != nil {
+				return errors.Wrapf(err, "cannot execute %s", sqlStr)
+			}
+			for rows.Next() {
+				var uuid string
+				if err := rows.Scan(&uuid); err != nil {
+					return errors.Wrapf(err, "cannot scan %s", sqlStr)
+				}
+				uuids = append(uuids, uuid)
+			}
+			rows.Close()
+			if len(uuids) == 0 {
+				break
+			}
+
+			for _, uuid := range uuids {
+				data, err := f.GetItem(p, uuid)
+				if err != nil {
+					return errors.Wrapf(err, "error loading item")
+				}
+				if data == nil {
+					return errors.New(fmt.Sprintf("item %s/%s not found", p.Name, uuid))
+				}
+
+				if data.Status != DataStatusActive {
+					f.log.Error().Msgf("item %s/%s is not active", p.Name, uuid)
+				}
+
+				if ark, err := f.ark.CreateNew(uuid, p.ARKNAAN, p.ARKShoulder, p.ARKPrefix); err != nil {
+					return errors.Wrapf(err, "cannot create ark for %s", uuid)
+				} else {
+					doRefresh = true
+					f.log.Info().Msgf("created ark %s for %s", ark, uuid)
+					ids := make([]string, 0, len(data.Identifier))
+					for _, id := range data.Identifier {
+						if strings.HasPrefix(id, fmt.Sprintf("ark:%s/%s", p.ARKNAAN, p.ARKShoulder)) {
+							continue
+						}
+						if id == "" {
+							continue
+						}
+						ids = append(ids, id)
+					}
+					data.Identifier = append(ids, ark)
+					sqlstr := "UPDATE core" +
+						" SET identifier=$1, datestamp=NOW(), seq=NEXTVAL('lastchange')" +
+						" WHERE uuid=$2"
+					params := []interface{}{
+						pgtype.FlatArray[string](data.Identifier),
+						data.UUID,
+					}
+					if _, err := f.db.Exec(context.Background(), sqlstr, params...); err != nil {
+						return errors.Wrapf(err, "[%s] cannot update [%s] - [%v]", uuid, sqlstr, params)
+					}
+				}
+			}
+		}
+	}
+	return nil
+
+}
+
+func (f *Fair) ARKResolveUUID(ark string) (uuid string, components string, variants string, err error) {
+	return f.ark.ResolveUUID(ark)
 }

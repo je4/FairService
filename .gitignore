@@ -14,6 +14,8 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 .idea/
+go.work
+go.work.sum
 ~*
 configs/fdp.toml
 configs/fdp2.toml

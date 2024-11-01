@@ -2,94 +2,112 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"flag"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/FairService/v2/pkg/service"
 	"github.com/je4/FairService/v2/pkg/service/datacite"
 	hcClient "github.com/je4/HandleCreator/v2/pkg/client"
-	lm "github.com/je4/utils/v2/pkg/logger"
-	"github.com/je4/utils/v2/pkg/ssh"
-	_ "github.com/lib/pq"
+	"github.com/je4/utils/v2/pkg/zLogger"
+	"github.com/rs/zerolog"
+	"go.ub.unibas.ch/cloud/certloader/v2/pkg/loader"
 	"io"
 	"log"
 	"os"
 	"os/signal"
+	"regexp"
+	"strings"
 	"syscall"
 	"time"
 )
+
+type queryTracer struct {
+	log zLogger.ZLogger
+}
+
+func (tracer *queryTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+	tracer.log.Debug().Msgf("postgreSQL command start '%s' - %v", data.SQL, data.Args)
+	return ctx
+}
+
+func (tracer *queryTracer) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryEndData) {
+	if data.Err != nil {
+		tracer.log.Error().Err(data.Err).Msgf("postgreSQL command error")
+		return
+	}
+	tracer.log.Debug().Msgf("postgreSQL command end: %s (%d)", data.CommandTag.String(), data.CommandTag.RowsAffected())
+}
 
 func main() {
 	cfgFile := flag.String("cfg", "/etc/fdp.toml", "locations of config file")
 	flag.Parse()
 	config := LoadConfig(*cfgFile)
 
-	// create logger instance
-	logger, lf := lm.CreateLogger("FAIRService", config.Logfile, nil, config.Loglevel, config.Logformat)
-	defer lf.Close()
-
-	var tunnels []*ssh.SSHtunnel
-	for name, tunnel := range config.Tunnel {
-		logger.Infof("starting tunnel %s", name)
-
-		forwards := make(map[string]*ssh.SourceDestination)
-		for fwName, fw := range tunnel.Forward {
-			forwards[fwName] = &ssh.SourceDestination{
-				Local: &ssh.Endpoint{
-					Host: fw.Local.Host,
-					Port: fw.Local.Port,
-				},
-				Remote: &ssh.Endpoint{
-					Host: fw.Remote.Host,
-					Port: fw.Remote.Port,
-				},
-			}
-		}
-
-		t, err := ssh.NewSSHTunnel(
-			tunnel.User,
-			tunnel.PrivateKey,
-			&ssh.Endpoint{
-				Host: tunnel.Endpoint.Host,
-				Port: tunnel.Endpoint.Port,
-			},
-			forwards,
-			logger,
-		)
+	var out io.Writer = os.Stdout
+	if config.Logfile != "" {
+		fp, err := os.OpenFile(config.Logfile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 		if err != nil {
-			logger.Errorf("cannot create tunnel %v@%v:%v - %v", tunnel.User, tunnel.Endpoint.Host, tunnel.Endpoint.Port, err)
-			return
+			log.Fatalf("cannot open logfile %s: %v", config.Logfile, err)
 		}
-		if err := t.Start(); err != nil {
-			logger.Errorf("cannot create configfile %v - %v", t.String(), err)
-			return
-		}
-		tunnels = append(tunnels, t)
-	}
-	defer func() {
-		for _, t := range tunnels {
-			t.Close()
-		}
-	}()
-	// if tunnels are made, wait until connection is established
-	if len(config.Tunnel) > 0 {
-		time.Sleep(2 * time.Second)
+		defer fp.Close()
+		out = fp
 	}
 
-	// get database connection handle
-	db, err := sql.Open(config.DB.ServerType, config.DB.DSN)
+	output := zerolog.ConsoleWriter{Out: out, TimeFormat: time.RFC3339}
+	_logger := zerolog.New(output).With().Timestamp().Logger()
+	_logger.Level(zLogger.LogLevel(config.Loglevel))
+	var logger zLogger.ZLogger = &_logger
+
+	pgxConf, err := pgxpool.ParseConfig(string(config.DB.DSN))
 	if err != nil {
-		log.Fatalf("error opening database: %v", err)
+		logger.Fatal().Err(err).Msg("cannot parse db connection string")
 	}
-	// close on shutdown
-	defer db.Close()
-
-	// Open doesn't open a connection. Validate DSN data:
-	err = db.Ping()
+	//	pgxConf.TLSConfig = &tls.Config{InsecureSkipVerify: true, ServerName: "dd-pdb3.ub.unibas.ch"}
+	// create prepared queries on each connection
+	/*
+		pgxConf.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+			return service.AfterConnectFunc(ctx, conn, logger)
+		}
+	*/
+	pgxConf.BeforeConnect = func(ctx context.Context, cfg *pgx.ConnConfig) error {
+		cfg.Tracer = &queryTracer{log: logger}
+		return nil
+	}
+	var conn *pgxpool.Pool
+	var dbstrRegexp = regexp.MustCompile(`^postgres://postgres:([^@]+)@.+$`)
+	pws := dbstrRegexp.FindStringSubmatch(string(config.DB.DSN))
+	if len(pws) == 2 {
+		logger.Info().Msgf("connecting to database: %s", strings.Replace(string(config.DB.DSN), pws[1], "xxxxxxxx", -1))
+	} else {
+		logger.Info().Msgf("connecting to database")
+	}
+	db, err := pgxpool.NewWithConfig(context.Background(), pgxConf)
+	//conn, err = pgx.ConnectConfig(context.Background(), pgxConf)
 	if err != nil {
-		log.Fatalf("error pinging database: %v", err)
+		logger.Fatal().Err(err).Msgf("cannot connect to database: %s", config.DB.DSN)
 	}
+	defer conn.Close()
 
+	if err := db.Ping(context.Background()); err != nil {
+		logger.Error().Err(err).Msg("cannot ping database")
+	} else {
+		logger.Info().Msg("database connection established")
+	}
+	/*	// get database connection handle
+		db, err := sql.Open(config.DB.ServerType, config.DB.DSN)
+		if err != nil {
+			log.Fatalf("error opening database: %v", err)
+		}
+		// close on shutdown
+		defer db.Close()
+
+		// Open doesn't open a connection. Validate DSN data:
+		err = db.Ping()
+		if err != nil {
+			log.Fatalf("error pinging database: %v", err)
+		}
+	*/
 	var accessLog io.Writer
 	var f *os.File
 	if config.AccessLog == "" {
@@ -97,7 +115,7 @@ func main() {
 	} else {
 		f, err = os.OpenFile(config.AccessLog, os.O_WRONLY|os.O_CREATE, 0755)
 		if err != nil {
-			logger.Panicf("cannot open file %s: %v", config.AccessLog, err)
+			logger.Panic().Msgf("cannot open file %s: %v", config.AccessLog, err)
 			return
 		}
 		defer f.Close()
@@ -112,19 +130,19 @@ func main() {
 			config.Datacite.Password,
 			config.Datacite.Prefix)
 		if err != nil {
-			logger.Panicf("cannot create datacite client: %v", err)
+			logger.Panic().Msgf("cannot create datacite client: %v", err)
 			return
 		}
 
 		if err := dataciteClient.Heartbeat(); err != nil {
-			logger.Panicf("cannot check datacite heartbeat: %v", err)
+			logger.Panic().Msgf("cannot check datacite heartbeat: %v", err)
 			return
 		}
 
 		/*
 			r, err := dataciteClient.RetrieveDOI("10.5438/0012")
 			if err != nil {
-				logger.Panicf("cannot get doi: %v", err)
+				logger.Panic().Msgf("cannot get doi: %v", err)
 				return
 			}
 			logger.Infof("doi: %v", r)
@@ -134,14 +152,14 @@ func main() {
 	if config.Handle.Addr != "" {
 		handle, err = hcClient.NewHandleCreatorClient(config.Handle.ServiceName, config.Handle.Addr, config.Handle.JWTKey, config.Handle.JWTAlg, config.Handle.SkipCertVerify, logger)
 		if err != nil {
-			logger.Panicf("cannot create handle service: %v", err)
+			logger.Panic().Msgf("cannot create handle service: %v", err)
 			return
 		}
 		if err := handle.Ping(); err != nil {
-			logger.Fatalf("cannot ping handle server on %s: %v", config.Handle.Addr, err)
+			logger.Fatal().Msgf("cannot ping handle server on %s: %v", config.Handle.Addr, err)
 		}
 	} else {
-		logger.Info("no handle creator configured")
+		logger.Info().Msg("no handle creator configured")
 	}
 	var partitions []*fair.Partition
 	for _, pconf := range config.Partition {
@@ -162,26 +180,34 @@ func main() {
 			pconf.JWTKey,
 			pconf.JWTAlg)
 		if err != nil {
-			logger.Panicf("cannot create partition %s: %v", pconf.Name, err)
+			logger.Panic().Msgf("cannot create partition %s: %v", pconf.Name, err)
 			return
 		}
 		partitions = append(partitions, p)
 	}
 
-	fair, err := fair.NewFair(db, config.DB.Schema, handle, dataciteClient, logger)
+	fair, err := fair.NewFair(db, config.DB.Schema, handle, nil, dataciteClient, logger)
 	if err != nil {
-		logger.Panicf("cannot initialize fair: %v", err)
+		logger.Panic().Msgf("cannot initialize fair: %v", err)
 	}
 	for _, p := range partitions {
 		fair.AddPartition(p)
 	}
 
-	srv, err := service.NewServer(config.ServiceName, config.Addr, config.UserName, config.Password, logger, fair, accessLog, config.JWTKey, config.JWTAlg, config.LinkTokenExp.Duration)
+	// create TLS Certificate.
+	// the certificate MUST contain <package>.<service> as DNS name
+	serverTLSConfig, serverLoader, err := loader.CreateServerLoader(true, config.TLSConfig, nil, logger)
 	if err != nil {
-		logger.Panicf("cannot initialize server: %v", err)
+		logger.Fatal().Err(err).Msg("cannot create server loader")
+	}
+	defer serverLoader.Close()
+
+	srv, err := service.NewServer(config.ServiceName, config.Addr, "", config.UserName, config.Password, "", logger, fair, accessLog, config.JWTKey, config.JWTAlg, config.LinkTokenExp.Duration)
+	if err != nil {
+		logger.Panic().Msgf("cannot initialize server: %v", err)
 	}
 	go func() {
-		if err := srv.ListenAndServe(config.CertPEM, config.KeyPEM); err != nil {
+		if err := srv.ListenAndServe(serverTLSConfig); err != nil {
 			log.Fatalf("server died: %v", err)
 		}
 	}()
@@ -201,7 +227,7 @@ func main() {
 		<-sigint
 
 		// We received an interrupt signal, shut down.
-		logger.Infof("shutdown requested")
+		logger.Info().Msg("shutdown requested")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
@@ -211,6 +237,6 @@ func main() {
 	}()
 
 	<-end
-	logger.Info("server stopped")
+	logger.Info().Msg("server stopped")
 
 }
