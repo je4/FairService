@@ -305,7 +305,7 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 			//
 			// Create Handle and add to local identifier list
 			//
-			next, err := f.nextCounter("handle")
+			next, err := f.NextCounter("handleseq")
 			if err != nil {
 				return nil, errors.Wrap(err, "cannot get next handle value")
 			}

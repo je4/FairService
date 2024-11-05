@@ -108,18 +108,6 @@ func equalStrings(a, b []string) bool {
 	return true
 }
 
-type Fair struct {
-	dbSchema       string
-	db             *pgxpool.Pool
-	handle         *hcClient.HandleCreatorClient
-	ark            *ark.Service
-	dataciteClient *datacite.Client
-	sourcesMutex   sync.RWMutex
-	sources        map[int64]*Source
-	partitions     map[string]*Partition
-	log            zLogger.ZLogger
-}
-
 func NewFair(db *pgxpool.Pool, dbSchema string, handle *hcClient.HandleCreatorClient, ark *ark.Service, dataciteClient *datacite.Client, log zLogger.ZLogger) (*Fair, error) {
 	f := &Fair{
 		dbSchema:       dbSchema,
@@ -138,7 +126,23 @@ func NewFair(db *pgxpool.Pool, dbSchema string, handle *hcClient.HandleCreatorCl
 	return f, nil
 }
 
-func (f *Fair) nextCounter(name string) (int64, error) {
+type Fair struct {
+	dbSchema       string
+	db             *pgxpool.Pool
+	handle         *hcClient.HandleCreatorClient
+	ark            *ark.Service
+	dataciteClient *datacite.Client
+	sourcesMutex   sync.RWMutex
+	sources        map[int64]*Source
+	partitions     map[string]*Partition
+	log            zLogger.ZLogger
+}
+
+func (f *Fair) GetDB() *pgxpool.Pool {
+	return f.db
+}
+
+func (f *Fair) NextCounter(name string) (int64, error) {
 	//	sqlStr := fmt.Sprintf("SELECT NEXTVAL('%s.%s')", f.dbSchema, name)
 	sqlStr := fmt.Sprintf("SELECT NEXTVAL('%s')", name)
 	var next int64
@@ -364,7 +368,7 @@ func (f *Fair) CreateDOI(p *Partition, uuidStr, targetUrl string) (*datacite.API
 		return nil, errors.New(fmt.Sprintf("doi %s for uuid %s already exists", hasDOI, uuidStr))
 	}
 
-	next, err := f.nextCounter("doi")
+	next, err := f.NextCounter("doiseq")
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get next doi sequence value")
 	}
@@ -532,80 +536,6 @@ func (f *Fair) Search(p *Partition, dtr *datatable.Request) ([]map[string]string
 		result = append(result, rLine)
 	}
 	return result, num, total, nil
-}
-
-func (f *Fair) ARKMintAll() error {
-	var doRefresh = false
-	defer func() {
-		if doRefresh {
-			f.RefreshSearch()
-		}
-	}()
-	sqlStr := "SELECT coreview.uuid FROM coreview LEFT JOIN ark ON coreview.uuid = ark.uuid WHERE coreview.partition=$1 AND ark.uuid IS NULL LIMIT 1000"
-	for _, p := range f.partitions {
-		for {
-			var uuids = make([]string, 0, 1000)
-			rows, err := f.db.Query(context.Background(), sqlStr, p.Name)
-			if err != nil {
-				return errors.Wrapf(err, "cannot execute %s", sqlStr)
-			}
-			for rows.Next() {
-				var uuid string
-				if err := rows.Scan(&uuid); err != nil {
-					return errors.Wrapf(err, "cannot scan %s", sqlStr)
-				}
-				uuids = append(uuids, uuid)
-			}
-			rows.Close()
-			if len(uuids) == 0 {
-				break
-			}
-
-			for _, uuid := range uuids {
-				data, err := f.GetItem(p, uuid)
-				if err != nil {
-					return errors.Wrapf(err, "error loading item")
-				}
-				if data == nil {
-					return errors.New(fmt.Sprintf("item %s/%s not found", p.Name, uuid))
-				}
-
-				if data.Status != DataStatusActive {
-					f.log.Error().Msgf("item %s/%s is not active", p.Name, uuid)
-				}
-
-				if ark, err := f.ark.CreateNew(uuid, p.ARKNAAN, p.ARKShoulder, p.ARKPrefix); err != nil {
-					return errors.Wrapf(err, "cannot create ark for %s", uuid)
-				} else {
-					doRefresh = true
-					f.log.Info().Msgf("created ark %s for %s", ark, uuid)
-					ids := make([]string, 0, len(data.Identifier))
-					for _, id := range data.Identifier {
-						if strings.HasPrefix(id, fmt.Sprintf("ark:%s/%s", p.ARKNAAN, p.ARKShoulder)) {
-							continue
-						}
-						if id == "" {
-							continue
-						}
-						ids = append(ids, id)
-					}
-					data.Identifier = append(ids, ark)
-					sqlstr := "UPDATE core" +
-						" SET identifier=$1, datestamp=NOW(), seq=NEXTVAL('lastchange')" +
-						" WHERE uuid=$2"
-					params := []interface{}{
-						pgtype.FlatArray[string](data.Identifier),
-						data.UUID,
-					}
-					if _, err := f.db.Exec(context.Background(), sqlstr, params...); err != nil {
-						return errors.Wrapf(err, "[%s] cannot update [%s] - [%v]", uuid, sqlstr, params)
-					}
-				}
-			}
-		}
-	}
-	return nil
-
 }
 
 func (f *Fair) ARKResolveUUID(ark string) (uuid string, components string, variants string, err error) {

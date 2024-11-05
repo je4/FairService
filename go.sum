@@ -86,6 +86,8 @@ github.com/je4/trustutil/v2 v2.0.26 h1:XwmLyJhO1Ylu7obNPAs5jl1jgcKvAxiGPPsJSR9fA
 github.com/je4/trustutil/v2 v2.0.26/go.mod h1:1P3AV+41TeRGZ1yTTzqR50Mnr63iki7D9VnI5k9fTP8=
 github.com/je4/utils/v2 v2.0.51 h1:q3+8teomO3PYEDaBS0BQ6aZHqPOTiPFeJqxkzo0Kebk=
 github.com/je4/utils/v2 v2.0.51/go.mod h1:fwr785KQSj9Zm8c7UVtN3IqN3CSYICDRguJ4BN9w+ys=
+github.com/je4/utils/v2 v2.0.52 h1:SP9vzCjN3s66TVNrihT4uMiE1L4LIrecPrkgvQ1J5hM=
+github.com/je4/utils/v2 v2.0.52/go.mod h1:IZFeKy7gRAJwppkHmqnba6RsgWOu1q9duN2306YppoQ=
 github.com/josharian/intern v1.0.0 h1:vlS4z54oSdjm0bgjRigI+G1HpF+tI+9rE5LLzOg8HmY=
 github.com/josharian/intern v1.0.0/go.mod h1:5DoeVV0s6jJacbCEi61lwdGj/aVlrQvzHFFd8Hwg//Y=
 github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=

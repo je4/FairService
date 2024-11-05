@@ -9,7 +9,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/FairService/v2/pkg/service"
-	ark2 "github.com/je4/FairService/v2/pkg/service/ark"
+	"github.com/je4/FairService/v2/pkg/service/ark"
 	"github.com/je4/FairService/v2/pkg/service/datacite"
 	hcClient "github.com/je4/HandleCreator/v2/pkg/client"
 	"github.com/je4/utils/v2/pkg/zLogger"
@@ -131,32 +131,6 @@ func main() {
 		accessLog = f
 	}
 
-	var dataciteClient *datacite.Client
-	if config.Datacite.Api != "" {
-		dataciteClient, err = datacite.NewClient(
-			config.Datacite.Api,
-			config.Datacite.User.String(),
-			config.Datacite.Password.String(),
-			config.Datacite.Prefix)
-		if err != nil {
-			logger.Fatal().Msgf("cannot create datacite client: %v", err)
-			return
-		}
-
-		if err := dataciteClient.Heartbeat(); err != nil {
-			logger.Fatal().Msgf("cannot check datacite heartbeat: %v", err)
-			return
-		}
-
-		/*
-			r, err := dataciteClient.RetrieveDOI("10.5438/0012")
-			if err != nil {
-				logger.Fatal().Msgf("cannot get doi: %v", err)
-				return
-			}
-			logger.Info().Msgf("doi: %v", r)
-		*/
-	}
 	var handle *hcClient.HandleCreatorClient
 	if config.Handle.Addr != "" {
 		handle, err = hcClient.NewHandleCreatorClient(config.Handle.ServiceName, config.Handle.Addr, string(config.Handle.JWTKey), config.Handle.JWTAlg, config.Handle.SkipCertVerify, logger)
@@ -168,33 +142,53 @@ func main() {
 		logger.Info().Msg("no handle creator configured")
 	}
 
-	arkSrv, err := ark2.NewService(db, logger)
+	res, err := fair.NewResolver(logger)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("cannot create ark service")
+		logger.Fatal().Err(err).Msg("cannot create resolver")
 		return
 	}
+	//	res.InitPIDTable()
 
 	var partitions []*fair.Partition
 	for _, pconf := range config.Partition {
 		p, err := fair.NewPartition(
+			db,
 			pconf.Name,
 			pconf.AddrExt,
 			pconf.Domain,
-			pconf.HandlePrefix,
-			pconf.OAI.RepositoryName,
-			pconf.OAI.AdminEmail,
-			pconf.OAI.SampleIdentifier,
-			pconf.OAI.Delimiter,
-			pconf.OAI.Scheme,
-			pconf.ARK.NAAN,
-			pconf.ARK.Shoulder,
-			pconf.ARK.Prefix,
-			pconf.HandleID,
+			&fair.OAIConfig{
+				RepositoryName:         pconf.OAI.RepositoryName,
+				AdminEmail:             pconf.OAI.AdminEmail,
+				SampleIdentifier:       pconf.OAI.SampleIdentifier,
+				Delimiter:              pconf.OAI.Delimiter,
+				Scheme:                 pconf.OAI.Scheme,
+				PageSize:               pconf.OAI.Pagesize,
+				ResumptionTokenTimeout: time.Duration(pconf.OAI.ResumptionTokenTimeout),
+			},
+			&ark.Config{
+				Shoulder: pconf.ARK.Shoulder,
+				Prefix:   pconf.ARK.Prefix,
+				NAAN:     pconf.ARK.NAAN,
+			},
+			&datacite.Config{
+				Api:      pconf.Datacite.Api,
+				User:     pconf.Datacite.User.String(),
+				Password: pconf.Datacite.Password.String(),
+				Prefix:   pconf.Datacite.Prefix,
+			},
+			&fair.HandleConfig{
+				ServiceName:    pconf.Handle.ServiceName,
+				Addr:           pconf.Handle.Addr,
+				JWTAlg:         pconf.Handle.JWTAlg,
+				JWTKey:         pconf.Handle.JWTKey.String(),
+				SkipCertVerify: pconf.Handle.SkipCertVerify,
+				Prefix:         pconf.Handle.Prefix,
+				ID:             pconf.Handle.ID,
+			},
 			pconf.Description,
-			pconf.OAI.Pagesize,
-			time.Duration(pconf.OAI.ResumptionTokenTimeout),
 			string(pconf.JWTKey),
-			pconf.JWTAlg)
+			pconf.JWTAlg,
+			logger)
 		if err != nil {
 			logger.Fatal().Msgf("cannot create partition %s: %v", pconf.Name, err)
 			return
@@ -209,7 +203,6 @@ func main() {
 	for _, p := range partitions {
 		fair.AddPartition(p)
 	}
-	fair.ARKMintAll()
 
 	// create TLS Certificate.
 	// the certificate MUST contain <package>.<service> as DNS name
@@ -233,6 +226,7 @@ func main() {
 	if err != nil {
 		logger.Fatal().Msgf("cannot initialize server: %v", err)
 	}
+
 	go func() {
 		if err := srv.ListenAndServe(serverTLSConfig); err != nil {
 			log.Fatalf("server died: %v", err)

@@ -184,7 +184,7 @@ func (c *Client) CreateDOI(data *dataciteModel.DataCite, doiSuffix, targetUrl st
 	req := &http.Request{
 		Method: "POST",
 		URL:    u,
-		Body:   ioutil.NopCloser(bytes.NewBuffer(aJson)),
+		Body:   io.NopCloser(bytes.NewBuffer(aJson)),
 		Header: map[string][]string{},
 	}
 	upwd := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", c.user, c.password)))

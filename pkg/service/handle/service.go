@@ -1,4 +1,4 @@
-package ark
+package handle
 
 import (
 	"context"
@@ -15,31 +15,24 @@ import (
 )
 
 type Config struct {
-	NAAN     string
-	Shoulder string
-	Prefix   string
+	Prefix string
 }
 
-func NewService(db *pgxpool.Pool, config *Config, logger zLogger.ZLogger) (*Service, error) {
+func NewService(db *pgxpool.Pool, config Config, logger zLogger.ZLogger) (*Service, error) {
 	return &Service{db: db, config: config, logger: logger}, nil
 }
 
 type Service struct {
 	db     *pgxpool.Pool
 	logger zLogger.ZLogger
-	config *Config
-}
-
-func (srv *Service) Resolve(pid string) (string, fair.ResolveResultType, error) {
-	//TODO implement me
-	panic("implement me")
+	config Config
 }
 
 func (srv *Service) CreatePID(fair *fair.Fair, item *fair.ItemData) (string, error) {
 	return srv.mint(fair, item.UUID)
 }
 
-var arkRegexp = regexp.MustCompile(`(?i)^ark:(?P<naan>[^/]+)/(?P<qualifier>[^./]+)(/(?P<component>[^.]+))?(\.(?P<variant>[^?]+))?(\?.*)?$`)
+var arkRegexp = regexp.MustCompile(`(?i)^handle:(?P<prefix>[^/]+)/(?P<suffix>[^./]+)$`)
 
 func (srv *Service) ResolveUUID(ark string) (uuid, components, variants string, err error) {
 	match := arkRegexp.FindStringSubmatch(ark)
@@ -66,6 +59,29 @@ func (srv *Service) ResolveUUID(ark string) (uuid, components, variants string, 
 		return "", "", variants, errors.Wrapf(err, "cannot execute %s [%s]", sqlStr, ark)
 	}
 	return
+
+	/*
+		var detailurl, signature string
+		var url zeronull.Text
+		sqlStr := "SELECT source.detailurl, core.signature, core.url FROM ark, source, core WHERE source.name=core.source AND core.uuid=ark.uuid AND ark.ark=$1"
+		var detailurl, signature string
+		var url zeronull.Text
+		if err := srv.db.QueryRow(context.Background(), sqlStr, ark).Scan(&detailurl, &signature, &url); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return "", "", errors.Errorf("ark %s not found", ark)
+			}
+			return "", "", errors.Wrapf(err, "cannot execute %s [%s]", sqlStr, ark)
+		}
+		var resultURL string
+		if url != "" {
+			resultURL = string(url)
+		} else {
+			resultURL = strings.ReplaceAll(detailurl, "{signature}", signature)
+		}
+		partsVariants := strings.Join(parts[2:], "/")
+		return resultURL + partsVariants, nil
+
+	*/
 }
 
 var chars = []rune("0123456789bcdfghjkmnpqrstvwxz")

@@ -44,16 +44,16 @@ type OAI struct {
 }
 
 type Partition struct {
-	Name         string           `toml:"name"`
-	AddrExt      string           `toml:"addrext"`
-	Description  string           `toml:"description"`
-	Domain       string           `toml:"domain"`
-	HandlePrefix string           `toml:"handleprefix"`
-	OAI          OAI              `toml:"oai"`
-	ARK          PartitionARK     `toml:"ark"`
-	HandleID     string           `toml:"handleid"`
-	JWTKey       config.EnvString `toml:"jwtkey"`
-	JWTAlg       []string         `toml:"jwtalg"`
+	Name        string           `toml:"name"`
+	AddrExt     string           `toml:"addrext"`
+	Description string           `toml:"description"`
+	Domain      string           `toml:"domain"`
+	OAI         OAI              `toml:"oai"`
+	ARK         PartitionARK     `toml:"ark"`
+	Handle      Handle           `toml:"handle"`
+	Datacite    Datacite         `toml:"datacite"`
+	JWTKey      config.EnvString `toml:"jwtkey"`
+	JWTAlg      []string         `toml:"jwtalg"`
 }
 
 type PartitionARK struct {
@@ -68,6 +68,8 @@ type Handle struct {
 	JWTKey         config.EnvString `toml:"jwtkey"`
 	JWTAlg         string           `toml:"jwtalg"`
 	SkipCertVerify bool             `toml:"skipcertverify"`
+	ID             string           `toml:"id"`
+	Prefix         string           `toml:"prefix"`
 }
 
 type Datacite struct {
@@ -91,7 +93,6 @@ type Config struct {
 	//Tunnel       map[string]SSHTunnel `toml:"tunnel"`
 	Partition []Partition      `toml:"partition"`
 	Handle    Handle           `toml:"handle"`
-	Datacite  Datacite         `toml:"datacite"`
 	UserName  string           `toml:"username"`
 	Password  config.EnvString `toml:"password"`
 }
