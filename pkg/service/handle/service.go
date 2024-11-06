@@ -28,29 +28,33 @@ type Service struct {
 	config Config
 }
 
+func (srv *Service) Resolve(pid string) (string, fair.ResolveResultType, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (srv *Service) CreatePID(fair *fair.Fair, item *fair.ItemData) (string, error) {
+
 	return srv.mint(fair, item.UUID)
 }
 
-var arkRegexp = regexp.MustCompile(`(?i)^handle:(?P<prefix>[^/]+)/(?P<suffix>[^./]+)$`)
+var handleRegexp = regexp.MustCompile(`(?i)^handle:(?P<prefix>[^/]+)/(?P<suffix>[^?]+)$`)
 
 func (srv *Service) ResolveUUID(ark string) (uuid, components, variants string, err error) {
-	match := arkRegexp.FindStringSubmatch(ark)
+	match := handleRegexp.FindStringSubmatch(ark)
 	if match == nil {
 		return "", "", variants, errors.Errorf("ark %s not valid", ark)
 	}
 	result := make(map[string]string)
-	for i, name := range arkRegexp.SubexpNames() {
+	for i, name := range handleRegexp.SubexpNames() {
 		if i != 0 && name != "" {
 			result[name] = match[i]
 		}
 	}
-	naan, _ := result["naan"]
-	qualifier, _ := result["qualifier"]
-	components, _ = result["component"]
-	variants, _ = result["variant"]
+	prefix, _ := result["prefix"]
+	suffix, _ := result["suffix"]
 	// hyphen is removed
-	ark = "ark:" + strings.ReplaceAll(strings.Join([]string{naan, qualifier}, "/"), "-", "")
+	handle := "handle:" + strings.Join([]string{prefix, suffix}, "/")
 	sqlStr := "SELECT ark.uuid FROM ark WHERE ark.ark=$1"
 	if err = srv.db.QueryRow(context.Background(), sqlStr, ark).Scan(&uuid); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -104,38 +108,37 @@ func (srv *Service) Type() dataciteModel.RelatedIdentifierType {
 	return dataciteModel.RelatedIdentifierTypeARK
 }
 
-func (srv *Service) Unify(ark string) (string, error) {
-	match := arkRegexp.FindStringSubmatch(ark)
+func (srv *Service) Unify(handle string) (string, error) {
+	match := handleRegexp.FindStringSubmatch(handle)
 	if match == nil {
-		return "", errors.Wrapf(fair.ErrInvalidIdentifier, "ark %s not valid", ark)
+		return "", errors.Wrapf(fair.ErrInvalidIdentifier, "handle %s not valid", handle)
 	}
-	var naan, qualifier string
-	for i, name := range arkRegexp.SubexpNames() {
+	var prefix, suffix string
+	for i, name := range handleRegexp.SubexpNames() {
 		if i != 0 {
 			switch name {
-			case "naan":
-				naan = match[i]
-			case "qualifier":
-				qualifier = match[i]
+			case "prefix":
+				prefix = match[i]
+			case "suffix":
+				suffix = match[i]
 			}
 		}
 	}
-	if naan == "" || qualifier == "" {
-		return "", errors.Wrapf(fair.ErrInvalidIdentifier, "ark %s not valid", ark)
+	if prefix == "" || suffix == "" {
+		return "", errors.Wrapf(fair.ErrInvalidIdentifier, "handle %s not valid", handle)
 	}
-
-	return fmt.Sprintf("ark:%s/%s", naan, qualifier), nil
+	return fmt.Sprintf("handle:%s/%s", prefix, suffix), nil
 }
 
 func (srv *Service) mint(fair *fair.Fair, uuid string) (string, error) {
-	counter, err := fair.NextCounter("arkseq")
+	counter, err := fair.NextCounter("handleseq")
 	if err != nil {
-		return "", errors.Wrap(err, "cannot mint ark")
+		return "", errors.Wrap(err, "cannot mint handle")
 	}
 	counter2 := bits.RotateLeft64(uint64(counter), -32)
 	b := encode(counter2)
 
-	return fmt.Sprintf("ark:%s/%s%s%s", srv.config.NAAN, srv.config.Shoulder, srv.config.Prefix, b), nil
+	return fmt.Sprintf("handle:%s/%s", srv.config.Prefix, b), nil
 }
 
 var _ fair.Resolver = (*Service)(nil)

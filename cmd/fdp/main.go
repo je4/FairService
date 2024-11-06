@@ -149,7 +149,12 @@ func main() {
 	}
 	//	res.InitPIDTable()
 
-	var partitions []*fair.Partition
+	fairService, err := fair.NewFair(db, res, config.DB.Schema, handle, logger)
+	if err != nil {
+		logger.Fatal().Msgf("cannot initialize fair: %v", err)
+	}
+
+	//	var partitions []*fair.Partition
 	for _, pconf := range config.Partition {
 		p, err := fair.NewPartition(
 			db,
@@ -193,15 +198,7 @@ func main() {
 			logger.Fatal().Msgf("cannot create partition %s: %v", pconf.Name, err)
 			return
 		}
-		partitions = append(partitions, p)
-	}
-
-	fair, err := fair.NewFair(db, config.DB.Schema, handle, arkSrv, dataciteClient, logger)
-	if err != nil {
-		logger.Fatal().Msgf("cannot initialize fair: %v", err)
-	}
-	for _, p := range partitions {
-		fair.AddPartition(p)
+		fairService.AddPartition(p)
 	}
 
 	// create TLS Certificate.
@@ -218,7 +215,7 @@ func main() {
 		config.UserName,
 		config.Password.String(),
 		logger,
-		fair,
+		fairService,
 		accessLog,
 		config.JWTKey.String(),
 		config.JWTAlg,

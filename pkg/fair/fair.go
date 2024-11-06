@@ -12,7 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/FairService/v2/pkg/model/myfair"
-	"github.com/je4/FairService/v2/pkg/service/ark"
 	"github.com/je4/FairService/v2/pkg/service/datacite"
 	hcClient "github.com/je4/HandleCreator/v2/pkg/client"
 	"github.com/je4/utils/v2/pkg/datatable"
@@ -108,17 +107,16 @@ func equalStrings(a, b []string) bool {
 	return true
 }
 
-func NewFair(db *pgxpool.Pool, dbSchema string, handle *hcClient.HandleCreatorClient, ark *ark.Service, dataciteClient *datacite.Client, log zLogger.ZLogger) (*Fair, error) {
+func NewFair(db *pgxpool.Pool, multiResolver *MultiResolver, dbSchema string, handle *hcClient.HandleCreatorClient, log zLogger.ZLogger) (*Fair, error) {
 	f := &Fair{
-		dbSchema:       dbSchema,
-		db:             db,
-		handle:         handle,
-		ark:            ark,
-		dataciteClient: dataciteClient,
-		sourcesMutex:   sync.RWMutex{},
-		sources:        map[int64]*Source{},
-		partitions:     map[string]*Partition{},
-		log:            log,
+		dbSchema:      dbSchema,
+		db:            db,
+		multiResolver: multiResolver,
+		handle:        handle,
+		sourcesMutex:  sync.RWMutex{},
+		sources:       map[int64]*Source{},
+		partitions:    map[string]*Partition{},
+		log:           log,
 	}
 	if err := f.LoadSources(); err != nil {
 		return nil, errors.Wrap(err, "cannot load sources")
@@ -127,19 +125,22 @@ func NewFair(db *pgxpool.Pool, dbSchema string, handle *hcClient.HandleCreatorCl
 }
 
 type Fair struct {
-	dbSchema       string
-	db             *pgxpool.Pool
-	handle         *hcClient.HandleCreatorClient
-	ark            *ark.Service
-	dataciteClient *datacite.Client
-	sourcesMutex   sync.RWMutex
-	sources        map[int64]*Source
-	partitions     map[string]*Partition
-	log            zLogger.ZLogger
+	dbSchema      string
+	db            *pgxpool.Pool
+	handle        *hcClient.HandleCreatorClient
+	sourcesMutex  sync.RWMutex
+	sources       map[int64]*Source
+	partitions    map[string]*Partition
+	log           zLogger.ZLogger
+	multiResolver *MultiResolver
 }
 
 func (f *Fair) GetDB() *pgxpool.Pool {
 	return f.db
+}
+
+func (f *Fair) GetResolver() *MultiResolver {
+	return f.multiResolver
 }
 
 func (f *Fair) NextCounter(name string) (int64, error) {

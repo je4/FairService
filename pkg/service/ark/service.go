@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/utils/v2/pkg/zLogger"
@@ -20,12 +19,12 @@ type Config struct {
 	Prefix   string
 }
 
-func NewService(db *pgxpool.Pool, config *Config, logger zLogger.ZLogger) (*Service, error) {
-	return &Service{db: db, config: config, logger: logger}, nil
+func NewService(_fair *fair.Fair, config *Config, logger zLogger.ZLogger) (*Service, error) {
+	return &Service{fair: _fair, config: config, logger: logger}, nil
 }
 
 type Service struct {
-	db     *pgxpool.Pool
+	fair   *fair.Fair
 	logger zLogger.ZLogger
 	config *Config
 }
@@ -42,6 +41,7 @@ func (srv *Service) CreatePID(fair *fair.Fair, item *fair.ItemData) (string, err
 var arkRegexp = regexp.MustCompile(`(?i)^ark:(?P<naan>[^/]+)/(?P<qualifier>[^./]+)(/(?P<component>[^.]+))?(\.(?P<variant>[^?]+))?(\?.*)?$`)
 
 func (srv *Service) ResolveUUID(ark string) (uuid, components, variants string, err error) {
+	db := srv.fair.GetDB()
 	match := arkRegexp.FindStringSubmatch(ark)
 	if match == nil {
 		return "", "", variants, errors.Errorf("ark %s not valid", ark)
@@ -59,7 +59,7 @@ func (srv *Service) ResolveUUID(ark string) (uuid, components, variants string, 
 	// hyphen is removed
 	ark = "ark:" + strings.ReplaceAll(strings.Join([]string{naan, qualifier}, "/"), "-", "")
 	sqlStr := "SELECT ark.uuid FROM ark WHERE ark.ark=$1"
-	if err = srv.db.QueryRow(context.Background(), sqlStr, ark).Scan(&uuid); err != nil {
+	if err = db.QueryRow(context.Background(), sqlStr, ark).Scan(&uuid); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", "", variants, errors.Errorf("ark %s not found", ark)
 		}

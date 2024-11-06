@@ -72,6 +72,8 @@ github.com/gorilla/handlers v1.5.2 h1:cLTUSsNkgcwhgRqvCNmdbRWG0A3N4F+M2nWKdScwyE
 github.com/gorilla/handlers v1.5.2/go.mod h1:dX+xVpaxdSw+q0Qek8SSsl3dfMk3jNddUkMzo0GtH0w=
 github.com/gorilla/mux v1.8.1 h1:TuBL49tXwgrFYWhqrNgrUNEY92u81SPhu7sTdzQEiWY=
 github.com/gorilla/mux v1.8.1/go.mod h1:AKf9I4AEqPTmMytcMc0KkNouC66V3BtZ4qD5fmWSiMQ=
+github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438 h1:Dj0L5fhJ9F82ZJyVOmBx6msDp/kfd1t9GRfny/mfJA0=
+github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438/go.mod h1:a/s9Lp5W7n/DD0VrVoyJ00FbP2ytTPDVOivvn2bMlds=
 github.com/jackc/pgpassfile v1.0.0 h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsIM=
 github.com/jackc/pgpassfile v1.0.0/go.mod h1:CEx0iS5ambNFdcRtxPj5JhEz+xB6uRky5eyVu/W2HEg=
 github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 h1:iCEnooe7UlwOQYpKFhBabPMi4aNAfoODPEFNiAnClxo=
@@ -84,8 +86,6 @@ github.com/je4/HandleCreator/v2 v2.0.5 h1:9hrR7OY2+YZ+w/aeMnAJ7Td/t/LSEoIk6MdMG8
 github.com/je4/HandleCreator/v2 v2.0.5/go.mod h1:0MpUX5QkZRaAT4OBqKMnqHsa3McvWe+61a4F3xovY+Y=
 github.com/je4/trustutil/v2 v2.0.26 h1:XwmLyJhO1Ylu7obNPAs5jl1jgcKvAxiGPPsJSR9fAzA=
 github.com/je4/trustutil/v2 v2.0.26/go.mod h1:1P3AV+41TeRGZ1yTTzqR50Mnr63iki7D9VnI5k9fTP8=
-github.com/je4/utils/v2 v2.0.51 h1:q3+8teomO3PYEDaBS0BQ6aZHqPOTiPFeJqxkzo0Kebk=
-github.com/je4/utils/v2 v2.0.51/go.mod h1:fwr785KQSj9Zm8c7UVtN3IqN3CSYICDRguJ4BN9w+ys=
 github.com/je4/utils/v2 v2.0.52 h1:SP9vzCjN3s66TVNrihT4uMiE1L4LIrecPrkgvQ1J5hM=
 github.com/je4/utils/v2 v2.0.52/go.mod h1:IZFeKy7gRAJwppkHmqnba6RsgWOu1q9duN2306YppoQ=
 github.com/josharian/intern v1.0.0 h1:vlS4z54oSdjm0bgjRigI+G1HpF+tI+9rE5LLzOg8HmY=

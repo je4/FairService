@@ -12,7 +12,10 @@ type ResolveResultType uint32
 const (
 	ResolveResultTypeUnknown ResolveResultType = iota
 	ResolveResultTypeRedirect
-	ResolveResultTypeContent
+	ResolveResultTypeTextHTML
+	ResolveResultTypeTextPlain
+	ResolveResultTypeApplicationJSON
+	ResolveResultTypeApplicationXML
 )
 
 type ResolverResolve interface {

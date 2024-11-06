@@ -159,12 +159,13 @@ func (s *Server) detailHandler(ctx *gin.Context) {
 	message := ""
 
 	if _, ok := ctx.GetQuery("createdoi"); ok {
-		targetUrl := fmt.Sprintf("%s/redir/%s", part.AddrExt, uuidStr)
-		_, err := s.fair.CreateDOI(part, uuidStr, targetUrl)
+		//		targetUrl := fmt.Sprintf("%s/redir/%s", part.AddrExt, uuidStr)
+		resolver := s.fair.GetResolver()
+		pidStr, err := resolver.CreatePID(uuidStr, part, dataciteModel.RelatedIdentifierTypeDOI)
 		if err != nil {
 			doiError = err.Error()
 		} else {
-			message = "Draft DOI successfully created"
+			message = fmt.Sprintf("Draft DOI %s successfully created", pidStr)
 		}
 	}
 

@@ -186,7 +186,7 @@ func main() {
 		partitions = append(partitions, p)
 	}
 
-	fair, err := fair.NewFair(db, config.DB.Schema, handle, nil, dataciteClient, logger)
+	fair, err := fair.NewFair(db, nil, config.DB.Schema, handle, nil)
 	if err != nil {
 		logger.Panic().Msgf("cannot initialize fair: %v", err)
 	}

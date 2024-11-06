@@ -9,9 +9,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgtype/zeronull"
+	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/FairService/v2/pkg/model/myfair"
 	"github.com/pkg/errors"
-	"net/url"
 	"reflect"
 	"sort"
 	"strings"
@@ -301,30 +301,40 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 		item.UUID = uuidVal.String()
 		var sqlHandle = sql.NullString{}
 
-		if f.handle != nil {
-			//
-			// Create Handle and add to local identifier list
-			//
-			next, err := f.NextCounter("handleseq")
-			if err != nil {
-				return nil, errors.Wrap(err, "cannot get next handle value")
-			}
-			newHandle := fmt.Sprintf("%s/%s/%v", partition.HandleID, partition.HandlePrefix, next)
-			newURL, err := url.Parse(fmt.Sprintf("%s/redir/%s", partition.AddrExt, item.UUID))
-			if err != nil {
-				return nil, errors.Wrapf(err, "cannot parse url %s", fmt.Sprintf("%s/redir/%s", partition.AddrExt, item.UUID))
-			}
-			if err := f.handle.Create(newHandle, newURL); err != nil {
-				return nil, errors.Wrapf(err, "cannot create handle %s for %s", newHandle, newURL.String())
-			}
-			sqlHandle.String = newHandle
-			sqlHandle.Valid = true
-			item.Metadata.Identifier = append(item.Metadata.Identifier, myfair.Identifier{
-				Value:          newHandle,
-				IdentifierType: myfair.RelatedIdentifierTypeHandle,
-			})
-			item.Identifier = append(item.Identifier, fmt.Sprintf("%s:%s", myfair.RelatedIdentifierTypeHandle, newHandle))
+		handleStr, err := f.multiResolver.CreatePID(item.UUID, partition, dataciteModel.RelatedIdentifierTypeHandle)
+		if err != nil {
+			return nil, errors.Wrapf(err, "cannot create handle for %s", item.UUID)
 		}
+		arkStr, err := f.multiResolver.CreatePID(item.UUID, partition, dataciteModel.RelatedIdentifierTypeARK)
+		if err != nil {
+			return nil, errors.Wrapf(err, "cannot create ark for %s", item.UUID)
+		}
+		/*
+			if f.handle != nil {
+				//
+				// Create Handle and add to local identifier list
+				//
+				next, err := f.NextCounter("handleseq")
+				if err != nil {
+					return nil, errors.Wrap(err, "cannot get next handle value")
+				}
+				newHandle := fmt.Sprintf("%s/%s/%v", partition.HandleID, partition.HandlePrefix, next)
+				newURL, err := url.Parse(fmt.Sprintf("%s/redir/%s", partition.AddrExt, item.UUID))
+				if err != nil {
+					return nil, errors.Wrapf(err, "cannot parse url %s", fmt.Sprintf("%s/redir/%s", partition.AddrExt, item.UUID))
+				}
+				if err := f.handle.Create(newHandle, newURL); err != nil {
+					return nil, errors.Wrapf(err, "cannot create handle %s for %s", newHandle, newURL.String())
+				}
+				sqlHandle.String = newHandle
+				sqlHandle.Valid = true
+				item.Metadata.Identifier = append(item.Metadata.Identifier, myfair.Identifier{
+					Value:          newHandle,
+					IdentifierType: myfair.RelatedIdentifierTypeHandle,
+				})
+				item.Identifier = append(item.Identifier, fmt.Sprintf("%s:%s", myfair.RelatedIdentifierTypeHandle, newHandle))
+			}
+		*/
 		sort.Strings(item.Identifier)
 
 		coreBytes, err := json.Marshal(item.Metadata)
