@@ -2,7 +2,6 @@ package fair
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
@@ -299,16 +298,7 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 			return nil, errors.Wrap(err, "cannot generate uuid")
 		}
 		item.UUID = uuidVal.String()
-		var sqlHandle = sql.NullString{}
 
-		handleStr, err := f.multiResolver.CreatePID(item.UUID, partition, dataciteModel.RelatedIdentifierTypeHandle)
-		if err != nil {
-			return nil, errors.Wrapf(err, "cannot create handle for %s", item.UUID)
-		}
-		arkStr, err := f.multiResolver.CreatePID(item.UUID, partition, dataciteModel.RelatedIdentifierTypeARK)
-		if err != nil {
-			return nil, errors.Wrapf(err, "cannot create ark for %s", item.UUID)
-		}
 		/*
 			if f.handle != nil {
 				//
@@ -346,8 +336,8 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 				" VALUES($1, NOW(), $2, $3, $4, $5, $6, $7, NEXTVAL('lastchange'), $8, $9)", f.dbSchema)
 		*/
 		sqlstr := `INSERT INTO core 
-    				(uuid, datestamp, setspec, metadata, signature, source, access, catalog, seq, status, identifier) 
-					VALUES($1, NOW(), $2, $3, $4, $5, $6, $7, NEXTVAL('lastchange'), $8, $9)`
+    				(uuid, datestamp, setspec, metadata, signature, source, access, catalog, seq, status) 
+					VALUES($1, NOW(), $2, $3, $4, $5, $6, $7, NEXTVAL('lastchange'), $8)`
 		params := []interface{}{
 			item.UUID, // uuid
 			// datestamp
@@ -359,7 +349,6 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 			pgtype.FlatArray[string](item.Catalog), // catalog
 			// seq
 			DataStatusActive,
-			pgtype.FlatArray[string](item.Identifier), // identifier
 		}
 		ret, err := f.db.Exec(context.Background(), sqlstr, params...)
 		if err != nil {
@@ -372,10 +361,19 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 				" (uuid)"+
 				" VALUES($1)", f.dbSchema)
 		*/
+
+		if _, err := f.multiResolver.CreatePID(item.UUID, partition, dataciteModel.RelatedIdentifierTypeHandle); err != nil {
+			f.log.Error().Err(err).Msgf("cannot create handle for %s", item.UUID)
+		}
+		if _, err := f.multiResolver.CreatePID(item.UUID, partition, dataciteModel.RelatedIdentifierTypeARK); err != nil {
+			f.log.Error().Err(err).Msgf("cannot create ark for %s", item.UUID)
+		}
+
 		sqlstr = "INSERT INTO core_dirty (uuid) VALUES($1)"
 		params = []interface{}{
 			item.UUID, // uuid
 		}
+
 		if _, err = f.db.Exec(context.Background(), sqlstr, params...); err != nil {
 			return nil, errors.Wrapf(err, "cannot execute query [%s] - [%v]", sqlstr, params)
 		}

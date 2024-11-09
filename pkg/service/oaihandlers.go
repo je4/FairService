@@ -216,19 +216,19 @@ func (s *Server) oaiHandlerIdentify(ctx *gin.Context, partition *fair.Partition,
 		Value: fmt.Sprintf("%s/%s/%s", partition.AddrExt, oai.APIPATH, context),
 	}
 	pmh.Identify = &oai.Identify{
-		RepositoryName:    partition.OAIRepositoryName,
+		RepositoryName:    partition.OAI.RepositoryName,
 		BaseURL:           partition.AddrExt + "/" + oai.APIPATH,
 		ProtocolVersion:   "2.0",
 		EarliestDatestamp: earliestDatestamp.Format("2006-01-02T15:04:05Z"),
-		AdminEmail:        partition.OAIAdminEmail,
+		AdminEmail:        partition.OAI.AdminEmail,
 		DeletedRecord:     "transient",
 		Granularity:       "YYYY-MM-DDThh:mm:ssZ",
 		Compression:       []string{"gzip", "deflate"},
 		Description: oai.Description{Identifier: oai.Identifier{
-			Scheme:               partition.OAIScheme,
+			Scheme:               partition.OAI.Scheme,
 			RepositoryIdentifier: partition.Domain,
-			Delimiter:            partition.OAIDelimiter,
-			SampleIdentifier:     partition.OAISampleIdentifier,
+			Delimiter:            partition.OAI.Delimiter,
+			SampleIdentifier:     partition.OAI.SampleIdentifier,
 		}},
 	}
 	pmh.Identify.Description.Identifier.InitNamespace()
@@ -236,7 +236,7 @@ func (s *Server) oaiHandlerIdentify(ctx *gin.Context, partition *fair.Partition,
 }
 
 func (s *Server) oaiHandlerGetRecord(ctx *gin.Context, partition *fair.Partition, context, identifier, metadataPrefix string) {
-	uuidStr := strings.TrimPrefix(identifier, fmt.Sprintf("%s:%s:", partition.OAIScheme, partition.Domain))
+	uuidStr := strings.TrimPrefix(identifier, fmt.Sprintf("%s:%s:", partition.OAI.Scheme, partition.Domain))
 	if uuidStr == identifier {
 		s.log.Info().Msgf("invalid identifier for partition %s: %s", partition.Name, identifier)
 		sendOAIError(ctx, oai.ErrorCodeIdDoesNotExist, "", "GetRecord", identifier, metadataPrefix, partition.AddrExt+"/"+oai.APIPATH)
@@ -343,13 +343,13 @@ func (s *Server) oaiHandlerListIdentifiers(ctx *gin.Context, partition *fair.Par
 	var count int64
 
 	itemFunc := func(item *fair.ItemData) error {
-		if count < partition.OAIPagesize {
+		if count < partition.OAI.Pagesize {
 			var status oai.RecordHeaderStatusType = oai.RecordHeaderStatusOK
 			if item.Status != fair.DataStatusActive {
 				status = oai.RecordHeaderStatusDeleted
 			}
 			header := &oai.RecordHeader{
-				Identifier: fmt.Sprintf("%s:%s:%s", partition.OAIScheme, partition.Domain, item.UUID),
+				Identifier: fmt.Sprintf("%s:%s:%s", partition.OAI.Scheme, partition.Domain, item.UUID),
 				Datestamp:  item.Datestamp.Format("2006-01-02T15:04:05Z"),
 				SetSpec:    item.Set,
 				Status:     status,
@@ -363,7 +363,7 @@ func (s *Server) oaiHandlerListIdentifiers(ctx *gin.Context, partition *fair.Par
 			}
 			uuidStr := uuidData.String()
 			listIdentifiers.ResumptionToken = &oai.ResumptionToken{
-				ExpirationDate:   time.Now().Add(partition.ResumptionTokenTimeout).Format("2006-01-02T15:04:05Z"),
+				ExpirationDate:   time.Now().Add(partition.OAI.ResumptionTokenTimeout).Format("2006-01-02T15:04:05Z"),
 				Value:            uuidStr,
 				Cursor:           rData.cursor,
 				CompleteListSize: rData.completeListSize,
@@ -371,7 +371,7 @@ func (s *Server) oaiHandlerListIdentifiers(ctx *gin.Context, partition *fair.Par
 			rData.cursor++
 			lastToken := rData.lastToken
 			rData.lastToken = resumptionToken
-			if err := s.resumptionTokenCache.SetWithExpire(uuidStr, rData, partition.ResumptionTokenTimeout); err != nil {
+			if err := s.resumptionTokenCache.SetWithExpire(uuidStr, rData, partition.OAI.ResumptionTokenTimeout); err != nil {
 				return errors.Wrapf(err, "cannot store resumption data")
 			}
 			s.resumptionTokenCache.Remove(lastToken)
@@ -393,7 +393,7 @@ func (s *Server) oaiHandlerListIdentifiers(ctx *gin.Context, partition *fair.Par
 			rData.seq,
 			until,
 			[]fair.DataAccess{fair.DataAccessPublic, fair.DataAccessPublic},
-			partition.OAIPagesize+1,
+			partition.OAI.Pagesize+1,
 			0,
 			nil,
 			itemFunc); err != nil {
@@ -406,7 +406,7 @@ func (s *Server) oaiHandlerListIdentifiers(ctx *gin.Context, partition *fair.Par
 			rData.from,
 			rData.until,
 			[]fair.DataAccess{fair.DataAccessPublic, fair.DataAccessClosedData},
-			partition.OAIPagesize+1,
+			partition.OAI.Pagesize+1,
 			0,
 			&rData.completeListSize,
 			itemFunc); err != nil {
@@ -484,14 +484,14 @@ func (s *Server) oaiHandlerListRecords(ctx *gin.Context, partition *fair.Partiti
 	var count int64
 
 	itemFunc := func(item *fair.ItemData) error {
-		if count < partition.OAIPagesize {
+		if count < partition.OAI.Pagesize {
 			var status oai.RecordHeaderStatusType = oai.RecordHeaderStatusOK
 			if item.Status != fair.DataStatusActive {
 				status = oai.RecordHeaderStatusDeleted
 			}
 			record := &oai.Record{
 				Header: &oai.RecordHeader{
-					Identifier: fmt.Sprintf("%s:%s:%s", partition.OAIScheme, partition.Domain, item.UUID),
+					Identifier: fmt.Sprintf("%s:%s:%s", partition.OAI.Scheme, partition.Domain, item.UUID),
 					Datestamp:  item.Datestamp.Format("2006-01-02T15:04:05Z"),
 					SetSpec:    item.Set,
 					Status:     status,
@@ -524,7 +524,7 @@ func (s *Server) oaiHandlerListRecords(ctx *gin.Context, partition *fair.Partiti
 			}
 			uuidStr := uuidData.String()
 			listRecords.ResumptionToken = &oai.ResumptionToken{
-				ExpirationDate:   time.Now().Add(partition.ResumptionTokenTimeout).Format("2006-01-02T15:04:05Z"),
+				ExpirationDate:   time.Now().Add(partition.OAI.ResumptionTokenTimeout).Format("2006-01-02T15:04:05Z"),
 				Value:            uuidStr,
 				Cursor:           rData.cursor,
 				CompleteListSize: rData.completeListSize,
@@ -532,7 +532,7 @@ func (s *Server) oaiHandlerListRecords(ctx *gin.Context, partition *fair.Partiti
 			rData.cursor++
 			lastToken := rData.lastToken
 			rData.lastToken = resumptionToken
-			if err := s.resumptionTokenCache.SetWithExpire(uuidStr, rData, partition.ResumptionTokenTimeout); err != nil {
+			if err := s.resumptionTokenCache.SetWithExpire(uuidStr, rData, partition.OAI.ResumptionTokenTimeout); err != nil {
 				return errors.Wrapf(err, "cannot store resumption data")
 			}
 			s.resumptionTokenCache.Remove(lastToken)
@@ -554,7 +554,7 @@ func (s *Server) oaiHandlerListRecords(ctx *gin.Context, partition *fair.Partiti
 			rData.seq,
 			until,
 			[]fair.DataAccess{fair.DataAccessPublic, fair.DataAccessPublic},
-			partition.OAIPagesize+1,
+			partition.OAI.Pagesize+1,
 			0,
 			nil,
 			itemFunc); err != nil {
@@ -567,7 +567,7 @@ func (s *Server) oaiHandlerListRecords(ctx *gin.Context, partition *fair.Partiti
 			rData.from,
 			rData.until,
 			[]fair.DataAccess{fair.DataAccessPublic, fair.DataAccessClosedData},
-			partition.OAIPagesize+1,
+			partition.OAI.Pagesize+1,
 			0,
 			&rData.completeListSize,
 			itemFunc); err != nil {

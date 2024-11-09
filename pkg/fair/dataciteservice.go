@@ -1,44 +1,46 @@
-package datacite
+package fair
 
 import (
 	"emperror.dev/errors"
 	"fmt"
-	"github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
+	"github.com/je4/FairService/v2/pkg/service/datacite"
 	"github.com/je4/utils/v2/pkg/zLogger"
 	"math/bits"
 	"regexp"
 )
 
-type Config struct {
+type DataciteConfig struct {
 	Api      string
 	User     string
 	Password string
 	Prefix   string
 }
 
-func NewService(config Config, logger zLogger.ZLogger) (*Service, error) {
-	client, err := NewClient(config.Api, config.User, config.Password, config.Prefix)
+func NewDataciteService(_fair *Fair, config DataciteConfig, logger zLogger.ZLogger) (*DataciteService, error) {
+	client, err := datacite.NewClient(config.Api, config.User, config.Password, config.Prefix)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create datacite client")
 	}
 	if err := client.Heartbeat(); err != nil {
 		logger.Error().Err(err).Msg("cannot connect to datacite")
 	}
-	return &Service{config: config, client: client, logger: logger}, nil
+	return &DataciteService{fair: _fair, config: config, client: client, logger: logger}, nil
 }
 
-type PartitionParam struct {
-	prefix string
-}
-
-type Service struct {
+type DataciteService struct {
+	fair   *Fair
 	logger zLogger.ZLogger
-	config Config
-	client *Client
+	config DataciteConfig
+	client *datacite.Client
 }
 
-func (srv *Service) CreatePID(fair *fair.Fair, item *fair.ItemData) (string, error) {
+func (srv *DataciteService) Resolve(pid string) (string, ResolveResultType, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (srv *DataciteService) CreatePID(fair *Fair, item *ItemData) (string, error) {
 	part, err := fair.GetPartition(item.Partition)
 	if err != nil {
 		return "", errors.Wrap(err, "cannot get partition")
@@ -47,8 +49,7 @@ func (srv *Service) CreatePID(fair *fair.Fair, item *fair.ItemData) (string, err
 	if err != nil {
 		return "", errors.Wrap(err, "cannot mint doi")
 	}
-	_, err = srv.client.RetrieveDOI(doiStr)
-	if err == nil {
+	if _, err = srv.client.RetrieveDOI(doiStr); err == nil {
 		return "", errors.New(fmt.Sprintf("doi %s already exists", doiStr))
 	}
 
@@ -56,9 +57,9 @@ func (srv *Service) CreatePID(fair *fair.Fair, item *fair.ItemData) (string, err
 	dataciteData.InitNamespace()
 	dataciteData.FromCore(item.Metadata)
 
-	_, suffix := splitDOI(doiStr)
+	_, suffix := srv.splitDOI(doiStr)
 
-	api, err := srv.client.CreateDOI(dataciteData, suffix, part.RedirURL(item.UUID), DCEventDraft)
+	api, err := srv.client.CreateDOI(dataciteData, suffix, part.RedirURL(item.UUID), datacite.DCEventDraft)
 	if err != nil {
 		return "", errors.Wrap(err, "cannot create doi")
 	}
@@ -69,7 +70,7 @@ func (srv *Service) CreatePID(fair *fair.Fair, item *fair.ItemData) (string, err
 
 var doiRegexp = regexp.MustCompile(`(?i)^doi:(?P<prefix>10.[0-9]+)/(?P<suffix>[^;/?:@&=+$,!]+)$`)
 
-func splitDOI(doi string) (prefix string, suffix string) {
+func (srv *DataciteService) splitDOI(doi string) (prefix string, suffix string) {
 	match := doiRegexp.FindStringSubmatch(doi)
 	if match == nil {
 		return "", ""
@@ -87,19 +88,19 @@ func splitDOI(doi string) (prefix string, suffix string) {
 	return
 }
 
-var chars = []rune("0123456789bcdfghjkmnpqrstvwxz")
+var datacitechars = []rune("0123456789bcdfghjkmnpqrstvwxz")
 
-var l = uint64(len(chars))
+var datacitecharslen = uint64(len(datacitechars))
 
-func encode(nb uint64) string {
+func (srv *DataciteService) encode(nb uint64) string {
 	var result string
 	var i = 0
 	for {
 		if i > 0 && i%4 == 0 {
 			result = "-" + result
 		}
-		result = string(chars[nb%l]) + result
-		nb /= l
+		result = string(datacitechars[nb%datacitecharslen]) + result
+		nb /= datacitecharslen
 		if nb == 0 {
 			break
 		}
@@ -108,28 +109,28 @@ func encode(nb uint64) string {
 	return result
 }
 
-func (srv *Service) Type() dataciteModel.RelatedIdentifierType {
+func (srv *DataciteService) Type() dataciteModel.RelatedIdentifierType {
 	return dataciteModel.RelatedIdentifierTypeDOI
 }
 
-func (srv *Service) Unify(doi string) (string, error) {
-	prefix, suffix := splitDOI(doi)
+func (srv *DataciteService) Unify(doi string) (string, error) {
+	prefix, suffix := srv.splitDOI(doi)
 	if prefix == "" || suffix == "" {
-		return "", errors.Wrapf(fair.ErrInvalidIdentifier, "doi %s not valid", doi)
+		return "", errors.Wrapf(ErrInvalidIdentifier, "doi %s not valid", doi)
 	}
 
 	return fmt.Sprintf("doi:%s/%s", prefix, suffix), nil
 }
 
-func (srv *Service) mint(fair *fair.Fair) (string, error) {
+func (srv *DataciteService) mint(fair *Fair) (string, error) {
 	counter, err := fair.NextCounter("doiseq")
 	if err != nil {
 		return "", errors.Wrap(err, "cannot mint ark")
 	}
 	counter2 := bits.RotateLeft64(uint64(counter), -32)
-	suffix := encode(counter2)
+	suffix := srv.encode(counter2)
 
 	return fmt.Sprintf("doi:%s/%s", srv.config.Prefix, suffix), nil
 }
 
-var _ fair.Resolver = (*Service)(nil)
+var _ Resolver = (*DataciteService)(nil)

@@ -58,25 +58,15 @@ func BasicAuth(ctx *gin.Context, username, password, realm string) bool {
 */
 
 func (s *Server) resolverHandler(ctx *gin.Context) {
+	partition := ctx.Param("partition")
 	pid := strings.Trim(ctx.Param("pid"), "/")
-	if strings.HasPrefix(strings.ToLower(pid), "ark:") {
-		uuid, components, variants, err := s.fair.ARKResolveUUID(pid)
-		if err != nil {
-			sendResult(s.log, ctx, http.StatusNotFound, fmt.Sprintf("cannot resolve %s: %v", pid, err), nil)
-			return
-		}
-		ctx.Set("uuid", uuid)
-		suffix := components
-		if variants != "" {
-			if suffix != "" {
-				suffix += "." + variants
-			} else {
-				suffix = variants
-			}
-		}
-		ctx.Set("suffix", suffix)
-		s.redirectHandler(ctx)
+	data, _type, err := s.fair.Resolve(partition, pid)
+	if err != nil {
+		sendResult(s.log, ctx, http.StatusNotFound, fmt.Sprintf("cannot resolve %s: %v", pid, err), nil)
+		return
 	}
+	ctx.Set("uuid", uuid)
+	s.redirectHandler(ctx)
 }
 
 func (s *Server) redirectHandler(ctx *gin.Context) {

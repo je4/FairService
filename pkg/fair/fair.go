@@ -7,13 +7,9 @@ import (
 	"emperror.dev/errors"
 	"fmt"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgtype/zeronull"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/FairService/v2/pkg/model/myfair"
-	"github.com/je4/FairService/v2/pkg/service/datacite"
-	hcClient "github.com/je4/HandleCreator/v2/pkg/client"
 	"github.com/je4/utils/v2/pkg/datatable"
 	"github.com/je4/utils/v2/pkg/zLogger"
 	"io"
@@ -107,12 +103,11 @@ func equalStrings(a, b []string) bool {
 	return true
 }
 
-func NewFair(db *pgxpool.Pool, multiResolver *MultiResolver, dbSchema string, handle *hcClient.HandleCreatorClient, log zLogger.ZLogger) (*Fair, error) {
+func NewFair(db *pgxpool.Pool, multiResolver *MultiResolver, dbSchema string, log zLogger.ZLogger) (*Fair, error) {
 	f := &Fair{
 		dbSchema:      dbSchema,
 		db:            db,
 		multiResolver: multiResolver,
-		handle:        handle,
 		sourcesMutex:  sync.RWMutex{},
 		sources:       map[int64]*Source{},
 		partitions:    map[string]*Partition{},
@@ -121,13 +116,13 @@ func NewFair(db *pgxpool.Pool, multiResolver *MultiResolver, dbSchema string, ha
 	if err := f.LoadSources(); err != nil {
 		return nil, errors.Wrap(err, "cannot load sources")
 	}
+	multiResolver.SetFair(f)
 	return f, nil
 }
 
 type Fair struct {
 	dbSchema      string
 	db            *pgxpool.Pool
-	handle        *hcClient.HandleCreatorClient
 	sourcesMutex  sync.RWMutex
 	sources       map[int64]*Source
 	partitions    map[string]*Partition
@@ -344,6 +339,12 @@ func (f *Fair) EndUpdate(p *Partition, source string) error {
 	return f.StartUpdate(p, source)
 }
 
+func (f *Fair) ResolveUUID(pid string) (uuid string, partition string, identifierType string, err error) {
+	return f.multiResolver.Resolve(pid)
+
+}
+
+/*
 func (f *Fair) CreateDOI(p *Partition, uuidStr, targetUrl string) (*datacite.API, error) {
 	data, err := f.GetItem(p, uuidStr)
 	if err != nil {
@@ -391,10 +392,6 @@ func (f *Fair) CreateDOI(p *Partition, uuidStr, targetUrl string) (*datacite.API
 	}
 
 	data.Identifier = append(data.Identifier, fmt.Sprintf("%s:%s", myfair.RelatedIdentifierTypeDOI, doiStr))
-	/*	sqlstr := fmt.Sprintf("UPDATE %s.core"+
-		" SET identifier=$1, datestamp=NOW(), seq=NEXTVAL('lastchange')"+
-		" WHERE uuid=$2", f.dbSchema)
-	*/
 	sqlstr := "UPDATE core" +
 		" SET identifier=$1, datestamp=NOW(), seq=NEXTVAL('lastchange')" +
 		" WHERE uuid=$2"
@@ -408,6 +405,7 @@ func (f *Fair) CreateDOI(p *Partition, uuidStr, targetUrl string) (*datacite.API
 	f.RefreshSearch()
 	return api, nil
 }
+*/
 
 var fieldDef = map[string]string{
 	"partition":       "src.partition AS partition",
@@ -539,6 +537,13 @@ func (f *Fair) Search(p *Partition, dtr *datatable.Request) ([]map[string]string
 	return result, num, total, nil
 }
 
+func (f *Fair) Resolve(partition string, pid string) (data, _type string, err error) {
+	return f.multiResolver.Resolve(partition, pid)
+
+}
+
+/*
 func (f *Fair) ARKResolveUUID(ark string) (uuid string, components string, variants string, err error) {
 	return f.ark.ResolveUUID(ark)
 }
+*/

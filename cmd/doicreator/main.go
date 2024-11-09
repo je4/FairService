@@ -63,7 +63,7 @@ func main() {
 	if err != nil {
 		logger.Fatal().Err(err).Msg("cannot parse db connection string")
 	}
-	//	pgxConf.TLSConfig = &tls.Config{InsecureSkipVerify: true, ServerName: "dd-pdb3.ub.unibas.ch"}
+	//	pgxConf.TLSConfig = &tls.DataciteConfig{InsecureSkipVerify: true, ServerName: "dd-pdb3.ub.unibas.ch"}
 	// create prepared queries on each connection
 	/*
 		pgxConf.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {

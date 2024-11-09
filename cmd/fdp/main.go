@@ -8,10 +8,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/je4/FairService/v2/pkg/fair"
+	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/FairService/v2/pkg/service"
-	"github.com/je4/FairService/v2/pkg/service/ark"
-	"github.com/je4/FairService/v2/pkg/service/datacite"
-	hcClient "github.com/je4/HandleCreator/v2/pkg/client"
 	"github.com/je4/utils/v2/pkg/zLogger"
 	ublogger "gitlab.switch.ch/ub-unibas/go-ublogger/v2"
 	"go.ub.unibas.ch/cloud/certloader/v2/pkg/loader"
@@ -85,7 +83,7 @@ func main() {
 	if err != nil {
 		logger.Fatal().Err(err).Msg("cannot parse db connection string")
 	}
-	//	pgxConf.TLSConfig = &tls.Config{InsecureSkipVerify: true, ServerName: "dd-pdb3.ub.unibas.ch"}
+	//	pgxConf.TLSConfig = &tls.ARKConfig{InsecureSkipVerify: true, ServerName: "dd-pdb3.ub.unibas.ch"}
 	// create prepared queries on each connection
 	/*
 		pgxConf.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
@@ -131,25 +129,14 @@ func main() {
 		accessLog = f
 	}
 
-	var handle *hcClient.HandleCreatorClient
-	if config.Handle.Addr != "" {
-		handle, err = hcClient.NewHandleCreatorClient(config.Handle.ServiceName, config.Handle.Addr, string(config.Handle.JWTKey), config.Handle.JWTAlg, config.Handle.SkipCertVerify, logger)
-		if err != nil {
-			logger.Fatal().Msgf("cannot create handle service: %v", err)
-			return
-		}
-	} else {
-		logger.Info().Msg("no handle creator configured")
-	}
-
-	res, err := fair.NewResolver(logger)
+	mr, err := fair.NewResolver(logger)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("cannot create resolver")
 		return
 	}
 	//	res.InitPIDTable()
 
-	fairService, err := fair.NewFair(db, res, config.DB.Schema, handle, logger)
+	fairService, err := fair.NewFair(db, mr, config.DB.Schema, logger)
 	if err != nil {
 		logger.Fatal().Msgf("cannot initialize fair: %v", err)
 	}
@@ -157,7 +144,7 @@ func main() {
 	//	var partitions []*fair.Partition
 	for _, pconf := range config.Partition {
 		p, err := fair.NewPartition(
-			db,
+			fairService,
 			pconf.Name,
 			pconf.AddrExt,
 			pconf.Domain,
@@ -170,12 +157,12 @@ func main() {
 				PageSize:               pconf.OAI.Pagesize,
 				ResumptionTokenTimeout: time.Duration(pconf.OAI.ResumptionTokenTimeout),
 			},
-			&ark.Config{
+			&fair.ARKConfig{
 				Shoulder: pconf.ARK.Shoulder,
 				Prefix:   pconf.ARK.Prefix,
 				NAAN:     pconf.ARK.NAAN,
 			},
-			&datacite.Config{
+			&fair.DataciteConfig{
 				Api:      pconf.Datacite.Api,
 				User:     pconf.Datacite.User.String(),
 				Password: pconf.Datacite.Password.String(),
@@ -184,11 +171,11 @@ func main() {
 			&fair.HandleConfig{
 				ServiceName:    pconf.Handle.ServiceName,
 				Addr:           pconf.Handle.Addr,
-				JWTAlg:         pconf.Handle.JWTAlg,
 				JWTKey:         pconf.Handle.JWTKey.String(),
+				JWTAlg:         pconf.Handle.JWTAlg,
 				SkipCertVerify: pconf.Handle.SkipCertVerify,
-				Prefix:         pconf.Handle.Prefix,
 				ID:             pconf.Handle.ID,
+				Prefix:         pconf.Handle.Prefix,
 			},
 			pconf.Description,
 			string(pconf.JWTKey),
@@ -198,6 +185,39 @@ func main() {
 			logger.Fatal().Msgf("cannot create partition %s: %v", pconf.Name, err)
 			return
 		}
+		arkService, err := fair.NewARKService(fairService.GetDB(), &fair.ARKConfig{
+			Shoulder: pconf.ARK.Shoulder,
+			Prefix:   pconf.ARK.Prefix,
+			NAAN:     pconf.ARK.NAAN,
+		}, logger)
+		if err != nil {
+			logger.Fatal().Msgf("cannot create ark service: %v", err)
+			return
+		}
+		mr.AddResolver(p, arkService)
+		handleService, err := fair.NewHandleService(fairService, &fair.HandleConfig{
+			ServiceName:    pconf.Handle.ServiceName,
+			Addr:           pconf.Handle.Addr,
+			JWTKey:         pconf.Handle.JWTKey.String(),
+			JWTAlg:         pconf.Handle.JWTAlg,
+			SkipCertVerify: pconf.Handle.SkipCertVerify,
+			ID:             pconf.Handle.ID,
+			Prefix:         pconf.Handle.Prefix,
+		}, logger)
+		mr.AddResolver(p, handleService)
+		mr.CreateAll(p, dataciteModel.RelatedIdentifierTypeARK)
+		dataciteService, err := fair.NewDataciteService(fairService, fair.DataciteConfig{
+			Api:      pconf.Datacite.Api,
+			User:     pconf.Datacite.User.String(),
+			Password: pconf.Datacite.Password.String(),
+			Prefix:   pconf.Datacite.Prefix,
+		}, logger)
+		mr.AddResolver(p, dataciteService)
+		if err != nil {
+			logger.Fatal().Msgf("cannot create datacite service: %v", err)
+			return
+		}
+
 		fairService.AddPartition(p)
 	}
 

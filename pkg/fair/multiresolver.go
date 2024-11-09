@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/utils/v2/pkg/zLogger"
 	"github.com/pkg/errors"
@@ -14,30 +13,32 @@ import (
 
 func NewResolver(logger zLogger.ZLogger) (*MultiResolver, error) {
 	return &MultiResolver{
-		resolver: map[dataciteModel.RelatedIdentifierType]Resolver{},
+		resolver: map[string]map[dataciteModel.RelatedIdentifierType]Resolver{},
 		logger:   logger,
 	}, nil
 }
 
 type MultiResolver struct {
-	db       *pgxpool.Pool
-	resolver map[dataciteModel.RelatedIdentifierType]Resolver
 	fair     *Fair
+	resolver map[string]map[dataciteModel.RelatedIdentifierType]Resolver
 	logger   zLogger.ZLogger
 }
 
 func (mr *MultiResolver) SetFair(fair *Fair) {
 	mr.fair = fair
-	mr.db = fair.GetDB()
 }
 
-func (mr *MultiResolver) AddResolver(resolver Resolver) {
-	mr.resolver[resolver.Type()] = resolver
+func (mr *MultiResolver) AddResolver(part *Partition, resolver Resolver) {
+	if _, ok := mr.resolver[part.Name]; !ok {
+		mr.resolver[part.Name] = map[dataciteModel.RelatedIdentifierType]Resolver{}
+	}
+	mr.resolver[part.Name][resolver.Type()] = resolver
 }
 
 func (mr *MultiResolver) StorePID(uuid string, identifierType dataciteModel.RelatedIdentifierType, identifier string) error {
+	db := mr.fair.GetDB()
 	sqlstr := `INSERT INTO pid (uuid, identifiertype, identifier) VALUES ($1,$2,$3)`
-	if tag, err := mr.db.Exec(context.Background(), sqlstr, uuid, identifierType, identifier); err != nil {
+	if tag, err := db.Exec(context.Background(), sqlstr, uuid, identifierType, identifier); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
 			mr.logger.Warn().Msgf("identifier %s already exists for uuid %s", identifier, uuid)
@@ -53,14 +54,19 @@ func (mr *MultiResolver) StorePID(uuid string, identifierType dataciteModel.Rela
 }
 
 func (mr *MultiResolver) CreatePID(uuid string, part *Partition, identifierType dataciteModel.RelatedIdentifierType) (string, error) {
-	if _, ok := mr.resolver[identifierType]; !ok {
+	partResolvers, ok := mr.resolver[part.Name]
+	if !ok {
+		return "", errors.Errorf("no resolvers for partition %s", part.Name)
+	}
+	if _, ok := partResolvers[identifierType]; !ok {
 		return "", errors.Errorf("no resolver for identifier type %s", identifierType)
 	}
-	item, err := mr.fair.GetItem(part, uuid)
+	_fair := part.GetFair()
+	item, err := _fair.GetItem(part, uuid)
 	if err != nil {
 		return "", errors.Wrapf(err, "cannot load item %s/%s", part.Name, uuid)
 	}
-	identifier, err := mr.resolver[identifierType].CreatePID(mr.fair, item)
+	identifier, err := partResolvers[identifierType].CreatePID(_fair, item)
 	if err != nil {
 		return "", errors.Wrapf(err, "cannot mint identifier for %s", identifierType)
 	}
@@ -71,8 +77,9 @@ func (mr *MultiResolver) CreatePID(uuid string, part *Partition, identifierType 
 }
 
 func (mr *MultiResolver) InitPIDTable() error {
+	db := mr.fair.GetDB()
 	sqlstr := `SELECT uuid, identifier FROM core`
-	rows, err := mr.db.Query(context.Background(), sqlstr)
+	rows, err := db.Query(context.Background(), sqlstr)
 	if err != nil {
 		return errors.Wrapf(err, "cannot query core table: %s", sqlstr)
 	}
@@ -102,10 +109,8 @@ func (mr *MultiResolver) InitPIDTable() error {
 	return nil
 }
 
-func (mr *MultiResolver) CreateAll(t dataciteModel.RelatedIdentifierType) error {
-	if _, ok := mr.resolver[t]; !ok {
-		return errors.Errorf("no resolver for type %s", t)
-	}
+func (mr *MultiResolver) CreateAll(part *Partition, t dataciteModel.RelatedIdentifierType) error {
+	db := mr.fair.GetDB()
 	var doRefresh = false
 	defer func() {
 		if doRefresh {
@@ -113,33 +118,54 @@ func (mr *MultiResolver) CreateAll(t dataciteModel.RelatedIdentifierType) error 
 		}
 	}()
 	sqlStr := "SELECT coreview.uuid FROM coreview LEFT JOIN pid ON coreview.uuid = pid.uuid WHERE coreview.partition=$1 AND pid.identifiertype=$2 AND pid.uuid IS NULL LIMIT 1000"
-	for _, part := range mr.fair.GetPartitions() {
-		for {
-			var uuids = make([]string, 0, 1000)
-			rows, err := mr.db.Query(context.Background(), sqlStr, part.Name, t)
-			if err != nil {
-				return errors.Wrapf(err, "cannot execute %s", sqlStr)
-			}
-			for rows.Next() {
-				var uuid string
-				if err := rows.Scan(&uuid); err != nil {
-					return errors.Wrapf(err, "cannot scan %s", sqlStr)
-				}
-				uuids = append(uuids, uuid)
-			}
-			rows.Close()
-			if len(uuids) == 0 {
-				break
-			}
-
-			for _, uuid := range uuids {
-				if _, err := mr.CreatePID(uuid, part, t); err != nil {
-					return errors.Wrapf(err, "cannot create pid for %s", uuid)
-				}
-			}
-			doRefresh = true
+	for {
+		var uuids = make([]string, 0, 1000)
+		rows, err := db.Query(context.Background(), sqlStr, part.Name, t)
+		if err != nil {
+			return errors.Wrapf(err, "cannot execute %s", sqlStr)
 		}
+		for rows.Next() {
+			var uuid string
+			if err := rows.Scan(&uuid); err != nil {
+				return errors.Wrapf(err, "cannot scan %s", sqlStr)
+			}
+			uuids = append(uuids, uuid)
+		}
+		rows.Close()
+		if len(uuids) == 0 {
+			break
+		}
+
+		for _, uuid := range uuids {
+			if _, err := mr.CreatePID(uuid, part, t); err != nil {
+				return errors.Wrapf(err, "cannot create pid for %s", uuid)
+			}
+		}
+		doRefresh = true
 	}
 	return nil
 
+}
+
+func (mr *MultiResolver) Resolve(partition, pid string) (data string, resultType ResolveResultType, err error) {
+	part, err := mr.fair.GetPartition(partition)
+	if err != nil {
+		return "", ResolveResultTypeUnknown, errors.Wrapf(err, "cannot get partition %s", partition)
+	}
+	parts := strings.SplitN(pid, ":", 2)
+	if len(parts) != 2 {
+		return "", ResolveResultTypeUnknown, errors.Errorf("invalid pid %s", pid)
+	}
+	var resolver Resolver
+	switch strings.ToLower(parts[0]) {
+	case "ark":
+		resolver = mr.resolver[part.Name][dataciteModel.RelatedIdentifierTypeARK]
+	case "doi":
+		resolver = mr.resolver[part.Name][dataciteModel.RelatedIdentifierTypeDOI]
+	case "handle":
+		resolver = mr.resolver[part.Name][dataciteModel.RelatedIdentifierTypeHandle]
+	default:
+		return "", ResolveResultTypeUnknown, errors.Errorf("unknown identifier type %s", parts[0])
+	}
+	return resolver.Resolve(pid)
 }
