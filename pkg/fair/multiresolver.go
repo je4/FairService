@@ -11,32 +11,31 @@ import (
 	"strings"
 )
 
-func NewResolver(logger zLogger.ZLogger) (*MultiResolver, error) {
+func NewResolver(part *Partition, logger zLogger.ZLogger) (*MultiResolver, error) {
 	return &MultiResolver{
-		resolver: map[string]map[dataciteModel.RelatedIdentifierType]Resolver{},
+		part:     part,
+		resolver: map[dataciteModel.RelatedIdentifierType]Resolver{},
 		logger:   logger,
 	}, nil
 }
 
 type MultiResolver struct {
-	fair     *Fair
-	resolver map[string]map[dataciteModel.RelatedIdentifierType]Resolver
+	resolver map[dataciteModel.RelatedIdentifierType]Resolver
 	logger   zLogger.ZLogger
+	part     *Partition
 }
 
-func (mr *MultiResolver) SetFair(fair *Fair) {
-	mr.fair = fair
+func (mr *MultiResolver) GetPartition() *Partition {
+	return mr.part
 }
 
-func (mr *MultiResolver) AddResolver(part *Partition, resolver Resolver) {
-	if _, ok := mr.resolver[part.Name]; !ok {
-		mr.resolver[part.Name] = map[dataciteModel.RelatedIdentifierType]Resolver{}
-	}
-	mr.resolver[part.Name][resolver.Type()] = resolver
+func (mr *MultiResolver) AddResolver(resolver Resolver) {
+	mr.resolver[resolver.Type()] = resolver
 }
 
 func (mr *MultiResolver) StorePID(uuid string, identifierType dataciteModel.RelatedIdentifierType, identifier string) error {
-	db := mr.fair.GetDB()
+	fair := mr.part.GetFair()
+	db := fair.GetDB()
 	sqlstr := `INSERT INTO pid (uuid, identifiertype, identifier) VALUES ($1,$2,$3)`
 	if tag, err := db.Exec(context.Background(), sqlstr, uuid, identifierType, identifier); err != nil {
 		var pgErr *pgconn.PgError
@@ -54,11 +53,7 @@ func (mr *MultiResolver) StorePID(uuid string, identifierType dataciteModel.Rela
 }
 
 func (mr *MultiResolver) CreatePID(uuid string, part *Partition, identifierType dataciteModel.RelatedIdentifierType) (string, error) {
-	partResolvers, ok := mr.resolver[part.Name]
-	if !ok {
-		return "", errors.Errorf("no resolvers for partition %s", part.Name)
-	}
-	if _, ok := partResolvers[identifierType]; !ok {
+	if _, ok := mr.resolver[identifierType]; !ok {
 		return "", errors.Errorf("no resolver for identifier type %s", identifierType)
 	}
 	_fair := part.GetFair()
@@ -66,7 +61,7 @@ func (mr *MultiResolver) CreatePID(uuid string, part *Partition, identifierType 
 	if err != nil {
 		return "", errors.Wrapf(err, "cannot load item %s/%s", part.Name, uuid)
 	}
-	identifier, err := partResolvers[identifierType].CreatePID(_fair, item)
+	identifier, err := mr.resolver[identifierType].CreatePID(_fair, item)
 	if err != nil {
 		return "", errors.Wrapf(err, "cannot mint identifier for %s", identifierType)
 	}
@@ -77,7 +72,8 @@ func (mr *MultiResolver) CreatePID(uuid string, part *Partition, identifierType 
 }
 
 func (mr *MultiResolver) InitPIDTable() error {
-	db := mr.fair.GetDB()
+	fair := mr.part.GetFair()
+	db := fair.GetDB()
 	sqlstr := `SELECT uuid, identifier FROM core`
 	rows, err := db.Query(context.Background(), sqlstr)
 	if err != nil {
@@ -110,17 +106,18 @@ func (mr *MultiResolver) InitPIDTable() error {
 }
 
 func (mr *MultiResolver) CreateAll(part *Partition, t dataciteModel.RelatedIdentifierType) error {
-	db := mr.fair.GetDB()
+	fair := mr.part.GetFair()
+	db := fair.GetDB()
 	var doRefresh = false
 	defer func() {
 		if doRefresh {
-			mr.fair.RefreshSearch()
+			fair.RefreshSearch()
 		}
 	}()
-	sqlStr := "SELECT coreview.uuid FROM coreview LEFT JOIN pid ON coreview.uuid = pid.uuid WHERE coreview.partition=$1 AND pid.identifiertype=$2 AND pid.uuid IS NULL LIMIT 1000"
+	sqlStr := "SELECT coreview.uuid FROM coreview LEFT JOIN pid ON coreview.uuid = pid.uuid AND pid.identifiertype=$1 WHERE coreview.partition=$2 AND pid.uuid IS NULL LIMIT 1000"
 	for {
 		var uuids = make([]string, 0, 1000)
-		rows, err := db.Query(context.Background(), sqlStr, part.Name, t)
+		rows, err := db.Query(context.Background(), sqlStr, t, part.Name)
 		if err != nil {
 			return errors.Wrapf(err, "cannot execute %s", sqlStr)
 		}
@@ -147,11 +144,7 @@ func (mr *MultiResolver) CreateAll(part *Partition, t dataciteModel.RelatedIdent
 
 }
 
-func (mr *MultiResolver) Resolve(partition, pid string) (data string, resultType ResolveResultType, err error) {
-	part, err := mr.fair.GetPartition(partition)
-	if err != nil {
-		return "", ResolveResultTypeUnknown, errors.Wrapf(err, "cannot get partition %s", partition)
-	}
+func (mr *MultiResolver) Resolve(pid string) (data string, resultType ResolveResultType, err error) {
 	parts := strings.SplitN(pid, ":", 2)
 	if len(parts) != 2 {
 		return "", ResolveResultTypeUnknown, errors.Errorf("invalid pid %s", pid)
@@ -159,11 +152,11 @@ func (mr *MultiResolver) Resolve(partition, pid string) (data string, resultType
 	var resolver Resolver
 	switch strings.ToLower(parts[0]) {
 	case "ark":
-		resolver = mr.resolver[part.Name][dataciteModel.RelatedIdentifierTypeARK]
+		resolver = mr.resolver[dataciteModel.RelatedIdentifierTypeARK]
 	case "doi":
-		resolver = mr.resolver[part.Name][dataciteModel.RelatedIdentifierTypeDOI]
+		resolver = mr.resolver[dataciteModel.RelatedIdentifierTypeDOI]
 	case "handle":
-		resolver = mr.resolver[part.Name][dataciteModel.RelatedIdentifierTypeHandle]
+		resolver = mr.resolver[dataciteModel.RelatedIdentifierTypeHandle]
 	default:
 		return "", ResolveResultTypeUnknown, errors.Errorf("unknown identifier type %s", parts[0])
 	}

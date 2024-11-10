@@ -25,6 +25,6 @@ type ResolverResolve interface {
 type Resolver interface {
 	ResolverResolve
 	Type() dataciteModel.RelatedIdentifierType
-	Unify(ark string) (string, error)
+	//Unify(ark string) (string, error)
 	CreatePID(fair *Fair, item *ItemData) (string, error)
 }

@@ -362,10 +362,10 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 				" VALUES($1)", f.dbSchema)
 		*/
 
-		if _, err := f.multiResolver.CreatePID(item.UUID, partition, dataciteModel.RelatedIdentifierTypeHandle); err != nil {
+		if _, err := partition.CreatePID(item.UUID, dataciteModel.RelatedIdentifierTypeHandle); err != nil {
 			f.log.Error().Err(err).Msgf("cannot create handle for %s", item.UUID)
 		}
-		if _, err := f.multiResolver.CreatePID(item.UUID, partition, dataciteModel.RelatedIdentifierTypeARK); err != nil {
+		if _, err := partition.CreatePID(item.UUID, dataciteModel.RelatedIdentifierTypeARK); err != nil {
 			f.log.Error().Err(err).Msgf("cannot create ark for %s", item.UUID)
 		}
 

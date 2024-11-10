@@ -106,6 +106,7 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 		router.StaticFS(fmt.Sprintf("/%s/static", part.Name), http.FS(fsys))
 	}
 	//partition.StaticFS("/static", http.FS(fsys))
+	router.GET("/resolve/*pid", s.resolverHandler)
 
 	/*
 		router.PathPrefix("/{partition}/static").Handler(
@@ -249,7 +250,7 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 	partition.GET("/item/:uuid", s.itemHandler)
 	partitionAuth.GET("/createdoi/:uuid", s.createDOIHandler)
 	partition.GET("/redir/:uuid", s.redirectHandler)
-	router.GET("/resolver/*pid", s.resolverHandler)
+	partition.GET("/resolve/*pid", s.resolverHandler)
 
 	loggedRouter := handlers.CombinedLoggingHandler(s.accessLog, handlers.ProxyHeaders(router))
 	addr := net.JoinHostPort(s.host, s.port)

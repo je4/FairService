@@ -1,8 +1,10 @@
 package fair
 
 import (
+	"context"
 	"emperror.dev/errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/FairService/v2/pkg/service/datacite"
 	"github.com/je4/utils/v2/pkg/zLogger"
@@ -17,7 +19,7 @@ type DataciteConfig struct {
 	Prefix   string
 }
 
-func NewDataciteService(_fair *Fair, config DataciteConfig, logger zLogger.ZLogger) (*DataciteService, error) {
+func NewDataciteService(mr *MultiResolver, config DataciteConfig, logger zLogger.ZLogger) (*DataciteService, error) {
 	client, err := datacite.NewClient(config.Api, config.User, config.Password, config.Prefix)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create datacite client")
@@ -25,19 +27,40 @@ func NewDataciteService(_fair *Fair, config DataciteConfig, logger zLogger.ZLogg
 	if err := client.Heartbeat(); err != nil {
 		logger.Error().Err(err).Msg("cannot connect to datacite")
 	}
-	return &DataciteService{fair: _fair, config: config, client: client, logger: logger}, nil
+	srv := &DataciteService{mr: mr, config: config, client: client, logger: logger}
+	mr.AddResolver(srv)
+	return srv, nil
 }
 
 type DataciteService struct {
-	fair   *Fair
 	logger zLogger.ZLogger
 	config DataciteConfig
 	client *datacite.Client
+	mr     *MultiResolver
 }
 
 func (srv *DataciteService) Resolve(pid string) (string, ResolveResultType, error) {
-	//TODO implement me
-	panic("implement me")
+	part := srv.mr.GetPartition()
+	fair := part.GetFair()
+	db := fair.GetDB()
+	prefix, suffix := srv.splitDOI(pid)
+	if prefix == "" || suffix == "" {
+		return "", ResolveResultTypeUnknown, errors.Wrapf(ErrInvalidIdentifier, "doi %s not valid", pid)
+	}
+	_pid := fmt.Sprintf("doi:%s/%s", prefix, suffix)
+	sqlStr := "SELECT pid.uuid FROM pid WHERE pid.identifier=$1"
+	var uuid string
+	if err := db.QueryRow(context.Background(), sqlStr, _pid).Scan(&uuid); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ResolveResultTypeUnknown, errors.Errorf("doi %s not found", _pid)
+		}
+		return "", ResolveResultTypeUnknown, errors.Wrapf(err, "cannot execute %s [%s]", sqlStr, _pid)
+	}
+	item, err := fair.GetItem(part, uuid)
+	if err != nil {
+		return "", ResolveResultTypeUnknown, errors.Wrapf(err, "cannot get item %s/%s", part.Name, uuid)
+	}
+	return item.URL, ResolveResultTypeRedirect, nil
 }
 
 func (srv *DataciteService) CreatePID(fair *Fair, item *ItemData) (string, error) {
@@ -111,15 +134,6 @@ func (srv *DataciteService) encode(nb uint64) string {
 
 func (srv *DataciteService) Type() dataciteModel.RelatedIdentifierType {
 	return dataciteModel.RelatedIdentifierTypeDOI
-}
-
-func (srv *DataciteService) Unify(doi string) (string, error) {
-	prefix, suffix := srv.splitDOI(doi)
-	if prefix == "" || suffix == "" {
-		return "", errors.Wrapf(ErrInvalidIdentifier, "doi %s not valid", doi)
-	}
-
-	return fmt.Sprintf("doi:%s/%s", prefix, suffix), nil
 }
 
 func (srv *DataciteService) mint(fair *Fair) (string, error) {

@@ -1,6 +1,7 @@
 package fair
 
 import (
+	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/utils/v2/pkg/zLogger"
 	"strings"
 	"time"
@@ -9,7 +10,6 @@ import (
 type OAIConfig struct {
 	RepositoryName         string
 	AdminEmail             []string
-	Pagesize               int64
 	SampleIdentifier       string
 	Delimiter              string
 	Scheme                 string
@@ -17,13 +17,12 @@ type OAIConfig struct {
 	ResumptionTokenTimeout time.Duration
 }
 
-func NewPartition(_fair *Fair, Name, AddrExt, Domain string, oai *OAIConfig, _ark *ARKConfig, _datacite *DataciteConfig, handle *HandleConfig, Description, JWTKey string, JWTAlg []string, logger zLogger.ZLogger) (*Partition, error) {
+func NewPartition(_fair *Fair, Name, AddrExt, Domain string, oai *OAIConfig, Description, JWTKey string, JWTAlg []string, logger zLogger.ZLogger) (*Partition, error) {
 	p := &Partition{
 		Name:        strings.ToLower(Name),
 		AddrExt:     strings.TrimRight(AddrExt, "/"),
 		Domain:      Domain,
 		OAI:         oai,
-		Handle:      handle,
 		Description: Description,
 		JWTKey:      JWTKey,
 		JWTAlg:      JWTAlg,
@@ -42,9 +41,16 @@ type Partition struct {
 	Domain       string
 	HandlePrefix string
 	OAI          *OAIConfig
-	ARK          *ARKConfig
-	Handle       *HandleConfig
 	fair         *Fair
+	mr           *MultiResolver
+}
+
+func (p *Partition) Resolve(pid string) (string, ResolveResultType, error) {
+	return p.mr.Resolve(pid)
+}
+
+func (p *Partition) CreatePID(uuid string, identifierType dataciteModel.RelatedIdentifierType) (string, error) {
+	return p.mr.CreatePID(uuid, p, identifierType)
 }
 
 func (p *Partition) RedirURL(uuid string) string {
@@ -53,4 +59,13 @@ func (p *Partition) RedirURL(uuid string) string {
 
 func (p *Partition) GetFair() *Fair {
 	return p.fair
+}
+
+func (p *Partition) AddResolver(mr *MultiResolver) {
+	p.mr = mr
+}
+
+func (p *Partition) GetMultiResolver() *MultiResolver {
+	return p.mr
+
 }

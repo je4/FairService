@@ -1,7 +1,9 @@
 package fair
 
 import (
+	"context"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	hcClient "github.com/je4/HandleCreator/v2/pkg/client"
 	"github.com/je4/utils/v2/pkg/zLogger"
@@ -21,66 +23,79 @@ type HandleConfig struct {
 	Prefix         string
 }
 
-func NewHandleService(_fair *Fair, config *HandleConfig, logger zLogger.ZLogger) (*HandleService, error) {
+func NewHandleService(mr *MultiResolver, config *HandleConfig, logger zLogger.ZLogger) (*HandleService, error) {
 	handleClient, err := hcClient.NewHandleCreatorClient(config.ServiceName, config.Addr, string(config.JWTKey), config.JWTAlg, config.SkipCertVerify, logger)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create handle client")
 	}
-	return &HandleService{fair: _fair, handleClient: handleClient, config: config, logger: logger}, nil
+	srv := &HandleService{mr: mr, handleClient: handleClient, config: config, logger: logger}
+	mr.AddResolver(srv)
+	return srv, nil
 }
 
 type HandleService struct {
 	handleClient *hcClient.HandleCreatorClient
 	logger       zLogger.ZLogger
 	config       *HandleConfig
-	fair         *Fair
+	mr           *MultiResolver
 }
 
 func (srv *HandleService) Resolve(pid string) (string, ResolveResultType, error) {
-	//TODO implement me
-	panic("implement me")
+	part := srv.mr.GetPartition()
+	fair := part.GetFair()
+	db := fair.GetDB()
+	prefix, suffix := srv.splitHandle(pid)
+	if prefix == "" || suffix == "" {
+		return "", ResolveResultTypeUnknown, errors.Wrapf(ErrInvalidIdentifier, "handle %s not valid", pid)
+	}
+	_pid := fmt.Sprintf("handle:%s/%s", prefix, suffix)
+	sqlStr := "SELECT pid.uuid FROM pid WHERE pid.identifier=$1"
+	var uuid string
+	if err := db.QueryRow(context.Background(), sqlStr, _pid).Scan(&uuid); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ResolveResultTypeUnknown, errors.Errorf("handle %s not found", _pid)
+		}
+		return "", ResolveResultTypeUnknown, errors.Wrapf(err, "cannot execute %s [%s]", sqlStr, _pid)
+	}
+	item, err := fair.GetItem(part, uuid)
+	if err != nil {
+		return "", ResolveResultTypeUnknown, errors.Wrapf(err, "cannot get item %s/%s", part.Name, uuid)
+	}
+	return item.URL, ResolveResultTypeRedirect, nil
 }
 
 func (srv *HandleService) CreatePID(fair *Fair, item *ItemData) (string, error) {
-	handle, err := srv.mint(fair, item.UUID)
+	handle, err := srv.mint()
 	if err != nil {
 		return "", errors.Wrap(err, "cannot mint handle")
 	}
-	url, err := url.Parse(fmt.Sprintf("%s/%s", srv.config.ID, item.UUID))
+	urlStr := srv.mr.GetPartition().RedirURL(item.UUID)
+	u, err := url.Parse(urlStr)
 	if err != nil {
-		return "", errors.Wrapf(err, "cannot parse url %s/%s", srv.config.ID, item.UUID)
+		return "", errors.Wrap(err, "cannot parse url")
 	}
-	return handle, errors.Wrapf(srv.handleClient.Create(handle, url), "cannot create handle %s", handle)
+	return handle, errors.Wrapf(srv.handleClient.Create(handle, u), "cannot create handle %s", handle)
 }
 
 var handleRegexp = regexp.MustCompile(`(?i)^handle:(?P<prefix>[^/]+)/(?P<suffix>[^?]+)$`)
 
-/*
-func (srv *HandleService) ResolveUUID(ark string) (uuid, components, variants string, err error) {
-	match := handleRegexp.FindStringSubmatch(ark)
+func (srv *HandleService) splitHandle(doi string) (prefix string, suffix string) {
+	match := handleRegexp.FindStringSubmatch(doi)
 	if match == nil {
-		return "", "", variants, errors.Errorf("ark %s not valid", ark)
+		return "", ""
 	}
-	result := make(map[string]string)
-	for i, name := range handleRegexp.SubexpNames() {
-		if i != 0 && name != "" {
-			result[name] = match[i]
+	for i, name := range doiRegexp.SubexpNames() {
+		if i != 0 {
+			switch name {
+			case "prefix":
+				prefix = match[i]
+			case "suffix":
+				suffix = match[i]
+			}
 		}
-	}
-	prefix, _ := result["prefix"]
-	suffix, _ := result["suffix"]
-	// hyphen is removed
-	handle := "handle:" + strings.Join([]string{prefix, suffix}, "/")
-	sqlStr := "SELECT ark.uuid FROM ark WHERE ark.ark=$1"
-	if err = srv.db.QueryRow(context.Background(), sqlStr, ark).Scan(&uuid); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return "", "", variants, errors.Errorf("ark %s not found", ark)
-		}
-		return "", "", variants, errors.Wrapf(err, "cannot execute %s [%s]", sqlStr, ark)
 	}
 	return
 }
-*/
 
 var handlechars = []rune("0123456789bcdfghjkmnpqrstvwxz")
 
@@ -99,33 +114,11 @@ func (srv *HandleService) encode(nb uint64) string {
 }
 
 func (srv *HandleService) Type() dataciteModel.RelatedIdentifierType {
-	return dataciteModel.RelatedIdentifierTypeARK
+	return dataciteModel.RelatedIdentifierTypeHandle
 }
 
-func (srv *HandleService) Unify(handle string) (string, error) {
-	match := handleRegexp.FindStringSubmatch(handle)
-	if match == nil {
-		return "", errors.Wrapf(ErrInvalidIdentifier, "handle %s not valid", handle)
-	}
-	var prefix, suffix string
-	for i, name := range handleRegexp.SubexpNames() {
-		if i != 0 {
-			switch name {
-			case "prefix":
-				prefix = match[i]
-			case "suffix":
-				suffix = match[i]
-			}
-		}
-	}
-	if prefix == "" || suffix == "" {
-		return "", errors.Wrapf(ErrInvalidIdentifier, "handle %s not valid", handle)
-	}
-	return fmt.Sprintf("handle:%s/%s", prefix, suffix), nil
-}
-
-func (srv *HandleService) mint(fair *Fair, uuid string) (string, error) {
-	counter, err := fair.NextCounter("handleseq")
+func (srv *HandleService) mint() (string, error) {
+	counter, err := srv.mr.GetPartition().GetFair().NextCounter("handleseq")
 	if err != nil {
 		return "", errors.Wrap(err, "cannot mint handle")
 	}

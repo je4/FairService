@@ -60,13 +60,43 @@ func BasicAuth(ctx *gin.Context, username, password, realm string) bool {
 func (s *Server) resolverHandler(ctx *gin.Context) {
 	partition := ctx.Param("partition")
 	pid := strings.Trim(ctx.Param("pid"), "/")
-	data, _type, err := s.fair.Resolve(partition, pid)
-	if err != nil {
-		sendResult(s.log, ctx, http.StatusNotFound, fmt.Sprintf("cannot resolve %s: %v", pid, err), nil)
-		return
+	var data string
+	var _type fair.ResolveResultType
+	var err error
+	if partition == "" {
+		data, _type, err = s.fair.Resolve(pid)
+		if err != nil {
+			sendResult(s.log, ctx, http.StatusNotFound, fmt.Sprintf("cannot resolve %s: %v", pid, err), nil)
+			return
+		}
+	} else {
+		part, err := s.fair.GetPartition(partition)
+		if err != nil {
+			sendResult(s.log, ctx, http.StatusNotFound, fmt.Sprintf("cannot get partition %s: %v", partition, err), nil)
+			return
+		}
+		data, _type, err = part.Resolve(pid)
+		if err != nil {
+			sendResult(s.log, ctx, http.StatusNotFound, fmt.Sprintf("cannot resolve %s: %v", pid, err), nil)
+			return
+		}
 	}
-	ctx.Set("uuid", uuid)
-	s.redirectHandler(ctx)
+	switch _type {
+	case fair.ResolveResultTypeRedirect:
+		ctx.Redirect(http.StatusMovedPermanently, data)
+	case fair.ResolveResultTypeTextPlain:
+		ctx.String(http.StatusOK, data)
+	case fair.ResolveResultTypeApplicationXML:
+		ctx.Header("Content-Type", "application/xml")
+		ctx.String(http.StatusOK, data)
+	case fair.ResolveResultTypeApplicationJSON:
+		ctx.Header("Content-Type", "application/json")
+		ctx.String(http.StatusOK, data)
+	case fair.ResolveResultTypeUnknown:
+		ctx.String(http.StatusOK, data)
+	default:
+		ctx.String(http.StatusOK, data)
+	}
 }
 
 func (s *Server) redirectHandler(ctx *gin.Context) {
@@ -150,12 +180,11 @@ func (s *Server) detailHandler(ctx *gin.Context) {
 
 	if _, ok := ctx.GetQuery("createdoi"); ok {
 		//		targetUrl := fmt.Sprintf("%s/redir/%s", part.AddrExt, uuidStr)
-		resolver := s.fair.GetResolver()
-		pidStr, err := resolver.CreatePID(uuidStr, part, dataciteModel.RelatedIdentifierTypeDOI)
+		pid, err := part.CreatePID(uuidStr, dataciteModel.RelatedIdentifierTypeDOI)
 		if err != nil {
 			doiError = err.Error()
 		} else {
-			message = fmt.Sprintf("Draft DOI %s successfully created", pidStr)
+			message = fmt.Sprintf("DOI %s successfully created", pid)
 		}
 	}
 
@@ -282,8 +311,7 @@ func (s *Server) createDOIHandler(ctx *gin.Context) {
 		return
 	}
 
-	targetUrl := fmt.Sprintf("%s/redir/%s", part.AddrExt, uuidStr)
-	doiResult, err := s.fair.CreateDOI(part, uuidStr, targetUrl)
+	doiResult, err := part.CreatePID(uuidStr, dataciteModel.RelatedIdentifierTypeDOI)
 	if err != nil {
 		sendResult(s.log, ctx, http.StatusInternalServerError, err.Error(), nil)
 		return

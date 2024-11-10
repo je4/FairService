@@ -343,7 +343,7 @@ func (s *Server) oaiHandlerListIdentifiers(ctx *gin.Context, partition *fair.Par
 	var count int64
 
 	itemFunc := func(item *fair.ItemData) error {
-		if count < partition.OAI.Pagesize {
+		if count < partition.OAI.PageSize {
 			var status oai.RecordHeaderStatusType = oai.RecordHeaderStatusOK
 			if item.Status != fair.DataStatusActive {
 				status = oai.RecordHeaderStatusDeleted
@@ -393,7 +393,7 @@ func (s *Server) oaiHandlerListIdentifiers(ctx *gin.Context, partition *fair.Par
 			rData.seq,
 			until,
 			[]fair.DataAccess{fair.DataAccessPublic, fair.DataAccessPublic},
-			partition.OAI.Pagesize+1,
+			partition.OAI.PageSize+1,
 			0,
 			nil,
 			itemFunc); err != nil {
@@ -406,7 +406,7 @@ func (s *Server) oaiHandlerListIdentifiers(ctx *gin.Context, partition *fair.Par
 			rData.from,
 			rData.until,
 			[]fair.DataAccess{fair.DataAccessPublic, fair.DataAccessClosedData},
-			partition.OAI.Pagesize+1,
+			partition.OAI.PageSize+1,
 			0,
 			&rData.completeListSize,
 			itemFunc); err != nil {
@@ -484,7 +484,7 @@ func (s *Server) oaiHandlerListRecords(ctx *gin.Context, partition *fair.Partiti
 	var count int64
 
 	itemFunc := func(item *fair.ItemData) error {
-		if count < partition.OAI.Pagesize {
+		if count < partition.OAI.PageSize {
 			var status oai.RecordHeaderStatusType = oai.RecordHeaderStatusOK
 			if item.Status != fair.DataStatusActive {
 				status = oai.RecordHeaderStatusDeleted
@@ -554,7 +554,7 @@ func (s *Server) oaiHandlerListRecords(ctx *gin.Context, partition *fair.Partiti
 			rData.seq,
 			until,
 			[]fair.DataAccess{fair.DataAccessPublic, fair.DataAccessPublic},
-			partition.OAI.Pagesize+1,
+			partition.OAI.PageSize+1,
 			0,
 			nil,
 			itemFunc); err != nil {
@@ -567,7 +567,7 @@ func (s *Server) oaiHandlerListRecords(ctx *gin.Context, partition *fair.Partiti
 			rData.from,
 			rData.until,
 			[]fair.DataAccess{fair.DataAccessPublic, fair.DataAccessClosedData},
-			partition.OAI.Pagesize+1,
+			partition.OAI.PageSize+1,
 			0,
 			&rData.completeListSize,
 			itemFunc); err != nil {

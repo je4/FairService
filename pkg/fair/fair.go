@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype/zeronull"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/FairService/v2/pkg/model/myfair"
 	"github.com/je4/utils/v2/pkg/datatable"
 	"github.com/je4/utils/v2/pkg/zLogger"
@@ -103,39 +104,32 @@ func equalStrings(a, b []string) bool {
 	return true
 }
 
-func NewFair(db *pgxpool.Pool, multiResolver *MultiResolver, dbSchema string, log zLogger.ZLogger) (*Fair, error) {
+func NewFair(db *pgxpool.Pool, dbSchema string, log zLogger.ZLogger) (*Fair, error) {
 	f := &Fair{
-		dbSchema:      dbSchema,
-		db:            db,
-		multiResolver: multiResolver,
-		sourcesMutex:  sync.RWMutex{},
-		sources:       map[int64]*Source{},
-		partitions:    map[string]*Partition{},
-		log:           log,
+		dbSchema:     dbSchema,
+		db:           db,
+		sourcesMutex: sync.RWMutex{},
+		sources:      map[int64]*Source{},
+		partitions:   map[string]*Partition{},
+		log:          log,
 	}
 	if err := f.LoadSources(); err != nil {
 		return nil, errors.Wrap(err, "cannot load sources")
 	}
-	multiResolver.SetFair(f)
 	return f, nil
 }
 
 type Fair struct {
-	dbSchema      string
-	db            *pgxpool.Pool
-	sourcesMutex  sync.RWMutex
-	sources       map[int64]*Source
-	partitions    map[string]*Partition
-	log           zLogger.ZLogger
-	multiResolver *MultiResolver
+	dbSchema     string
+	db           *pgxpool.Pool
+	sourcesMutex sync.RWMutex
+	sources      map[int64]*Source
+	partitions   map[string]*Partition
+	log          zLogger.ZLogger
 }
 
 func (f *Fair) GetDB() *pgxpool.Pool {
 	return f.db
-}
-
-func (f *Fair) GetResolver() *MultiResolver {
-	return f.multiResolver
 }
 
 func (f *Fair) NextCounter(name string) (int64, error) {
@@ -339,11 +333,6 @@ func (f *Fair) EndUpdate(p *Partition, source string) error {
 	return f.StartUpdate(p, source)
 }
 
-func (f *Fair) ResolveUUID(pid string) (uuid string, partition string, identifierType string, err error) {
-	return f.multiResolver.Resolve(pid)
-
-}
-
 /*
 func (f *Fair) CreateDOI(p *Partition, uuidStr, targetUrl string) (*datacite.API, error) {
 	data, err := f.GetItem(p, uuidStr)
@@ -537,13 +526,36 @@ func (f *Fair) Search(p *Partition, dtr *datatable.Request) ([]map[string]string
 	return result, num, total, nil
 }
 
-func (f *Fair) Resolve(partition string, pid string) (data, _type string, err error) {
-	return f.multiResolver.Resolve(partition, pid)
+func (f *Fair) Resolve(pid string) (data string, resultType ResolveResultType, err error) {
+	parts := strings.SplitN(pid, ":", 2)
+	if len(parts) != 2 {
+		return "", ResolveResultTypeUnknown, errors.Errorf("invalid pid %s", pid)
+	}
 
+	sql := "SELECT pid.uuid, searchable.partition FROM pid, searchable WHERE pid.uuid=searchable.uuid AND pid.identifier=$1"
+	var uuid string
+	var partition string
+	if err := f.db.QueryRow(context.Background(), sql, pid).Scan(&uuid, &partition); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ResolveResultTypeUnknown, errors.Errorf("pid %s not found", pid)
+		}
+		return "", ResolveResultTypeUnknown, errors.Wrapf(err, "cannot execute %s [%s]", sql, pid)
+	}
+	part, err := f.GetPartition(partition)
+	if err != nil {
+		return "", ResolveResultTypeUnknown, errors.Wrapf(err, "cannot get partition %s", partition)
+	}
+	mr := part.GetMultiResolver()
+	var resolver Resolver
+	switch strings.ToLower(parts[0]) {
+	case "ark":
+		resolver = mr.resolver[dataciteModel.RelatedIdentifierTypeARK]
+	case "doi":
+		resolver = mr.resolver[dataciteModel.RelatedIdentifierTypeDOI]
+	case "handle":
+		resolver = mr.resolver[dataciteModel.RelatedIdentifierTypeHandle]
+	default:
+		return "", ResolveResultTypeUnknown, errors.Errorf("unknown identifier type %s", parts[0])
+	}
+	return resolver.Resolve(pid)
 }
-
-/*
-func (f *Fair) ARKResolveUUID(ark string) (uuid string, components string, variants string, err error) {
-	return f.ark.ResolveUUID(ark)
-}
-*/

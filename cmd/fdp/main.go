@@ -129,21 +129,14 @@ func main() {
 		accessLog = f
 	}
 
-	mr, err := fair.NewResolver(logger)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("cannot create resolver")
-		return
-	}
-	//	res.InitPIDTable()
-
-	fairService, err := fair.NewFair(db, mr, config.DB.Schema, logger)
+	fairService, err := fair.NewFair(db, config.DB.Schema, logger)
 	if err != nil {
 		logger.Fatal().Msgf("cannot initialize fair: %v", err)
 	}
 
 	//	var partitions []*fair.Partition
 	for _, pconf := range config.Partition {
-		p, err := fair.NewPartition(
+		partition, err := fair.NewPartition(
 			fairService,
 			pconf.Name,
 			pconf.AddrExt,
@@ -157,26 +150,6 @@ func main() {
 				PageSize:               pconf.OAI.Pagesize,
 				ResumptionTokenTimeout: time.Duration(pconf.OAI.ResumptionTokenTimeout),
 			},
-			&fair.ARKConfig{
-				Shoulder: pconf.ARK.Shoulder,
-				Prefix:   pconf.ARK.Prefix,
-				NAAN:     pconf.ARK.NAAN,
-			},
-			&fair.DataciteConfig{
-				Api:      pconf.Datacite.Api,
-				User:     pconf.Datacite.User.String(),
-				Password: pconf.Datacite.Password.String(),
-				Prefix:   pconf.Datacite.Prefix,
-			},
-			&fair.HandleConfig{
-				ServiceName:    pconf.Handle.ServiceName,
-				Addr:           pconf.Handle.Addr,
-				JWTKey:         pconf.Handle.JWTKey.String(),
-				JWTAlg:         pconf.Handle.JWTAlg,
-				SkipCertVerify: pconf.Handle.SkipCertVerify,
-				ID:             pconf.Handle.ID,
-				Prefix:         pconf.Handle.Prefix,
-			},
 			pconf.Description,
 			string(pconf.JWTKey),
 			pconf.JWTAlg,
@@ -185,17 +158,20 @@ func main() {
 			logger.Fatal().Msgf("cannot create partition %s: %v", pconf.Name, err)
 			return
 		}
-		arkService, err := fair.NewARKService(fairService.GetDB(), &fair.ARKConfig{
+		mr, err := fair.NewResolver(partition, logger)
+		if err != nil {
+			logger.Fatal().Err(err).Msg("cannot create resolver")
+			return
+		}
+		if _, err := fair.NewARKService(mr, &fair.ARKConfig{
 			Shoulder: pconf.ARK.Shoulder,
 			Prefix:   pconf.ARK.Prefix,
 			NAAN:     pconf.ARK.NAAN,
-		}, logger)
-		if err != nil {
+		}, logger); err != nil {
 			logger.Fatal().Msgf("cannot create ark service: %v", err)
 			return
 		}
-		mr.AddResolver(p, arkService)
-		handleService, err := fair.NewHandleService(fairService, &fair.HandleConfig{
+		if _, err := fair.NewHandleService(mr, &fair.HandleConfig{
 			ServiceName:    pconf.Handle.ServiceName,
 			Addr:           pconf.Handle.Addr,
 			JWTKey:         pconf.Handle.JWTKey.String(),
@@ -203,22 +179,20 @@ func main() {
 			SkipCertVerify: pconf.Handle.SkipCertVerify,
 			ID:             pconf.Handle.ID,
 			Prefix:         pconf.Handle.Prefix,
-		}, logger)
-		mr.AddResolver(p, handleService)
-		mr.CreateAll(p, dataciteModel.RelatedIdentifierTypeARK)
-		dataciteService, err := fair.NewDataciteService(fairService, fair.DataciteConfig{
+		}, logger); err != nil {
+			logger.Fatal().Msgf("cannot create handle service: %v", err)
+		}
+		mr.CreateAll(partition, dataciteModel.RelatedIdentifierTypeARK)
+		if _, err := fair.NewDataciteService(mr, fair.DataciteConfig{
 			Api:      pconf.Datacite.Api,
 			User:     pconf.Datacite.User.String(),
 			Password: pconf.Datacite.Password.String(),
 			Prefix:   pconf.Datacite.Prefix,
-		}, logger)
-		mr.AddResolver(p, dataciteService)
-		if err != nil {
+		}, logger); err != nil {
 			logger.Fatal().Msgf("cannot create datacite service: %v", err)
-			return
 		}
-
-		fairService.AddPartition(p)
+		partition.AddResolver(mr)
+		fairService.AddPartition(partition)
 	}
 
 	// create TLS Certificate.
