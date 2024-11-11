@@ -97,6 +97,16 @@ func (srv *ARKService) Resolve(pid string) (string, ResolveResultType, error) {
 		return data, ResolveResultTypeTextPlain, nil
 	}
 	redirURL := item.URL
+	if redirURL == "" {
+		src, err := fair.GetSourceByName(part.Name, item.Source)
+		if err != nil {
+			return "", ResolveResultTypeUnknown, errors.Wrapf(err, "cannot get source %s", item.Source)
+		}
+		redirURL = strings.ReplaceAll(src.DetailURL, "{signature}", item.Signature)
+	}
+	if redirURL == "" {
+		return "", ResolveResultTypeUnknown, errors.Errorf("no URL found for item %s", uuid)
+	}
 	if components != "" {
 		redirURL += "/" + components
 	}

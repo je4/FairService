@@ -208,6 +208,7 @@ func main() {
 		config.AddrExt,
 		config.UserName,
 		config.Password.String(),
+		config.AdminBearer.String(),
 		logger,
 		fairService,
 		accessLog,

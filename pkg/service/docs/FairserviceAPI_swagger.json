@@ -1,0 +1,895 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "Fair Service API for managing fair data",
+        "title": "Fair Service",
+        "termsOfService": "http://swagger.io/terms/",
+        "contact": {
+            "name": "Jürgen Enge",
+            "url": "https://ub.unibas.ch",
+            "email": "juergen.enge@unibas.ch"
+        },
+        "license": {
+            "name": "Apache 2.0",
+            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+        },
+        "version": "1.0"
+    },
+    "paths": {
+        "/{domain}/ping": {
+            "get": {
+                "description": "for testing if server is running",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "mediaserver"
+                ],
+                "summary": "does pong",
+                "operationId": "get-ping",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Domain",
+                        "name": "domain",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/{partition}/abortupdate": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "ends aborts transaction for a source without removal of missing items",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fairservice"
+                ],
+                "summary": "aborts update transaction",
+                "operationId": "post-abort-update",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Partition",
+                        "name": "partition",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "source to abort update",
+                        "name": "source",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/fair.SourceData"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    }
+                }
+            }
+        },
+        "/{partition}/endupdate": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "ends update transaction for a source with commit",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fairservice"
+                ],
+                "summary": "ends update transaction",
+                "operationId": "post-end-update",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Partition",
+                        "name": "partition",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "source to end update",
+                        "name": "source",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/fair.SourceData"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    }
+                }
+            }
+        },
+        "/{partition}/item": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "creates a new item within a transaction",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fairservice"
+                ],
+                "summary": "creates a new item",
+                "operationId": "post-create-item",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Partition",
+                        "name": "partition",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "source to abort update",
+                        "name": "source",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/fair.ItemData"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    }
+                }
+            }
+        },
+        "/{partition}/source": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "updates or creates source for a partition",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fairservice"
+                ],
+                "summary": "update or create source",
+                "operationId": "post-set-source",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Partition",
+                        "name": "partition",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "source to set",
+                        "name": "source",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/fair.Source"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    }
+                }
+            }
+        },
+        "/{partition}/startupdate": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "starts update transaction for a source",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fairservice"
+                ],
+                "summary": "starts update transaction",
+                "operationId": "post-start-update",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Partition",
+                        "name": "partition",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "source to start update",
+                        "name": "source",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/fair.SourceData"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/service.FairResultMessage"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "fair.DataAccess": {
+            "type": "string",
+            "enum": [
+                "public",
+                "closed",
+                "closed_data",
+                "open_access"
+            ],
+            "x-enum-varnames": [
+                "DataAccessPublic",
+                "DataAccessClosed",
+                "DataAccessClosedData",
+                "DataAccessOpenAccess"
+            ]
+        },
+        "fair.DataStatus": {
+            "type": "string",
+            "enum": [
+                "active",
+                "disabled",
+                "deleted",
+                "deleted_meta"
+            ],
+            "x-enum-varnames": [
+                "DataStatusActive",
+                "DataStatusDisabled",
+                "DataStatusDeleted",
+                "DataStatusDeletedMeta"
+            ]
+        },
+        "fair.ItemData": {
+            "type": "object",
+            "properties": {
+                "access": {
+                    "$ref": "#/definitions/fair.DataAccess"
+                },
+                "catalog": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "datestamp": {
+                    "type": "string"
+                },
+                "identifier": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "metadata": {
+                    "$ref": "#/definitions/myfair.Core"
+                },
+                "partition": {
+                    "type": "string"
+                },
+                "set": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "signature": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/fair.DataStatus"
+                },
+                "url": {
+                    "type": "string"
+                },
+                "uuid": {
+                    "type": "string"
+                }
+            }
+        },
+        "fair.Source": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "detailURL": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "oaidomain": {
+                    "type": "string"
+                },
+                "partition": {
+                    "type": "string"
+                }
+            }
+        },
+        "fair.SourceData": {
+            "type": "object",
+            "properties": {
+                "source": {
+                    "type": "string"
+                }
+            }
+        },
+        "myfair.Core": {
+            "type": "object",
+            "properties": {
+                "identifier": {
+                    "description": "DataCite: #1 Identifier (with mandatory type sub-property)",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/myfair.Identifier"
+                    }
+                },
+                "license": {
+                    "type": "string"
+                },
+                "media": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/myfair.Media"
+                    }
+                },
+                "person": {
+                    "description": "DataCite: #2 Person (with optional given name, family name, name identifier\n             and affiliation sub-properties)",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/myfair.Person"
+                    }
+                },
+                "poster": {
+                    "$ref": "#/definitions/myfair.Media"
+                },
+                "publicationYear": {
+                    "description": "DataCite: #5 Publicationyear",
+                    "type": "string"
+                },
+                "publisher": {
+                    "description": "DataCite: #4 Publisher",
+                    "type": "string"
+                },
+                "resourceType": {
+                    "description": "DataCite: #10 ResourceType (with mandatory general type description subproperty)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/myfair.ResourceType"
+                        }
+                    ]
+                },
+                "rights": {
+                    "type": "string"
+                },
+                "title": {
+                    "description": "DataCite: #3 Title (with optional type sub-properties",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/myfair.Title"
+                    }
+                }
+            }
+        },
+        "myfair.CoreTitleType": {
+            "type": "string",
+            "enum": [
+                "",
+                "AlternativeTitle",
+                "Subtitle",
+                "TranslatedTitle",
+                "Other"
+            ],
+            "x-enum-varnames": [
+                "TitleTypeMain",
+                "TitleTypeAlternativeTitle",
+                "TitleTypeSubTitle",
+                "TitleTypeTranslatedTitle",
+                "TitleTypeOther"
+            ]
+        },
+        "myfair.Identifier": {
+            "type": "object",
+            "properties": {
+                "identifierType": {
+                    "$ref": "#/definitions/myfair.RelatedIdentifierType"
+                },
+                "value": {
+                    "description": "Todo: value durch identifier ersetzen",
+                    "type": "string"
+                }
+            }
+        },
+        "myfair.Media": {
+            "type": "object",
+            "properties": {
+                "duration": {
+                    "type": "integer"
+                },
+                "fulltext": {
+                    "type": "string"
+                },
+                "height": {
+                    "type": "integer"
+                },
+                "mimetype": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "orientation": {
+                    "type": "integer"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "uri": {
+                    "type": "string"
+                },
+                "width": {
+                    "type": "integer"
+                }
+            }
+        },
+        "myfair.Name": {
+            "type": "object",
+            "properties": {
+                "lang": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/myfair.NameType"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "myfair.NameIdentifier": {
+            "type": "object",
+            "properties": {
+                "lang": {
+                    "type": "string"
+                },
+                "nameIdentifierScheme": {
+                    "type": "string"
+                },
+                "schemeURI": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "myfair.NameType": {
+            "type": "string",
+            "enum": [
+                "",
+                "Organizational",
+                "Personal"
+            ],
+            "x-enum-varnames": [
+                "NameTypeDefault",
+                "NameTypeOrganizational",
+                "NameTypePersonal"
+            ]
+        },
+        "myfair.Person": {
+            "type": "object",
+            "properties": {
+                "affiliation": {
+                    "type": "string"
+                },
+                "familyName": {
+                    "type": "string"
+                },
+                "givenName": {
+                    "type": "string"
+                },
+                "nameIdentifier": {
+                    "$ref": "#/definitions/myfair.NameIdentifier"
+                },
+                "personName": {
+                    "$ref": "#/definitions/myfair.Name"
+                },
+                "personType": {
+                    "$ref": "#/definitions/myfair.PersonType"
+                }
+            }
+        },
+        "myfair.PersonType": {
+            "type": "string",
+            "enum": [
+                "Author",
+                "Artist",
+                "ContactPerson",
+                "DataCollector",
+                "DataCurator",
+                "DataManager",
+                "Distributor",
+                "Editor",
+                "HostingInstitution",
+                "Other",
+                "Producer",
+                "ProjectLeader",
+                "ProjectManager",
+                "ProjectMember",
+                "RegistrationAgency",
+                "RegistrationAuthority",
+                "RelatedPerson",
+                "ResearchGroup",
+                "RightsHolder",
+                "Researcher",
+                "Sponsor",
+                "Supervisor",
+                "WorkPackageLeader"
+            ],
+            "x-enum-varnames": [
+                "PersonTypeAuthor",
+                "PersonTypeArtist",
+                "PersonTypeContactPerson",
+                "PersonTypeDataCollector",
+                "PersonTypeDataCurator",
+                "PersonTypeDataManager",
+                "PersonTypeDistributor",
+                "PersonTypeEditor",
+                "PersonTypeHostingInstitution",
+                "PersonTypeOther",
+                "PersonTypeProducer",
+                "PersonTypeProjectLeader",
+                "PersonTypeProjectManager",
+                "PersonTypeProjectMember",
+                "PersonTypeRegistrationAgency",
+                "PersonTypeRegistrationAuthority",
+                "PersonTypeRelatedPerson",
+                "PersonTypeResearchGroup",
+                "PersonTypeRightsHolder",
+                "PersonTypeResearcher",
+                "PersonTypeSponsor",
+                "PersonTypeSupervisor",
+                "PersonTypeWorkPackageLeader"
+            ]
+        },
+        "myfair.RelatedIdentifierType": {
+            "type": "string",
+            "enum": [
+                "ARK",
+                "arXiv",
+                "bibcode",
+                "DOI",
+                "EAN13",
+                "EISSN",
+                "Handle",
+                "IGSN",
+                "ISBN",
+                "ISSN",
+                "ISTC",
+                "LISSN",
+                "LSID",
+                "PMID",
+                "PURL",
+                "UPC",
+                "URL",
+                "URN",
+                "w3id",
+                "zotero"
+            ],
+            "x-enum-varnames": [
+                "RelatedIdentifierTypeARK",
+                "RelatedIdentifierTypeArXiv",
+                "RelatedIdentifierTypeBibcode",
+                "RelatedIdentifierTypeDOI",
+                "RelatedIdentifierTypeEAN13",
+                "RelatedIdentifierTypeEISSN",
+                "RelatedIdentifierTypeHandle",
+                "RelatedIdentifierTypeIGSN",
+                "RelatedIdentifierTypeISBN",
+                "RelatedIdentifierTypeISSN",
+                "RelatedIdentifierTypeISTC",
+                "RelatedIdentifierTypeLISSN",
+                "RelatedIdentifierTypeLSID",
+                "RelatedIdentifierTypePMID",
+                "RelatedIdentifierTypePURL",
+                "RelatedIdentifierTypeUPC",
+                "RelatedIdentifierTypeURL",
+                "RelatedIdentifierTypeURN",
+                "RelatedIdentifierTypeW3id",
+                "RelatedIdentifierTypeZotero"
+            ]
+        },
+        "myfair.ResourceType": {
+            "type": "string",
+            "enum": [
+                "book",
+                "bookSection",
+                "thesis",
+                "journalArticle",
+                "magazineArticle",
+                "onlineResource",
+                "report",
+                "webpage",
+                "conferencePaper",
+                "patent",
+                "note",
+                "artisticPerformance",
+                "dataset",
+                "presentation",
+                "physicalObject",
+                "computerProgram",
+                "other",
+                "artwork",
+                "attachment",
+                "audioRecording",
+                "document",
+                "email",
+                "encyclopediaArticle",
+                "film",
+                "instantMessage",
+                "interview",
+                "letter",
+                "manuscript",
+                "map",
+                "newspaperArticle",
+                "podcast",
+                "radioBroadcast",
+                "tvBroadcast",
+                "videoRecording"
+            ],
+            "x-enum-varnames": [
+                "ResourceTypeBook",
+                "ResourceTypeBookSection",
+                "ResourceTypeThesis",
+                "ResourceTypeJournalArticle",
+                "ResourceTypeMagazineArticle",
+                "ResourceTypeOnlineResource",
+                "ResourceTypeReport",
+                "ResourceTypeWebpage",
+                "ResourceTypeConferencePaper",
+                "ResourceTypePatent",
+                "ResourceTypeNote",
+                "ResourceTypeArtisticPerformance",
+                "ResourceTypeDataset",
+                "ResourceTypePresentation",
+                "ResourceTypePhysicalObject",
+                "ResourceTypeComputerProgram",
+                "ResourceTypeOther",
+                "ResourceTypeArtwork",
+                "ResourceTypeAttachment",
+                "ResourceTypeAudioRecording",
+                "ResourceTypeDocument",
+                "ResourceTypeEmail",
+                "ResourceTypeEncyclopediaArticle",
+                "ResourceTypeFilm",
+                "ResourceTypeInstantMessage",
+                "ResourceTypeInterview",
+                "ResourceTypeLetter",
+                "ResourceTypeManuscript",
+                "ResourceTypeMap",
+                "ResourceTypeNewspaperArticle",
+                "ResourceTypePodcast",
+                "ResourceTypeRadioBroadcast",
+                "ResourceTypeTvBroadcast",
+                "ResourceTypeVideoRecording"
+            ]
+        },
+        "myfair.Title": {
+            "type": "object",
+            "properties": {
+                "lang": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/myfair.CoreTitleType"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.FairResultMessage": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    }
+}

@@ -15,6 +15,11 @@ import (
 	"strings"
 )
 
+type FairResultMessage struct {
+	Status  string `json:"status"`
+	Message string `json:"message,omitempty"`
+}
+
 type FairResultStatus struct {
 	Status       string              `json:"status"`
 	Message      string              `json:"message,omitempty"`
@@ -37,7 +42,11 @@ func sendResult(log zLogger.ZLogger, ctx *gin.Context, status int, message strin
 		}
 	}
 	message = fmt.Sprintf("%s: %s", ctx.HandlerName(), message)
-	ctx.JSON(status, FairResultStatus{Status: http.StatusText(status), Message: message, Item: item})
+	if item == nil {
+		ctx.JSON(status, FairResultMessage{Status: http.StatusText(status), Message: message})
+	} else {
+		ctx.JSON(status, FairResultStatus{Status: http.StatusText(status), Message: message, Item: item})
+	}
 }
 
 /*
@@ -321,6 +330,21 @@ func (s *Server) createDOIHandler(ctx *gin.Context) {
 	return
 }
 
+// startUpdate godoc
+// @Summary      starts update transaction
+// @ID			 post-start-update
+// @Description  starts update transaction for a source
+// @Tags         fairservice
+// @Security 	 BearerAuth
+// @Produce      json
+// @Param 		 partition path string true "Partition"
+// @Param 		 source       body fair.SourceData true "source to start update"
+// @Success      200  {object}  FairResultMessage
+// @Failure      400  {object}  FairResultMessage
+// @Failure      401  {object}  FairResultMessage
+// @Failure      404  {object}  FairResultMessage
+// @Failure      500  {object}  FairResultMessage
+// @Router       /{partition}/startupdate [post]
 func (s *Server) startUpdateHandler(ctx *gin.Context) {
 
 	pName := ctx.Param("partition")
@@ -344,10 +368,34 @@ func (s *Server) startUpdateHandler(ctx *gin.Context) {
 	sendResult(s.log, ctx, http.StatusOK, fmt.Sprintf("starting update for %s on %s", data.Source, pName), nil)
 }
 
+// ping godoc
+// @Summary      does pong
+// @ID			 get-ping
+// @Description  for testing if server is running
+// @Tags         mediaserver
+// @Param 		 domain path string true "Domain"
+// @Produce      plain
+// @Success      200  {string}  string
+// @Router       /{domain}/ping [get]
 func (s *Server) pingHandler(ctx *gin.Context) {
 	sendResult(s.log, ctx, http.StatusOK, "pong", nil)
 }
 
+// endUpdate godoc
+// @Summary      ends update transaction
+// @ID			 post-end-update
+// @Description  ends update transaction for a source with commit
+// @Tags         fairservice
+// @Security 	 BearerAuth
+// @Produce      json
+// @Param 		 partition path string true "Partition"
+// @Param 		 source       body fair.SourceData true "source to end update"
+// @Success      200  {object}  FairResultMessage
+// @Failure      400  {object}  FairResultMessage
+// @Failure      401  {object}  FairResultMessage
+// @Failure      404  {object}  FairResultMessage
+// @Failure      500  {object}  FairResultMessage
+// @Router       /{partition}/endupdate [post]
 func (s *Server) endUpdateHandler(ctx *gin.Context) {
 	pName := ctx.Param("partition")
 
@@ -370,6 +418,21 @@ func (s *Server) endUpdateHandler(ctx *gin.Context) {
 	sendResult(s.log, ctx, http.StatusOK, fmt.Sprintf("end update for %s on %s", data.Source, pName), nil)
 }
 
+// abortUpdate godoc
+// @Summary      aborts update transaction
+// @ID			 post-abort-update
+// @Description  ends aborts transaction for a source without removal of missing items
+// @Tags         fairservice
+// @Security 	 BearerAuth
+// @Produce      json
+// @Param 		 partition path string true "Partition"
+// @Param 		 source       body fair.SourceData true "source to abort update"
+// @Success      200  {object}  FairResultMessage
+// @Failure      400  {object}  FairResultMessage
+// @Failure      401  {object}  FairResultMessage
+// @Failure      404  {object}  FairResultMessage
+// @Failure      500  {object}  FairResultMessage
+// @Router       /{partition}/abortupdate [post]
 func (s *Server) abortUpdateHandler(ctx *gin.Context) {
 	pName := ctx.Param("partition")
 
@@ -453,6 +516,21 @@ func (s *Server) originalDataWriteHandler(ctx *gin.Context) {
 	sendResult(s.log, ctx, http.StatusOK, fmt.Sprintf("original data for %s stored", uuidStr), nil)
 }
 
+// createItem godoc
+// @Summary      creates a new item
+// @ID			 post-create-item
+// @Description  creates a new item within a transaction
+// @Tags         fairservice
+// @Security 	 BearerAuth
+// @Produce      json
+// @Param 		 partition path string true "Partition"
+// @Param 		 source       body fair.ItemData true "source to abort update"
+// @Success      200  {object}  FairResultMessage
+// @Failure      400  {object}  FairResultMessage
+// @Failure      401  {object}  FairResultMessage
+// @Failure      404  {object}  FairResultMessage
+// @Failure      500  {object}  FairResultMessage
+// @Router       /{partition}/item [post]
 func (s *Server) createHandler(ctx *gin.Context) {
 	pName := ctx.Param("partition")
 
@@ -478,6 +556,21 @@ func (s *Server) createHandler(ctx *gin.Context) {
 	return
 }
 
+// setSource godoc
+// @Summary      update or create source
+// @ID			 post-set-source
+// @Description  updates or creates source for a partition
+// @Tags         fairservice
+// @Security 	 BearerAuth
+// @Produce      json
+// @Param 		 partition path string true "Partition"
+// @Param 		 source       body fair.Source true "source to set"
+// @Success      200  {object}  FairResultMessage
+// @Failure      400  {object}  FairResultMessage
+// @Failure      401  {object}  FairResultMessage
+// @Failure      404  {object}  FairResultMessage
+// @Failure      500  {object}  FairResultMessage
+// @Router       /{partition}/source [post]
 func (s *Server) setSourceHandler(ctx *gin.Context) {
 	pName := ctx.Param("partition")
 

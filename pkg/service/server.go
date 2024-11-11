@@ -10,9 +10,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/handlers"
 	fair "github.com/je4/FairService/v2/pkg/fair"
+	"github.com/je4/FairService/v2/pkg/service/docs"
 	"github.com/je4/utils/v2/pkg/JWTInterceptor"
 	"github.com/je4/utils/v2/pkg/zLogger"
 	"github.com/pkg/errors"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"html/template"
 	"io"
 	"io/fs"
@@ -37,9 +40,26 @@ type Server struct {
 	templates            map[string]*template.Template
 	resumptionTokenCache gcache.Cache
 	extUrl               *url.URL
+	adminBearer          string
 }
 
-func NewServer(service, addr, addrExt, name, password string, log zLogger.ZLogger, fair *fair.Fair, accessLog io.Writer, jwtKey string, jwtAlg []string, linkTokenExp time.Duration) (*Server, error) {
+//	@title			Fair Service
+//	@version		1.0
+//	@description	Fair Service API for managing fair data
+//	@termsOfService	http://swagger.io/terms/
+
+//	@contact.name	Jürgen Enge
+//	@contact.url	https://ub.unibas.ch
+//	@contact.email	juergen.enge@unibas.ch
+
+//	@license.name	Apache 2.0
+//	@license.url	http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+
+func NewServer(service, addr, addrExt, name, password, adminBearer string, log zLogger.ZLogger, fair *fair.Fair, accessLog io.Writer, jwtKey string, jwtAlg []string, linkTokenExp time.Duration) (*Server, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot split address %s", addr)
@@ -48,6 +68,12 @@ func NewServer(service, addr, addrExt, name, password string, log zLogger.ZLogge
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot parse external address %s", addrExt)
 	}
+	subpath := "/" + strings.Trim(extUrl.Path, "/")
+
+	// programmatically set swagger info
+	docs.SwaggerInfoFairserviceAPI.Host = strings.TrimRight(fmt.Sprintf("%s:%s", extUrl.Hostname(), extUrl.Port()), " :")
+	docs.SwaggerInfoFairserviceAPI.BasePath = subpath
+	docs.SwaggerInfoFairserviceAPI.Schemes = []string{"https"}
 
 	srv := &Server{
 		extUrl:               extUrl,
@@ -56,6 +82,7 @@ func NewServer(service, addr, addrExt, name, password string, log zLogger.ZLogge
 		port:                 port,
 		name:                 name,
 		password:             password,
+		adminBearer:          adminBearer,
 		log:                  log,
 		accessLog:            accessLog,
 		linkTokenExp:         linkTokenExp,
@@ -163,6 +190,7 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 		s.jwtKey,
 		s.jwtAlg,
 		sha512.New(),
+		s.adminBearer,
 		s.log,
 	), s.createHandler)
 	partition.POST("/source", JWTInterceptor.JWTInterceptorGIN(
@@ -172,6 +200,7 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 		s.jwtKey,
 		s.jwtAlg,
 		sha512.New(),
+		s.adminBearer,
 		s.log,
 	), s.setSourceHandler)
 	partition.POST("/item/:uuid/originaldata", JWTInterceptor.JWTInterceptorGIN(
@@ -181,6 +210,7 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 		s.jwtKey,
 		s.jwtAlg,
 		sha512.New(),
+		s.adminBearer,
 		s.log,
 	), s.originalDataWriteHandler)
 	partition.GET("/item/:uuid/originaldata", JWTInterceptor.JWTInterceptorGIN(
@@ -190,6 +220,7 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 		s.jwtKey,
 		s.jwtAlg,
 		sha512.New(),
+		s.adminBearer,
 		s.log,
 	), s.originalDataReadHandler)
 	partition.POST("/startupdate", JWTInterceptor.JWTInterceptorGIN(
@@ -199,6 +230,7 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 		s.jwtKey,
 		s.jwtAlg,
 		sha512.New(),
+		s.adminBearer,
 		s.log,
 	), s.startUpdateHandler)
 	partition.POST("/endupdate", JWTInterceptor.JWTInterceptorGIN(
@@ -208,6 +240,7 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 		s.jwtKey,
 		s.jwtAlg,
 		sha512.New(),
+		s.adminBearer,
 		s.log,
 	), s.endUpdateHandler)
 	partition.POST("/abortupdate", JWTInterceptor.JWTInterceptorGIN(
@@ -217,6 +250,7 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 		s.jwtKey,
 		s.jwtAlg,
 		sha512.New(),
+		s.adminBearer,
 		s.log,
 	), s.abortUpdateHandler)
 	partition.POST("/archive", JWTInterceptor.JWTInterceptorGIN(
@@ -226,6 +260,7 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 		s.jwtKey,
 		s.jwtAlg,
 		sha512.New(),
+		s.adminBearer,
 		s.log,
 	), s.createArchiveHandler)
 	partition.POST("/archive/:archive", JWTInterceptor.JWTInterceptorGIN(
@@ -235,6 +270,7 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 		s.jwtKey,
 		s.jwtAlg,
 		sha512.New(),
+		s.adminBearer,
 		s.log,
 	), s.addArchiveItemHandler)
 	partition.GET("/archive/:archive", JWTInterceptor.JWTInterceptorGIN(
@@ -244,6 +280,7 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 		s.jwtKey,
 		s.jwtAlg,
 		sha512.New(),
+		s.adminBearer,
 		s.log,
 	), s.getArchiveItemHandler)
 	partition.GET("/item/:uuid/:outputType", s.itemHandler)
@@ -251,6 +288,8 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 	partitionAuth.GET("/createdoi/:uuid", s.createDOIHandler)
 	partition.GET("/redir/:uuid", s.redirectHandler)
 	partition.GET("/resolve/*pid", s.resolverHandler)
+
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.NewHandler(), ginSwagger.InstanceName("FairserviceAPI")))
 
 	loggedRouter := handlers.CombinedLoggingHandler(s.accessLog, handlers.ProxyHeaders(router))
 	addr := net.JoinHostPort(s.host, s.port)

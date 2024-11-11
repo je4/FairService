@@ -88,6 +88,7 @@ type Config struct {
 	TLSConfig    *loader.Config     `toml:"tls"`
 	JWTKey       config.EnvString   `toml:"jwtkey"`
 	JWTAlg       []string           `toml:"jwtalg"`
+	AdminBearer  config.EnvString   `toml:"adminbearer"`
 	LinkTokenExp config.Duration    `toml:"linktokenexp"`
 	DB           CfgDatabase        `toml:"database"`
 	//Tunnel       map[string]SSHTunnel `toml:"tunnel"`

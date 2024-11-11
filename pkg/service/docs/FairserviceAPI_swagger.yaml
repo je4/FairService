@@ -1,0 +1,649 @@
+definitions:
+  fair.DataAccess:
+    enum:
+    - public
+    - closed
+    - closed_data
+    - open_access
+    type: string
+    x-enum-varnames:
+    - DataAccessPublic
+    - DataAccessClosed
+    - DataAccessClosedData
+    - DataAccessOpenAccess
+  fair.DataStatus:
+    enum:
+    - active
+    - disabled
+    - deleted
+    - deleted_meta
+    type: string
+    x-enum-varnames:
+    - DataStatusActive
+    - DataStatusDisabled
+    - DataStatusDeleted
+    - DataStatusDeletedMeta
+  fair.ItemData:
+    properties:
+      access:
+        $ref: '#/definitions/fair.DataAccess'
+      catalog:
+        items:
+          type: string
+        type: array
+      datestamp:
+        type: string
+      identifier:
+        items:
+          type: string
+        type: array
+      metadata:
+        $ref: '#/definitions/myfair.Core'
+      partition:
+        type: string
+      set:
+        items:
+          type: string
+        type: array
+      signature:
+        type: string
+      source:
+        type: string
+      status:
+        $ref: '#/definitions/fair.DataStatus'
+      url:
+        type: string
+      uuid:
+        type: string
+    type: object
+  fair.Source:
+    properties:
+      description:
+        type: string
+      detailURL:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      oaidomain:
+        type: string
+      partition:
+        type: string
+    type: object
+  fair.SourceData:
+    properties:
+      source:
+        type: string
+    type: object
+  myfair.Core:
+    properties:
+      identifier:
+        description: 'DataCite: #1 Identifier (with mandatory type sub-property)'
+        items:
+          $ref: '#/definitions/myfair.Identifier'
+        type: array
+      license:
+        type: string
+      media:
+        items:
+          $ref: '#/definitions/myfair.Media'
+        type: array
+      person:
+        description: |-
+          DataCite: #2 Person (with optional given name, family name, name identifier
+                       and affiliation sub-properties)
+        items:
+          $ref: '#/definitions/myfair.Person'
+        type: array
+      poster:
+        $ref: '#/definitions/myfair.Media'
+      publicationYear:
+        description: 'DataCite: #5 Publicationyear'
+        type: string
+      publisher:
+        description: 'DataCite: #4 Publisher'
+        type: string
+      resourceType:
+        allOf:
+        - $ref: '#/definitions/myfair.ResourceType'
+        description: 'DataCite: #10 ResourceType (with mandatory general type description
+          subproperty)'
+      rights:
+        type: string
+      title:
+        description: 'DataCite: #3 Title (with optional type sub-properties'
+        items:
+          $ref: '#/definitions/myfair.Title'
+        type: array
+    type: object
+  myfair.CoreTitleType:
+    enum:
+    - ""
+    - AlternativeTitle
+    - Subtitle
+    - TranslatedTitle
+    - Other
+    type: string
+    x-enum-varnames:
+    - TitleTypeMain
+    - TitleTypeAlternativeTitle
+    - TitleTypeSubTitle
+    - TitleTypeTranslatedTitle
+    - TitleTypeOther
+  myfair.Identifier:
+    properties:
+      identifierType:
+        $ref: '#/definitions/myfair.RelatedIdentifierType'
+      value:
+        description: 'Todo: value durch identifier ersetzen'
+        type: string
+    type: object
+  myfair.Media:
+    properties:
+      duration:
+        type: integer
+      fulltext:
+        type: string
+      height:
+        type: integer
+      mimetype:
+        type: string
+      name:
+        type: string
+      orientation:
+        type: integer
+      type:
+        type: string
+      uri:
+        type: string
+      width:
+        type: integer
+    type: object
+  myfair.Name:
+    properties:
+      lang:
+        type: string
+      type:
+        $ref: '#/definitions/myfair.NameType'
+      value:
+        type: string
+    type: object
+  myfair.NameIdentifier:
+    properties:
+      lang:
+        type: string
+      nameIdentifierScheme:
+        type: string
+      schemeURI:
+        type: string
+      value:
+        type: string
+    type: object
+  myfair.NameType:
+    enum:
+    - ""
+    - Organizational
+    - Personal
+    type: string
+    x-enum-varnames:
+    - NameTypeDefault
+    - NameTypeOrganizational
+    - NameTypePersonal
+  myfair.Person:
+    properties:
+      affiliation:
+        type: string
+      familyName:
+        type: string
+      givenName:
+        type: string
+      nameIdentifier:
+        $ref: '#/definitions/myfair.NameIdentifier'
+      personName:
+        $ref: '#/definitions/myfair.Name'
+      personType:
+        $ref: '#/definitions/myfair.PersonType'
+    type: object
+  myfair.PersonType:
+    enum:
+    - Author
+    - Artist
+    - ContactPerson
+    - DataCollector
+    - DataCurator
+    - DataManager
+    - Distributor
+    - Editor
+    - HostingInstitution
+    - Other
+    - Producer
+    - ProjectLeader
+    - ProjectManager
+    - ProjectMember
+    - RegistrationAgency
+    - RegistrationAuthority
+    - RelatedPerson
+    - ResearchGroup
+    - RightsHolder
+    - Researcher
+    - Sponsor
+    - Supervisor
+    - WorkPackageLeader
+    type: string
+    x-enum-varnames:
+    - PersonTypeAuthor
+    - PersonTypeArtist
+    - PersonTypeContactPerson
+    - PersonTypeDataCollector
+    - PersonTypeDataCurator
+    - PersonTypeDataManager
+    - PersonTypeDistributor
+    - PersonTypeEditor
+    - PersonTypeHostingInstitution
+    - PersonTypeOther
+    - PersonTypeProducer
+    - PersonTypeProjectLeader
+    - PersonTypeProjectManager
+    - PersonTypeProjectMember
+    - PersonTypeRegistrationAgency
+    - PersonTypeRegistrationAuthority
+    - PersonTypeRelatedPerson
+    - PersonTypeResearchGroup
+    - PersonTypeRightsHolder
+    - PersonTypeResearcher
+    - PersonTypeSponsor
+    - PersonTypeSupervisor
+    - PersonTypeWorkPackageLeader
+  myfair.RelatedIdentifierType:
+    enum:
+    - ARK
+    - arXiv
+    - bibcode
+    - DOI
+    - EAN13
+    - EISSN
+    - Handle
+    - IGSN
+    - ISBN
+    - ISSN
+    - ISTC
+    - LISSN
+    - LSID
+    - PMID
+    - PURL
+    - UPC
+    - URL
+    - URN
+    - w3id
+    - zotero
+    type: string
+    x-enum-varnames:
+    - RelatedIdentifierTypeARK
+    - RelatedIdentifierTypeArXiv
+    - RelatedIdentifierTypeBibcode
+    - RelatedIdentifierTypeDOI
+    - RelatedIdentifierTypeEAN13
+    - RelatedIdentifierTypeEISSN
+    - RelatedIdentifierTypeHandle
+    - RelatedIdentifierTypeIGSN
+    - RelatedIdentifierTypeISBN
+    - RelatedIdentifierTypeISSN
+    - RelatedIdentifierTypeISTC
+    - RelatedIdentifierTypeLISSN
+    - RelatedIdentifierTypeLSID
+    - RelatedIdentifierTypePMID
+    - RelatedIdentifierTypePURL
+    - RelatedIdentifierTypeUPC
+    - RelatedIdentifierTypeURL
+    - RelatedIdentifierTypeURN
+    - RelatedIdentifierTypeW3id
+    - RelatedIdentifierTypeZotero
+  myfair.ResourceType:
+    enum:
+    - book
+    - bookSection
+    - thesis
+    - journalArticle
+    - magazineArticle
+    - onlineResource
+    - report
+    - webpage
+    - conferencePaper
+    - patent
+    - note
+    - artisticPerformance
+    - dataset
+    - presentation
+    - physicalObject
+    - computerProgram
+    - other
+    - artwork
+    - attachment
+    - audioRecording
+    - document
+    - email
+    - encyclopediaArticle
+    - film
+    - instantMessage
+    - interview
+    - letter
+    - manuscript
+    - map
+    - newspaperArticle
+    - podcast
+    - radioBroadcast
+    - tvBroadcast
+    - videoRecording
+    type: string
+    x-enum-varnames:
+    - ResourceTypeBook
+    - ResourceTypeBookSection
+    - ResourceTypeThesis
+    - ResourceTypeJournalArticle
+    - ResourceTypeMagazineArticle
+    - ResourceTypeOnlineResource
+    - ResourceTypeReport
+    - ResourceTypeWebpage
+    - ResourceTypeConferencePaper
+    - ResourceTypePatent
+    - ResourceTypeNote
+    - ResourceTypeArtisticPerformance
+    - ResourceTypeDataset
+    - ResourceTypePresentation
+    - ResourceTypePhysicalObject
+    - ResourceTypeComputerProgram
+    - ResourceTypeOther
+    - ResourceTypeArtwork
+    - ResourceTypeAttachment
+    - ResourceTypeAudioRecording
+    - ResourceTypeDocument
+    - ResourceTypeEmail
+    - ResourceTypeEncyclopediaArticle
+    - ResourceTypeFilm
+    - ResourceTypeInstantMessage
+    - ResourceTypeInterview
+    - ResourceTypeLetter
+    - ResourceTypeManuscript
+    - ResourceTypeMap
+    - ResourceTypeNewspaperArticle
+    - ResourceTypePodcast
+    - ResourceTypeRadioBroadcast
+    - ResourceTypeTvBroadcast
+    - ResourceTypeVideoRecording
+  myfair.Title:
+    properties:
+      lang:
+        type: string
+      type:
+        $ref: '#/definitions/myfair.CoreTitleType'
+      value:
+        type: string
+    type: object
+  service.FairResultMessage:
+    properties:
+      message:
+        type: string
+      status:
+        type: string
+    type: object
+info:
+  contact:
+    email: juergen.enge@unibas.ch
+    name: Jürgen Enge
+    url: https://ub.unibas.ch
+  description: Fair Service API for managing fair data
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Fair Service
+  version: "1.0"
+paths:
+  /{domain}/ping:
+    get:
+      description: for testing if server is running
+      operationId: get-ping
+      parameters:
+      - description: Domain
+        in: path
+        name: domain
+        required: true
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: does pong
+      tags:
+      - mediaserver
+  /{partition}/abortupdate:
+    post:
+      description: ends aborts transaction for a source without removal of missing
+        items
+      operationId: post-abort-update
+      parameters:
+      - description: Partition
+        in: path
+        name: partition
+        required: true
+        type: string
+      - description: source to abort update
+        in: body
+        name: source
+        required: true
+        schema:
+          $ref: '#/definitions/fair.SourceData'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+      security:
+      - BearerAuth: []
+      summary: aborts update transaction
+      tags:
+      - fairservice
+  /{partition}/endupdate:
+    post:
+      description: ends update transaction for a source with commit
+      operationId: post-end-update
+      parameters:
+      - description: Partition
+        in: path
+        name: partition
+        required: true
+        type: string
+      - description: source to end update
+        in: body
+        name: source
+        required: true
+        schema:
+          $ref: '#/definitions/fair.SourceData'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+      security:
+      - BearerAuth: []
+      summary: ends update transaction
+      tags:
+      - fairservice
+  /{partition}/item:
+    post:
+      description: creates a new item within a transaction
+      operationId: post-create-item
+      parameters:
+      - description: Partition
+        in: path
+        name: partition
+        required: true
+        type: string
+      - description: source to abort update
+        in: body
+        name: source
+        required: true
+        schema:
+          $ref: '#/definitions/fair.ItemData'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+      security:
+      - BearerAuth: []
+      summary: creates a new item
+      tags:
+      - fairservice
+  /{partition}/source:
+    post:
+      description: updates or creates source for a partition
+      operationId: post-set-source
+      parameters:
+      - description: Partition
+        in: path
+        name: partition
+        required: true
+        type: string
+      - description: source to set
+        in: body
+        name: source
+        required: true
+        schema:
+          $ref: '#/definitions/fair.Source'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+      security:
+      - BearerAuth: []
+      summary: update or create source
+      tags:
+      - fairservice
+  /{partition}/startupdate:
+    post:
+      description: starts update transaction for a source
+      operationId: post-start-update
+      parameters:
+      - description: Partition
+        in: path
+        name: partition
+        required: true
+        type: string
+      - description: source to start update
+        in: body
+        name: source
+        required: true
+        schema:
+          $ref: '#/definitions/fair.SourceData'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/service.FairResultMessage'
+      security:
+      - BearerAuth: []
+      summary: starts update transaction
+      tags:
+      - fairservice
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

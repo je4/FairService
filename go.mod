@@ -19,8 +19,8 @@ require (
 	github.com/gorilla/handlers v1.5.2
 	github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438
 	github.com/jackc/pgx/v5 v5.7.1
-	github.com/je4/HandleCreator/v2 v2.0.5
-	github.com/je4/utils/v2 v2.0.52
+	github.com/je4/HandleCreator/v2 v2.0.6
+	github.com/je4/utils/v2 v2.0.53
 	github.com/lib/pq v1.10.9
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.33.0
