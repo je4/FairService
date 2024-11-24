@@ -61,6 +61,9 @@ func (mr *MultiResolver) CreatePID(uuid string, part *Partition, identifierType 
 	if err != nil {
 		return "", errors.Wrapf(err, "cannot load item %s/%s", part.Name, uuid)
 	}
+	if item == nil {
+		return "", errors.Errorf("cannot find item %s/%s", part.Name, uuid)
+	}
 	identifier, err := mr.resolver[identifierType].CreatePID(_fair, item)
 	if err != nil {
 		return "", errors.Wrapf(err, "cannot mint identifier for %s", identifierType)
@@ -114,7 +117,7 @@ func (mr *MultiResolver) CreateAll(part *Partition, t dataciteModel.RelatedIdent
 			fair.RefreshSearch()
 		}
 	}()
-	sqlStr := "SELECT coreview.uuid FROM coreview LEFT JOIN pid ON coreview.uuid = pid.uuid AND pid.identifiertype=$1 WHERE coreview.partition=$2 AND pid.uuid IS NULL LIMIT 1000"
+	sqlStr := "SELECT coreview.uuid FROM coreview_new coreview LEFT JOIN pid ON coreview.uuid = pid.uuid AND pid.identifiertype=$1 WHERE coreview.partition=$2 AND pid.uuid IS NULL LIMIT 1000"
 	for {
 		var uuids = make([]string, 0, 1000)
 		rows, err := db.Query(context.Background(), sqlStr, t, part.Name)

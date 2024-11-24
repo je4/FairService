@@ -185,8 +185,8 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 	partition.GET("/oai/", s.partitionOAIHandler)
 	partition.POST("/item", JWTInterceptor.JWTInterceptorGIN(
 		s.service,
-		"CreateItem",
-		JWTInterceptor.Secure,
+		"createItem",
+		JWTInterceptor.Simple,
 		s.jwtKey,
 		s.jwtAlg,
 		sha512.New(),
@@ -195,8 +195,8 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 	), s.createHandler)
 	partition.POST("/source", JWTInterceptor.JWTInterceptorGIN(
 		s.service,
-		"SetSource",
-		JWTInterceptor.Secure,
+		"setSource",
+		JWTInterceptor.Simple,
 		s.jwtKey,
 		s.jwtAlg,
 		sha512.New(),
@@ -205,8 +205,8 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 	), s.setSourceHandler)
 	partition.POST("/item/:uuid/originaldata", JWTInterceptor.JWTInterceptorGIN(
 		s.service,
-		"OriginalDataWrite",
-		JWTInterceptor.Secure,
+		"originalDataWrite",
+		JWTInterceptor.Simple,
 		s.jwtKey,
 		s.jwtAlg,
 		sha512.New(),
@@ -215,8 +215,8 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 	), s.originalDataWriteHandler)
 	partition.GET("/item/:uuid/originaldata", JWTInterceptor.JWTInterceptorGIN(
 		s.service,
-		"OriginalDataRead",
-		JWTInterceptor.Secure,
+		"originalDataRead",
+		JWTInterceptor.Simple,
 		s.jwtKey,
 		s.jwtAlg,
 		sha512.New(),
@@ -225,8 +225,8 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 	), s.originalDataReadHandler)
 	partition.POST("/startupdate", JWTInterceptor.JWTInterceptorGIN(
 		s.service,
-		"StartUpdate",
-		JWTInterceptor.Secure,
+		"startUpdate",
+		JWTInterceptor.Simple,
 		s.jwtKey,
 		s.jwtAlg,
 		sha512.New(),
@@ -235,8 +235,8 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 	), s.startUpdateHandler)
 	partition.POST("/endupdate", JWTInterceptor.JWTInterceptorGIN(
 		s.service,
-		"EndUpdate",
-		JWTInterceptor.Secure,
+		"endUpdate",
+		JWTInterceptor.Simple,
 		s.jwtKey,
 		s.jwtAlg,
 		sha512.New(),
@@ -245,8 +245,8 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 	), s.endUpdateHandler)
 	partition.POST("/abortupdate", JWTInterceptor.JWTInterceptorGIN(
 		s.service,
-		"AbortUpdate",
-		JWTInterceptor.Secure,
+		"abortUpdate",
+		JWTInterceptor.Simple,
 		s.jwtKey,
 		s.jwtAlg,
 		sha512.New(),
@@ -255,8 +255,8 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 	), s.abortUpdateHandler)
 	partition.POST("/archive", JWTInterceptor.JWTInterceptorGIN(
 		s.service,
-		"AddArchive",
-		JWTInterceptor.Secure,
+		"addArchive",
+		JWTInterceptor.Simple,
 		s.jwtKey,
 		s.jwtAlg,
 		sha512.New(),
@@ -265,8 +265,8 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 	), s.createArchiveHandler)
 	partition.POST("/archive/:archive", JWTInterceptor.JWTInterceptorGIN(
 		s.service,
-		"AddArchiveItem",
-		JWTInterceptor.Secure,
+		"addArchiveItem",
+		JWTInterceptor.Simple,
 		s.jwtKey,
 		s.jwtAlg,
 		sha512.New(),
@@ -275,8 +275,8 @@ func (s *Server) ListenAndServe(tlsConfig *tls.Config) (err error) {
 	), s.addArchiveItemHandler)
 	partition.GET("/archive/:archive", JWTInterceptor.JWTInterceptorGIN(
 		s.service,
-		"GetArchiveItem",
-		JWTInterceptor.Secure,
+		"getArchiveItem",
+		JWTInterceptor.Simple,
 		s.jwtKey,
 		s.jwtAlg,
 		sha512.New(),

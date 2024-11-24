@@ -13,6 +13,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -38,7 +39,7 @@ func postHelper(client http.Client, urlstr string, data []byte) error {
 	if err := json.Unmarshal(bodyBytes, &result); err != nil {
 		return errors.Wrapf(err, "cannot decode result %s", string(bodyBytes))
 	}
-	if result.Status != "ok" {
+	if strings.ToLower(result.Status) != "ok" {
 		return errors.New(fmt.Sprintf("error on POST::%s: %s", urlstr, result.Message))
 	}
 	return nil
@@ -57,7 +58,7 @@ func getHelper(client http.Client, urlstr string) (*service.FairResultStatus, er
 	if err := json.Unmarshal(bodyBytes, &result); err != nil {
 		return nil, errors.Wrapf(err, "cannot decode result %s", string(bodyBytes))
 	}
-	if result.Status != "ok" {
+	if strings.ToLower(result.Status) != "ok" {
 		return nil, errors.New(fmt.Sprintf("error on POST::%s: %s", urlstr, result.Message))
 	}
 	return result, nil
@@ -91,7 +92,7 @@ func (fs *FairClient) Ping() error {
 	if err := json.Unmarshal(bodyBytes, &result); err != nil {
 		return errors.Wrapf(err, "cannot decode result %s", string(bodyBytes))
 	}
-	if result.Status != "ok" {
+	if strings.ToLower(result.Status) != "ok" {
 		return errors.New(fmt.Sprintf("ping error: %s", result.Message))
 	}
 	return nil
@@ -202,7 +203,7 @@ func (fs *FairClient) Create(item *fair.ItemData) (*fair.ItemData, error) {
 	if err := json.Unmarshal(bodyBytes, &result); err != nil {
 		return nil, errors.Wrapf(err, "cannot decode result %s", string(bodyBytes))
 	}
-	if result.Status != "ok" {
+	if strings.ToLower(result.Status) != "ok" {
 		return nil, errors.New(fmt.Sprintf("error creating item: %s", result.Message))
 	}
 	if result.Item == nil {
@@ -275,7 +276,7 @@ func (fs *FairClient) ReadOriginalData(item *fair.ItemData) ([]byte, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot post to %s", fs.address)
 	}
-	bodyBytes, err := ioutil.ReadAll(response.Body)
+	bodyBytes, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot read response body")
 	}

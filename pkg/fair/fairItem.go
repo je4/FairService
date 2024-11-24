@@ -85,7 +85,7 @@ func itemDataFromRow(row interface{}, lastCols ...interface{}) (*ItemData, error
 	}
 	data.Status, ok = DataStatusReverse[statusStr]
 	if !ok {
-		return nil, errors.New(fmt.Sprintf("[%s] invalid status type %s", uuidStr, accessStr))
+		return nil, errors.New(fmt.Sprintf("[%s] invalid status type %s", uuidStr, statusStr))
 	}
 	if err := json.Unmarshal([]byte(metaStr), &data.Metadata); err != nil {
 		return nil, errors.Wrapf(err, "[%s] cannot unmarshal core [%s]", uuidStr, metaStr)
@@ -102,7 +102,7 @@ func itemDataFromRow(row interface{}, lastCols ...interface{}) (*ItemData, error
 			//f.log.Warningf("[%s] unknown identifier type %s", uuidStr, id)
 			continue
 		}
-		idStr := strs[1]
+		idStr := strings.TrimPrefix(strs[1], "/")
 		found := false
 		for _, di := range data.Metadata.Identifier {
 			if di.IdentifierType == idType && di.Value == idStr {
@@ -127,7 +127,7 @@ func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int
 				" WHERE %s", f.dbSchema, sqlWhere)
 		*/
 		sqlstr := fmt.Sprintf("SELECT COUNT(*) AS num"+
-			" FROM coreview"+
+			" FROM coreview_new"+
 			" WHERE %s ", sqlWhere)
 		if err := f.db.QueryRow(context.Background(), sqlstr, params...).Scan(completeListSize); err != nil {
 			return errors.Wrapf(err, "cannot get number of result items [%s] - [%v]", sqlstr, params)
@@ -139,7 +139,7 @@ func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int
 		" ORDER BY seq ASC", f.dbSchema, sqlWhere)
 	*/
 	sqlstr := fmt.Sprintf("SELECT uuid, metadata, setspec, catalog, access, signature, sourcename, partition, status, seq, datestamp, identifier, url"+
-		" FROM coreview"+
+		" FROM coreview_new"+
 		" WHERE %s"+
 		" ORDER BY seq ASC", sqlWhere)
 	if limit > 0 {
@@ -291,7 +291,7 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 		//
 
 		item = data
-		item.Identifier = []string{}
+		//		item.Identifier = []string{}
 
 		uuidVal, err := uuid.NewUUID()
 		if err != nil {
@@ -336,14 +336,15 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 				" VALUES($1, NOW(), $2, $3, $4, $5, $6, $7, NEXTVAL('lastchange'), $8, $9)", f.dbSchema)
 		*/
 		sqlstr := `INSERT INTO core 
-    				(uuid, datestamp, setspec, metadata, signature, source, access, catalog, seq, status) 
-					VALUES($1, NOW(), $2, $3, $4, $5, $6, $7, NEXTVAL('lastchange'), $8)`
+    				(uuid, datestamp, setspec, metadata, signature, identifier, source, access, catalog, seq, status) 
+					VALUES($1, NOW(), $2, $3, $4, $5, $6, $7, $8, NEXTVAL('lastchange'), $9)`
 		params := []interface{}{
 			item.UUID, // uuid
 			// datestamp
-			pgtype.FlatArray[string](item.Set),     // setspec
-			string(coreBytes),                      // metadata
-			item.Signature,                         // signature
+			pgtype.FlatArray[string](item.Set),        // setspec
+			string(coreBytes),                         // metadata
+			item.Signature,                            // signature
+			pgtype.FlatArray[string](item.Identifier), // identifier
 			src.ID,                                 // source
 			item.Access,                            // access
 			pgtype.FlatArray[string](item.Catalog), // catalog
@@ -361,7 +362,6 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 				" (uuid)"+
 				" VALUES($1)", f.dbSchema)
 		*/
-
 		if _, err := partition.CreatePID(item.UUID, dataciteModel.RelatedIdentifierTypeHandle); err != nil {
 			f.log.Error().Err(err).Msgf("cannot create handle for %s", item.UUID)
 		}
@@ -392,7 +392,7 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 				return nil, errors.New(fmt.Sprintf("[%s] invalid identifier format %s", item.UUID, id))
 			}
 
-			idType, ok := myfair.RelatedIdentifierTypeReverse[strs[0]]
+			idType, ok := myfair.RelatedIdentifierTypeReverse[strings.ToLower(strs[0])]
 			if !ok {
 				f.log.Warn().Msgf("[%s] unknown identifier type %s", item.UUID, id)
 				continue
@@ -418,6 +418,7 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 			reflect.DeepEqual(item.Metadata, data.Metadata) &&
 			equalStrings(item.Set, data.Set) &&
 			equalStrings(item.Catalog, data.Catalog) &&
+			equalStrings(item.Identifier, data.Identifier) &&
 			item.Access == data.Access {
 			f.log.Info().Msgf("no update needed for item [%v]", item.UUID)
 			/*			sqlstr := fmt.Sprintf("INSERT INTO %s.core_dirty"+
@@ -439,18 +440,56 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 			return nil, errors.Wrapf(err, "[%s] cannot unmarshal data core", item.UUID)
 		}
 
+		identifiers := []string{}
+		identifiers = append(identifiers, item.Identifier...)
+		identifiers = append(identifiers, data.Identifier...)
+		sort.Strings(identifiers)
+		identifiers = UniqString(identifiers)
+
 		sqlstr := fmt.Sprintf("UPDATE %s.core"+
-			" SET setspec=$1, metadata=$2, access=$3, catalog=$4, status=$5, datestamp=NOW(), seq=NEXTVAL('lastchange')"+
+			" SET setspec=$1, identifier=$7, metadata=$2, access=$3, catalog=$4, status=$5, datestamp=NOW(), seq=NEXTVAL('lastchange')"+
 			" WHERE uuid=$6", f.dbSchema)
-		params := []interface{}{
+		params := []any{
 			pgtype.FlatArray[string](data.Set),
 			string(dataMetaBytes),
 			data.Access,
 			pgtype.FlatArray[string](data.Catalog),
 			DataStatusActive,
-			item.UUID}
+			item.UUID,
+			pgtype.FlatArray[string](identifiers),
+		}
 		if _, err := f.db.Exec(context.Background(), sqlstr, params...); err != nil {
 			return nil, errors.Wrapf(err, "[%s] cannot update [%s] - [%v]", item.UUID, sqlstr, params)
+		}
+		if len(identifiers) > 0 {
+			sqlstr = `WITH DATA(uuid, identifier, identifierType)  AS (
+   VALUES
+`
+			params = []any{}
+			counter := 1
+			for _, id := range identifiers {
+				parts := strings.SplitN(id, ":", 2)
+				if len(parts) != 2 {
+					f.log.Warn().Msgf("[%s] invalid identifier format %s", item.UUID, id)
+					continue
+				}
+				idType := myfair.RelatedIdentifierTypeReverse[strings.ToLower(parts[0])]
+				sqlstr += fmt.Sprintf("	($%d, $%d, $%d ::\"IdentifierType\"),\n", counter, counter+1, counter+2)
+				params = append(params, item.UUID, id, idType)
+				counter += 3
+			}
+			sqlstr = strings.TrimSuffix(sqlstr, ",\n") + `
+) 
+insert into pid (uuid, identifier, identifierType) 
+select d.uuid, d.identifier, d.identifierType
+from data d
+where not exists (select 1
+                  from pid p2
+                  where p2.uuid = d.uuid and p2.identifier = d.identifier and p2.identifierType = d.identifierType);
+`
+			if _, err := f.db.Exec(context.Background(), sqlstr, params...); err != nil {
+				return nil, errors.Wrapf(err, "[%s] cannot update pid [%s] - [%v]", item.UUID, sqlstr, params)
+			}
 		}
 		/*		sqlstr = fmt.Sprintf("INSERT INTO %s.core_dirty"+
 				" (uuid)"+

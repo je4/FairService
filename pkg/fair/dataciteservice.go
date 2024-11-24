@@ -137,7 +137,7 @@ func (srv *DataciteService) Type() dataciteModel.RelatedIdentifierType {
 }
 
 func (srv *DataciteService) mint(fair *Fair) (string, error) {
-	counter, err := fair.NextCounter("doiseq")
+	counter, err := fair.NextCounter("doi")
 	if err != nil {
 		return "", errors.Wrap(err, "cannot mint ark")
 	}

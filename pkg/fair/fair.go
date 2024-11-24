@@ -55,9 +55,10 @@ const (
 )
 
 var DataStatusReverse = map[string]DataStatus{
-	string(DataStatusActive):   DataStatusActive,
-	string(DataStatusDisabled): DataStatusDisabled,
-	string(DataStatusDeleted):  DataStatusDeleted,
+	string(DataStatusActive):      DataStatusActive,
+	string(DataStatusDisabled):    DataStatusDisabled,
+	string(DataStatusDeleted):     DataStatusDeleted,
+	string(DataStatusDeletedMeta): DataStatusDeletedMeta,
 }
 
 type ItemData struct {
@@ -163,7 +164,7 @@ func (f *Fair) GetMinimumDatestamp(partition *Partition) (time.Time, error) {
 		" FROM %s.coreview"+
 		" WHERE partition=$1", f.dbSchema)
 	*/sqlstr := "SELECT MIN(datestamp) AS mindate" +
-		" FROM coreview" +
+		" FROM coreview_new" +
 		" WHERE partition=$1"
 	params := []interface{}{partition.Name}
 	var datestamp time.Time
@@ -179,7 +180,7 @@ func (f *Fair) GetMinimumDatestamp(partition *Partition) (time.Time, error) {
 func (f *Fair) RefreshSearch() error {
 	f.log.Info().Msg("refreshing meterialized view searchable")
 	//	sqlstr := fmt.Sprintf("SELECT %s.refresh()", f.dbSchema)
-	sqlstr := "SELECT refresh()"
+	sqlstr := "SELECT refresh_new()"
 	_, err := f.db.Exec(context.Background(), sqlstr)
 	if err != nil {
 		f.log.Error().Msgf("cannot refresh materialized view: %v - %v", sqlstr, err)
@@ -264,7 +265,7 @@ func (f *Fair) GetSets(p *Partition) (map[string]string, error) {
 		" LEFT JOIN %s.set s ON s.setspec=setspecx", f.dbSchema, f.dbSchema)
 	*/
 	sqlstr := "SELECT specs.setspecx, s.setname" +
-		" FROM (SELECT DISTINCT unnest(setspec) AS setspecx FROM coreview WHERE partition=$1) specs" +
+		" FROM (SELECT DISTINCT unnest(setspec) AS setspecx FROM coreview_new WHERE partition=$1) specs" +
 		" LEFT JOIN set s ON s.setspec=setspecx"
 	rows, err := f.db.Query(context.Background(), sqlstr, p.Name)
 	if err != nil {
@@ -324,7 +325,15 @@ func (f *Fair) EndUpdate(p *Partition, source string) error {
 		" SET status=$1"+
 		" WHERE source=$2 AND uuid NOT IN (SELECT uuid FROM %s.core_dirty)", f.dbSchema, f.dbSchema)
 	*/
-	sqlstr := "UPDATE core SET status=$1 WHERE source=$2 AND uuid NOT IN (SELECT uuid FROM core_dirty)"
+	//	sqlstr := "UPDATE core SET status=$1 WHERE source=$2 AND uuid NOT IN (SELECT uuid FROM core_dirty)"
+	sqlstr := `UPDATE core 
+  SET status = $1 
+  WHERE source = $2 
+  AND NOT EXISTS (
+    SELECT 1 
+    FROM core_dirty 
+    WHERE core.uuid = core_dirty.uuid
+  )`
 	params := []interface{}{DataStatusDeletedMeta, src.ID}
 	if _, err := f.db.Exec(context.Background(), sqlstr, params...); err != nil {
 		return errors.Wrapf(err, "cannot execute dirty update - %s - %v", sqlstr, params)
@@ -458,7 +467,7 @@ func (f *Fair) Search(p *Partition, dtr *datatable.Request) ([]map[string]string
 		" WHERE %s", f.dbSchema, f.dbSchema, sqlWhere)
 	*/
 	sqlstr := fmt.Sprintf("SELECT COUNT(*) AS num"+
-		" FROM searchable s, source src "+
+		" FROM searchable_new s, source src "+
 		" WHERE %s", sqlWhere)
 	var num, total int64
 	if err := f.db.QueryRow(context.Background(), sqlstr, params...).Scan(&total); err != nil {
@@ -480,7 +489,7 @@ func (f *Fair) Search(p *Partition, dtr *datatable.Request) ([]map[string]string
 				" WHERE %s", f.dbSchema, f.dbSchema, sqlWhere)
 		*/
 		sqlstr = fmt.Sprintf("SELECT COUNT(*) AS num"+
-			" FROM searchable s, source src "+
+			" FROM searchable_new s, source src "+
 			" WHERE %s", sqlWhere)
 		if err := f.db.QueryRow(context.Background(), sqlstr, params...).Scan(&num); err != nil {
 			return nil, 0, 0, errors.Wrapf(err, "cannot execute query %s - %v", sqlstr, params)
@@ -503,7 +512,7 @@ func (f *Fair) Search(p *Partition, dtr *datatable.Request) ([]map[string]string
 		" LIMIT %v OFFSET %v", sqlFields, f.dbSchema, f.dbSchema, sqlWhere, sqlOrder, dtr.Length, dtr.Start)
 	*/
 	sqlstr = fmt.Sprintf("SELECT %s "+
-		" FROM searchable s, source src "+
+		" FROM searchable_new s, source src "+
 		" WHERE %s "+
 		" %s "+
 		" LIMIT %v OFFSET %v", sqlFields, sqlWhere, sqlOrder, dtr.Length, dtr.Start)
@@ -532,7 +541,7 @@ func (f *Fair) Resolve(pid string) (data string, resultType ResolveResultType, e
 		return "", ResolveResultTypeUnknown, errors.Errorf("invalid pid %s", pid)
 	}
 
-	sql := "SELECT pid.uuid, searchable.partition FROM pid, searchable WHERE pid.uuid=searchable.uuid AND pid.identifier=$1"
+	sql := "SELECT pid.uuid, searchable_new.partition FROM pid, searchable_new WHERE pid.uuid=searchable_new.uuid AND pid.identifier=$1"
 	var uuid string
 	var partition string
 	if err := f.db.QueryRow(context.Background(), sql, pid).Scan(&uuid, &partition); err != nil {

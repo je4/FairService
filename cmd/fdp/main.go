@@ -182,7 +182,12 @@ func main() {
 		}, logger); err != nil {
 			logger.Fatal().Msgf("cannot create handle service: %v", err)
 		}
+
+		//		mr.InitPIDTable()
 		mr.CreateAll(partition, dataciteModel.RelatedIdentifierTypeARK)
+		mr.CreateAll(partition, dataciteModel.RelatedIdentifierTypeHandle)
+		//mr.CreateAll(partition, dataciteModel.RelatedIdentifierTypeDOI)
+
 		if _, err := fair.NewDataciteService(mr, fair.DataciteConfig{
 			Api:      pconf.Datacite.Api,
 			User:     pconf.Datacite.User.String(),

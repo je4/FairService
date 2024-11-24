@@ -69,7 +69,8 @@ func (srv *HandleService) CreatePID(fair *Fair, item *ItemData) (string, error) 
 	if err != nil {
 		return "", errors.Wrap(err, "cannot mint handle")
 	}
-	urlStr := srv.mr.GetPartition().RedirURL(item.UUID)
+	part := srv.mr.GetPartition()
+	urlStr := part.RedirURL(item.UUID)
 	u, err := url.Parse(urlStr)
 	if err != nil {
 		return "", errors.Wrap(err, "cannot parse url")
@@ -118,7 +119,7 @@ func (srv *HandleService) Type() dataciteModel.RelatedIdentifierType {
 }
 
 func (srv *HandleService) mint() (string, error) {
-	counter, err := srv.mr.GetPartition().GetFair().NextCounter("handleseq")
+	counter, err := srv.mr.GetPartition().GetFair().NextCounter("handle")
 	if err != nil {
 		return "", errors.Wrap(err, "cannot mint handle")
 	}

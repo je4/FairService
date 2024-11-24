@@ -83,7 +83,7 @@ func (f *Fair) GetArchiveItems(part *Partition, archive string, delta bool, fn f
 	*/
 	sqlstr := "SELECT cv.uuid, cv.metadata, cv.setspec, cv.catalog, cv.access, cv.signature," +
 		"	 cv.sourcename, cv.status, cv.seq, cv.datestamp, cv.identifier, cv.files" +
-		" FROM archive a, core_archive ca, coreview cv" +
+		" FROM archive a, core_archive ca, coreview_new cv" +
 		" WHERE a.partition=ca.partition AND a.name=ca.archive_name AND ca.core_uuid=cv.uuid" +
 		"	 AND a.partition=$1 AND a.name=$2" +
 		" ORDER BY seq ASC"
