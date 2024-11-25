@@ -175,7 +175,11 @@ func main() {
 		}
 
 		// todo: make better code
+<<<<<<< HEAD
 		arkGitPlugin := arkgit.NewPlugin(logger)
+=======
+		arkGitPlugin := &arkgit.Plugin{}
+>>>>>>> 58fc6ca (git added)
 		arkService.AddPlugin("git", arkGitPlugin)
 
 		if _, err := fair.NewHandleService(mr, &fair.HandleConfig{
