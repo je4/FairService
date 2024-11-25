@@ -41,15 +41,20 @@ func ArkParts(pid string) (naan, qualifier, component, variant, inflection strin
 }
 
 func NewARKService(mr *MultiResolver, config *ARKConfig, logger zLogger.ZLogger) (*ARKService, error) {
-	srv := &ARKService{mr: mr, config: config, logger: logger}
+	srv := &ARKService{mr: mr, config: config, plugins: map[string]Plugin{}, logger: logger}
 	mr.AddResolver(srv)
 	return srv, nil
 }
 
 type ARKService struct {
-	logger zLogger.ZLogger
-	config *ARKConfig
-	mr     *MultiResolver
+	logger  zLogger.ZLogger
+	config  *ARKConfig
+	mr      *MultiResolver
+	plugins map[string]Plugin
+}
+
+func (srv *ARKService) AddPlugin(repository string, plugin Plugin) {
+	srv.plugins[repository] = plugin
 }
 
 func (srv *ARKService) Resolve(pid string) (string, ResolveResultType, error) {
@@ -71,6 +76,23 @@ func (srv *ARKService) Resolve(pid string) (string, ResolveResultType, error) {
 	item, err := fair.GetItem(part, uuid)
 	if err != nil {
 		return "", ResolveResultTypeUnknown, errors.Wrapf(err, "cannot get item %s", uuid)
+	}
+	source, err := fair.GetSourceByName(part.Name, item.Source)
+	if err != nil {
+		return "", ResolveResultTypeUnknown, errors.Wrapf(err, "cannot get source %s", item.Source)
+	}
+	plugin, ok := srv.plugins[source.Repository]
+	if ok {
+		ret, err := plugin.Handle(fair, pid, item)
+		if err != nil {
+			return "", ResolveResultTypeUnknown, errors.Wrap(err, "cannot handle plugin")
+		}
+		switch ret.Type {
+		case ARKPluginRedirect:
+			return string(ret.Data), ResolveResultTypeRedirect, nil
+		case ARKPluginData:
+			return string(ret.Data), ResolveResultTypeApplicationJSON, nil
+		}
 	}
 	if slices.Contains([]string{"?info", "?", "??"}, inflection) {
 		data := "erc\n"
