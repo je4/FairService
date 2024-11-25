@@ -56,15 +56,15 @@ func main() {
 	}
 
 	var item = &fair.ItemData{
-		Source:    "github",
+		Source:    "go-ub-unibas",
 		Partition: "mediathek",
-		Signature: "je4/FairService",
+		Signature: "cloud/minivault",
 		Metadata: myfair.Core{
 			Identifier: []myfair.Identifier{},
 			Person:     []myfair.Person{},
 			Title: []myfair.Title{
 				{
-					Data: "FairService",
+					Data: "load certificates",
 					Type: myfair.TitleTypeMain,
 				},
 			},

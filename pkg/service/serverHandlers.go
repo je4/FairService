@@ -69,6 +69,9 @@ func BasicAuth(ctx *gin.Context, username, password, realm string) bool {
 func (s *Server) resolverHandler(ctx *gin.Context) {
 	partition := ctx.Param("partition")
 	pid := strings.Trim(ctx.Param("pid"), "/")
+	if ctx.Request.URL.RawQuery != "" {
+		pid += "?" + ctx.Request.URL.RawQuery
+	}
 	var data string
 	var _type fair.ResolveResultType
 	var err error
@@ -100,6 +103,9 @@ func (s *Server) resolverHandler(ctx *gin.Context) {
 		ctx.String(http.StatusOK, data)
 	case fair.ResolveResultTypeApplicationJSON:
 		ctx.Header("Content-Type", "application/json")
+		ctx.String(http.StatusOK, data)
+	case fair.ResolveResultTypeApplicationYAML:
+		ctx.Header("Content-Type", "text/yaml")
 		ctx.String(http.StatusOK, data)
 	case fair.ResolveResultTypeUnknown:
 		ctx.String(http.StatusOK, data)
