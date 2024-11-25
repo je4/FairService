@@ -195,7 +195,7 @@ func (fs *FairClient) Create(item *fair.ItemData) (*fair.ItemData, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot post to %s", fs.address)
 	}
-	bodyBytes, err := ioutil.ReadAll(response.Body)
+	bodyBytes, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot read response body")
 	}

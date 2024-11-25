@@ -9,7 +9,7 @@ import (
 
 func (f *Fair) LoadSources() error {
 	//sqlstr := fmt.Sprintf("SELECT sourceid, name, detailurl, description, oai_domain, partition FROM %s.source", f.dbSchema)
-	sqlstr := "SELECT sourceid, name, detailurl, description, oai_domain, partition FROM source"
+	sqlstr := "SELECT sourceid, name, detailurl, description, oai_domain, partition, repository FROM source"
 	rows, err := f.db.Query(context.Background(), sqlstr)
 	if err != nil {
 		return errors.Wrapf(err, "cannot execute %s", sqlstr)
@@ -20,7 +20,7 @@ func (f *Fair) LoadSources() error {
 	f.sources = make(map[int64]*Source)
 	for rows.Next() {
 		src := &Source{}
-		if err := rows.Scan(&src.ID, &src.Name, &src.DetailURL, &src.Description, &src.OAIDomain, &src.Partition); err != nil {
+		if err := rows.Scan(&src.ID, &src.Name, &src.DetailURL, &src.Description, &src.OAIDomain, &src.Partition, &src.Repository); err != nil {
 			return errors.Wrap(err, "cannot scan values")
 		}
 		f.sources[src.ID] = src
@@ -58,15 +58,15 @@ func (f *Fair) SetSource(src *Source) error {
 		if !errors.Is(err, sql.ErrNoRows) {
 			return errors.Wrapf(err, "cannot query database - %s [%v]", sqlstr, src.ID)
 		} else {
-			sqlstr = "INSERT INTO source (name, detailurl, description, oai_domain, partition) VALUES($1, $2, $3, $4, $5)"
-			values := []interface{}{src.Name, src.DetailURL, src.Description, src.OAIDomain, src.Partition}
+			sqlstr = "INSERT INTO source (name, detailurl, description, oai_domain, partition, repository) VALUES($1, $2, $3, $4, $5, $6)"
+			values := []interface{}{src.Name, src.DetailURL, src.Description, src.OAIDomain, src.Partition, src.Repository}
 			if _, err := f.db.Exec(context.Background(), sqlstr, values...); err != nil {
 				return errors.Wrapf(err, "cannot update source database - %s [%v]", sqlstr, values)
 			}
 		}
 	} else {
-		sqlstr = "UPDATE source SET name=$1, detailurl=$2, description=$3, oai_domain=$4, partition=$5 WHERE sourceid=$6 "
-		values := []interface{}{src.Name, src.DetailURL, src.Description, src.OAIDomain, src.Partition, sourceId}
+		sqlstr = "UPDATE source SET name=$1, detailurl=$2, description=$3, oai_domain=$4, partition=$5, repository=$6 WHERE sourceid=$7 "
+		values := []interface{}{src.Name, src.DetailURL, src.Description, src.OAIDomain, src.Partition, src.Repository, sourceId}
 		if _, err := f.db.Exec(context.Background(), sqlstr, values...); err != nil {
 			return errors.Wrapf(err, "cannot insert into source database - %s [%v]", sqlstr, values)
 		}

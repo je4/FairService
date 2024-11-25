@@ -27,6 +27,7 @@ type Source struct {
 	Description string
 	OAIDomain   string
 	Partition   string
+	Repository  string
 }
 
 type DataAccess string

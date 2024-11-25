@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	arkgit "github.com/je4/FairService/v2/pkg/ark/git"
 	"github.com/je4/FairService/v2/pkg/fair"
 	"github.com/je4/FairService/v2/pkg/model/dataciteModel"
 	"github.com/je4/FairService/v2/pkg/service"
@@ -163,14 +164,20 @@ func main() {
 			logger.Fatal().Err(err).Msg("cannot create resolver")
 			return
 		}
-		if _, err := fair.NewARKService(mr, &fair.ARKConfig{
+		arkService, err := fair.NewARKService(mr, &fair.ARKConfig{
 			Shoulder: pconf.ARK.Shoulder,
 			Prefix:   pconf.ARK.Prefix,
 			NAAN:     pconf.ARK.NAAN,
-		}, logger); err != nil {
+		}, logger)
+		if err != nil {
 			logger.Fatal().Msgf("cannot create ark service: %v", err)
 			return
 		}
+
+		// todo: make better code
+		arkGitPlugin := &arkgit.Plugin{}
+		arkService.AddPlugin("git", arkGitPlugin)
+
 		if _, err := fair.NewHandleService(mr, &fair.HandleConfig{
 			ServiceName:    pconf.Handle.ServiceName,
 			Addr:           pconf.Handle.Addr,
