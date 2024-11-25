@@ -541,11 +541,18 @@ func (f *Fair) Resolve(pid string) (data string, resultType ResolveResultType, e
 	if len(parts) != 2 {
 		return "", ResolveResultTypeUnknown, errors.Errorf("invalid pid %s", pid)
 	}
-
+	basePID := pid
+	if strings.ToLower(parts[0]) == "ark" {
+		naan, qualifier, _, _, _, err := ArkParts(pid)
+		if err != nil {
+			return "", ResolveResultTypeUnknown, errors.Wrapf(err, "cannot parse PID %s", pid)
+		}
+		basePID = "ark:/" + naan + "/" + qualifier
+	}
 	sql := "SELECT pid.uuid, searchable_new.partition FROM pid, searchable_new WHERE pid.uuid=searchable_new.uuid AND pid.identifier=$1"
 	var uuid string
 	var partition string
-	if err := f.db.QueryRow(context.Background(), sql, pid).Scan(&uuid, &partition); err != nil {
+	if err := f.db.QueryRow(context.Background(), sql, basePID).Scan(&uuid, &partition); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", ResolveResultTypeUnknown, errors.Errorf("pid %s not found", pid)
 		}

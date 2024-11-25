@@ -19,7 +19,7 @@ type ARKConfig struct {
 	Prefix   string
 }
 
-var arkRegexp = regexp.MustCompile(`(?i)^ark:/(?P<naan>[^/]+)/(?P<qualifier>[^./]+)(/(?P<component>[^.]+))?(\.(?P<variant>[^?]+))?(?P<inflection>\?.*)?$`)
+var arkRegexp = regexp.MustCompile(`(?i)^ark:\/(?P<naan>[^\/]+)\/(?P<qualifier>[^.\/?]+)(\/(?P<component>[^?.]+))?(\.(?P<variant>[^?]+))?(?P<inflection>\?.*)?$`)
 
 func ArkParts(pid string) (naan, qualifier, component, variant, inflection string, err error) {
 	match := arkRegexp.FindStringSubmatch(pid)
@@ -91,7 +91,15 @@ func (srv *ARKService) Resolve(pid string) (string, ResolveResultType, error) {
 		case ARKPluginRedirect:
 			return string(ret.Data), ResolveResultTypeRedirect, nil
 		case ARKPluginData:
-			return string(ret.Data), ResolveResultTypeApplicationJSON, nil
+			switch ret.Mime {
+			case "application/x-yaml":
+				return string(ret.Data), ResolveResultTypeApplicationYAML, nil
+			case "application/json":
+				return string(ret.Data), ResolveResultTypeApplicationJSON, nil
+			default:
+				return string(ret.Data), ResolveResultTypeTextPlain, nil
+			}
+
 		}
 	}
 	if slices.Contains([]string{"?info", "?", "??"}, inflection) {

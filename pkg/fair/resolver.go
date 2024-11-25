@@ -15,6 +15,7 @@ const (
 	ResolveResultTypeTextHTML
 	ResolveResultTypeTextPlain
 	ResolveResultTypeApplicationJSON
+	ResolveResultTypeApplicationYAML
 	ResolveResultTypeApplicationXML
 )
 
