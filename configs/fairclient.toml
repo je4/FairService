@@ -1,6 +1,0 @@
-servicename = "FairService"
-address = "https://localhost:8444/mediathek"
-#address = "https://dataverse.hgk.fhnw.ch/mediathek"
-certskipverify = true
-jwtkey = "ov@cO+Rn,lcwmP6r:O3"
-jwtalg = "HS512"

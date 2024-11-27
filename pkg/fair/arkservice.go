@@ -99,7 +99,6 @@ func (srv *ARKService) Resolve(pid string) (string, ResolveResultType, error) {
 			default:
 				return string(ret.Data), ResolveResultTypeTextPlain, nil
 			}
-
 		}
 	}
 	if slices.Contains([]string{"?info", "?", "??"}, inflection) {
