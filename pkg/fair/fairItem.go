@@ -168,20 +168,28 @@ func (f *Fair) getItems(sqlWhere string, params []interface{}, limit, offset int
 
 }
 
-func (f *Fair) GetItemsDatestamp(partition *Partition, datestamp, until time.Time, access []DataAccess, limit, offset int64, completeListSize *int64, fn func(item *ItemData) error) error {
+func (f *Fair) GetItemsDatestamp(partition *Partition, datestamp, until time.Time, set string, access []DataAccess, limit, offset int64, completeListSize *int64, fn func(item *ItemData) error) error {
 	sqlWhere := "partition=$1 AND datestamp>=$2"
 	params := []interface{}{partition.Name, datestamp}
+	key := 3
+	if set != "" {
+		sqlWhere += fmt.Sprintf(" AND $%d = ANY(setspec)", key)
+		params = append(params, set)
+		key++
+	}
 	if len(access) > 0 {
 		var accessList []string
-		for key, acc := range access {
-			accessList = append(accessList, fmt.Sprintf("access=$%v", key+3))
+		for _, acc := range access {
+			accessList = append(accessList, fmt.Sprintf("access=$%v", key))
 			params = append(params, acc)
+			key++
 		}
 		sqlWhere += fmt.Sprintf(" AND (%s)", strings.Join(accessList, " OR "))
 	}
 	if !until.Equal(time.Time{}) {
 		params = append(params, until)
-		sqlWhere += fmt.Sprintf(" AND datestamp<=$%v", len(params))
+		sqlWhere += fmt.Sprintf(" AND datestamp<=$%v", key)
+		key++
 	}
 	return f.getItems(sqlWhere, params, limit, offset, completeListSize, fn)
 }

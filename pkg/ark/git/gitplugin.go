@@ -29,6 +29,8 @@ type Plugin struct {
 }
 
 var purlPKGRegexpWithVersion = regexp.MustCompile(`(?i)^(?P<base>pkg:golang.+)(?P<goversion>\/v[\d]+)(?P<version>@.*)?$`)
+var gitDownloadLocation1 = regexp.MustCompile(`(?i)^(.+)(\/v\d+|\.git|\/releases\/.+)$`)
+var gitDownloadLocation2 = regexp.MustCompile(`(?i)^(git\+)?(?P<base>https:\/\/[^\/]+\/)(?P<namespace>.+)\/(?P<name>[^\/]+)$`)
 
 func (g *Plugin) Handle(_fair *fair.Fair, pid string, item *fair.ItemData) (*fair.PluginResult, error) {
 	naan, qualifier, components, variants, inflection, err := fair.ArkParts(pid)
@@ -102,7 +104,8 @@ func (g *Plugin) Handle(_fair *fair.Fair, pid string, item *fair.ItemData) (*fai
 	if foundTag == "" {
 		return nil, errors.Errorf("cannot find tag %s in %v", version, tags)
 	}
-	if !slices.Contains([]string{"?spdx", "?spdx.yaml", "?spdx.json", "?spdx.gv"}, inflection) {
+	//	if !slices.Contains([]string{"?spdx", "?spdx.yaml", "?spdx.json", "?spdx.gv"}, inflection) {
+	if inflection == "" {
 		return &fair.PluginResult{
 			Type: fair.ARKPluginRedirect,
 			Data: []byte(fmt.Sprintf("%s/blob/%s/%s", url, hash, file)),
@@ -153,19 +156,6 @@ func (g *Plugin) Handle(_fair *fair.Fair, pid string, item *fair.ItemData) (*fai
 			}
 			infoLicense[pkg.PackageLicenseConcluded]++
 		}
-		/*
-			if pkg.PackageName == spdxDocument.DocumentName {
-				if pkg.PackageExternalReferences == nil {
-					pkg.PackageExternalReferences = []*spdxv23.PackageExternalReference{}
-				}
-				pkg.PackageExternalReferences = append(pkg.PackageExternalReferences, &spdxv23.PackageExternalReference{
-					Category:           "PERSISTENT-ID",
-					RefType:            "ark",
-					Locator:            fmt.Sprintf("ark:/%s/%s", naan, qualifier),
-					ExternalRefComment: "",
-				})
-			}
-		*/
 		for _, extRefs := range pkg.PackageExternalReferences {
 			switch extRefs.Category {
 			case "PERSISTENT-ID":
@@ -229,8 +219,6 @@ func (g *Plugin) Handle(_fair *fair.Fair, pid string, item *fair.ItemData) (*fai
 			}
 		}
 		if pkg.PackageDownloadLocation != "" {
-			var gitDownloadLocation1 = regexp.MustCompile(`(?i)^(.+)(\/v\d+|\.git|\/releases\/.+)$`)
-			var gitDownloadLocation2 = regexp.MustCompile(`(?i)^(git\+)?(?P<base>https:\/\/[^\/]+\/)(?P<namespace>.+)\/(?P<name>[^\/]+)$`)
 			if matches := gitDownloadLocation1.FindStringSubmatch(pkg.PackageDownloadLocation); matches != nil {
 				pkg.PackageDownloadLocation = matches[1]
 				if matches := gitDownloadLocation1.FindStringSubmatch(pkg.PackageDownloadLocation); matches != nil {
@@ -275,70 +263,71 @@ func (g *Plugin) Handle(_fair *fair.Fair, pid string, item *fair.ItemData) (*fai
 
 	}
 
-	if inflection == "?spdx" {
-		str := ""
-		str += fmt.Sprintf("Packages: %d\n", len(spdxDocument.Packages))
-		str += fmt.Sprintf("PID count: %d\n", pidCounter)
-		for t, count := range infoPID {
-			str += fmt.Sprintf("PID %s: %d\n", t, count)
-		}
-		for t, count := range infoLicense {
-			str += fmt.Sprintf("License \"%s\": %d\n", t, count)
-		}
-		return &fair.PluginResult{
-			Type: fair.ARKPluginData,
-			Data: []byte(str),
-			Mime: "text/plain",
-		}, nil
-	} else if inflection == "?spdx.yaml" {
-		var buf = &bytes.Buffer{}
-		if err := spdxyaml.Write(spdxDocument, buf); err != nil {
-			return nil, errors.Wrap(err, "cannot write spdx.json")
-		}
-		return &fair.PluginResult{
-			Type: fair.ARKPluginData,
-			Data: buf.Bytes(),
-			Mime: "application/x-yaml",
-		}, nil
-	} else if inflection == "?spdx.json" {
-		var buf = &bytes.Buffer{}
-		if err := spdxjson.Write(spdxDocument, buf); err != nil {
-			return nil, errors.Wrap(err, "cannot write spdx.json")
-		}
-		return &fair.PluginResult{
-			Type: fair.ARKPluginData,
-			Data: buf.Bytes(),
-			Mime: "application/json",
-		}, nil
-	} else if inflection == "?spdx.gv" {
-		str := `digraph mygraph {
+	if inflection != "" {
+		switch inflection {
+		case "?spdx":
+			str := ""
+			str += fmt.Sprintf("Packages: %d\n", len(spdxDocument.Packages))
+			str += fmt.Sprintf("PID count: %d\n", pidCounter)
+			for t, count := range infoPID {
+				str += fmt.Sprintf("PID %s: %d\n", t, count)
+			}
+			for t, count := range infoLicense {
+				str += fmt.Sprintf("License \"%s\": %d\n", t, count)
+			}
+			return &fair.PluginResult{
+				Type: fair.ARKPluginData,
+				Data: []byte(str),
+				Mime: "text/plain",
+			}, nil
+		case "?spdx.yaml":
+			var buf = &bytes.Buffer{}
+			if err := spdxyaml.Write(spdxDocument, buf); err != nil {
+				return nil, errors.Wrap(err, "cannot write spdx.json")
+			}
+			return &fair.PluginResult{
+				Type: fair.ARKPluginData,
+				Data: buf.Bytes(),
+				Mime: "application/x-yaml",
+			}, nil
+		case "?spdx.json":
+			var buf = &bytes.Buffer{}
+			if err := spdxjson.Write(spdxDocument, buf); err != nil {
+				return nil, errors.Wrap(err, "cannot write spdx.json")
+			}
+			return &fair.PluginResult{
+				Type: fair.ARKPluginData,
+				Data: buf.Bytes(),
+				Mime: "application/json",
+			}, nil
+		case "?spdx.gv":
+			str := `digraph mygraph {
   fontname="Helvetica,Arial,sans-serif"
   node [fontname="Helvetica,Arial,sans-serif"]
   edge [fontname="Helvetica,Arial,sans-serif"]
   node [shape=box];
 `
-		for _, pkg := range spdxDocument.Packages {
-			if slices.Contains(withPID, pkg.PackageName) {
-				str += fmt.Sprintf("  \"%s\" [label=\"%s\" style=filled,color=aquamarine];\n", pkg.PackageSPDXIdentifier, pkg.PackageName)
-			} else {
-				str += fmt.Sprintf("  \"%s\" [label=\"%s\"];\n", pkg.PackageSPDXIdentifier, pkg.PackageName)
+			for _, pkg := range spdxDocument.Packages {
+				if slices.Contains(withPID, pkg.PackageName) {
+					str += fmt.Sprintf("  \"%s\" [label=\"%s\" style=filled,color=aquamarine];\n", pkg.PackageSPDXIdentifier, pkg.PackageName)
+				} else {
+					str += fmt.Sprintf("  \"%s\" [label=\"%s\"];\n", pkg.PackageSPDXIdentifier, pkg.PackageName)
+				}
 			}
+			for _, rel := range spdxDocument.Relationships {
+				str += fmt.Sprintf("  \"%s\" -> \"%s\";\n", rel.RefA.ElementRefID, rel.RefB.ElementRefID)
+			}
+			str += "}\n"
+			return &fair.PluginResult{
+				Type: fair.ARKPluginData,
+				Data: []byte(str),
+				Mime: "text/vnd.graphviz",
+			}, nil
 		}
-		for _, rel := range spdxDocument.Relationships {
-			str += fmt.Sprintf("  \"%s\" -> \"%s\";\n", rel.RefA.ElementRefID, rel.RefB.ElementRefID)
-		}
-		str += "}\n"
-		return &fair.PluginResult{
-			Type: fair.ARKPluginData,
-			Data: []byte(str),
-			Mime: "text/vnd.graphviz",
-		}, nil
-
-	} else {
-		return &fair.PluginResult{
-			Type: fair.ARKPluginCannotHandle,
-		}, nil
 	}
+	return &fair.PluginResult{
+		Type: fair.ARKPluginCannotHandle,
+	}, nil
 }
 
 var _ fair.Plugin = (*Plugin)(nil)
