@@ -370,12 +370,15 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 				" (uuid)"+
 				" VALUES($1)", f.dbSchema)
 		*/
-		if _, err := partition.CreatePID(item.UUID, dataciteModel.RelatedIdentifierTypeHandle); err != nil {
+		ark, err := partition.CreatePID(item.UUID, dataciteModel.RelatedIdentifierTypeHandle)
+		if err != nil {
 			f.log.Error().Err(err).Msgf("cannot create handle for %s", item.UUID)
 		}
-		if _, err := partition.CreatePID(item.UUID, dataciteModel.RelatedIdentifierTypeARK); err != nil {
+		handle, err := partition.CreatePID(item.UUID, dataciteModel.RelatedIdentifierTypeARK)
+		if err != nil {
 			f.log.Error().Err(err).Msgf("cannot create ark for %s", item.UUID)
 		}
+		item.Identifier = append(item.Identifier, ark, handle)
 
 		sqlstr = "INSERT INTO core_dirty (uuid) VALUES($1)"
 		params = []interface{}{

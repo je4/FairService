@@ -34,6 +34,7 @@ func ArkParts(pid string) (naan, qualifier, component, variant, inflection strin
 	}
 	naan, _ = result["naan"]
 	qualifier, _ = result["qualifier"]
+	qualifier = strings.ReplaceAll(qualifier, "-", "")
 	component, _ = result["component"]
 	variant, _ = result["variant"]
 	inflection, _ = result["inflection"]

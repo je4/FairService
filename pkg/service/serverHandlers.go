@@ -285,6 +285,15 @@ func (s *Server) itemHandler(ctx *gin.Context) {
 		ctx.AbortWithError(http.StatusNotFound, fmt.Errorf("item [%s] not found in partition %s", uuidStr, pName))
 		return
 	}
+	identifiers := []string{}
+	for _, identifer := range data.Identifier {
+		if strings.HasPrefix(identifer, "ark:") {
+			identifer = fair.ARKBeautifier(identifer)
+		}
+		identifiers = append(identifiers, identifer)
+	}
+	data.Identifier = identifiers
+
 	if data.Access != fair.DataAccessOpenAccess && data.Access != fair.DataAccessPublic {
 		sendResult(s.log, ctx, http.StatusForbidden, fmt.Sprintf("no public access for %v: %v", uuidStr, data.Access), nil)
 		return
@@ -558,6 +567,15 @@ func (s *Server) createHandler(ctx *gin.Context) {
 		sendResult(s.log, ctx, http.StatusInternalServerError, fmt.Sprintf("cannot create item: %v", err), nil)
 		return
 	}
+	identifiers := []string{}
+	for _, identifer := range item.Identifier {
+		if strings.HasPrefix(identifer, "ark:") {
+			identifer = fair.ARKBeautifier(identifer)
+		}
+		identifiers = append(identifiers, identifer)
+	}
+	item.Identifier = identifiers
+
 	sendResult(s.log, ctx, http.StatusOK, "update done", item)
 	return
 }

@@ -12,9 +12,11 @@ import (
 	"github.com/package-url/packageurl-go"
 	spdxjson "github.com/spdx/tools-golang/json"
 	spdxv23 "github.com/spdx/tools-golang/spdx/v2/v2_3"
+	spdxspdx "github.com/spdx/tools-golang/tagvalue"
 	spdxyaml "github.com/spdx/tools-golang/yaml"
 	"io"
 	"net/http"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -105,44 +107,80 @@ func (g *Plugin) Handle(_fair *fair.Fair, pid string, item *fair.ItemData) (*fai
 		return nil, errors.Errorf("cannot find tag %s in %v", version, tags)
 	}
 	//	if !slices.Contains([]string{"?spdx", "?spdx.yaml", "?spdx.json", "?spdx.gv"}, inflection) {
-	if inflection == "" {
+	switch inflection {
+	case "":
 		return &fair.PluginResult{
 			Type: fair.ARKPluginRedirect,
 			Data: []byte(fmt.Sprintf("%s/blob/%s/%s", url, hash, file)),
 		}, nil
+	case "?raw":
+		var rawUrl string
+		switch {
+		case strings.Contains(url, "github.com"):
+			rawUrl = fmt.Sprintf("%s/%s/%s", strings.ReplaceAll(url, "github.com", "raw.githubusercontent.com"), hash, file)
+		default:
+			rawUrl = fmt.Sprintf("%s/-/raw/%s/%s", url, foundTag, file)
+		}
+		return &fair.PluginResult{
+			Type: fair.ARKPluginRedirect,
+			Data: []byte(rawUrl),
+		}, nil
 	}
 
-	file = "spdx.json"
+	files := []string{"spdx.json", "spdx.spdx", "spdx.yaml"}
+	var spdxDocument *spdxv23.Document
 	var data []byte
-	var rawUrl string
-	switch {
-	case strings.Contains(url, "github.com"):
-		rawUrl = fmt.Sprintf("%s/%s/%s", strings.ReplaceAll(url, "github.com", "raw.githubusercontent.com"), hash, file)
-	case strings.Contains(url, "gitlab.com"):
-		rawUrl = fmt.Sprintf("%s/-/raw/%s/%s", url, foundTag, file)
-	default:
-		return nil, errors.Errorf("cannot handle %s", url)
+	for _, file := range files {
+		var rawUrl string
+		switch {
+		case strings.Contains(url, "github.com"):
+			rawUrl = fmt.Sprintf("%s/%s/%s", strings.ReplaceAll(url, "github.com", "raw.githubusercontent.com"), hash, file)
+		default:
+			rawUrl = fmt.Sprintf("%s/-/raw/%s/%s", url, foundTag, file)
+		}
+		resp, err := http.Get(rawUrl)
+		if err != nil {
+			return nil, errors.Wrapf(err, "cannot get %s", rawUrl)
+		}
+		data, err = io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			continue
+		}
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot read response body")
+		}
+		if resp.StatusCode != http.StatusOK {
+			return nil, errors.Errorf("cannot get %s: %s", rawUrl, resp.Status)
+		}
+		switch filepath.Ext(file) {
+		case ".spdx":
+			spdxDocument, err = spdxspdx.Read(bytes.NewReader(data))
+			if err != nil {
+				return nil, errors.Wrapf(err, "cannot read spdx.spdx")
+			}
+		case ".json":
+			spdxDocument, err = spdxjson.Read(bytes.NewReader(data))
+			if err != nil {
+				return nil, errors.Wrapf(err, "cannot read spdx.json")
+			}
+		case ".yaml":
+			spdxDocument, err = spdxyaml.Read(bytes.NewReader(data))
+			if err != nil {
+				return nil, errors.Wrapf(err, "cannot read spdx.yaml")
+			}
+		}
+		if spdxDocument != nil {
+			break
+		}
 	}
-	resp, err := http.Get(rawUrl)
-	if err != nil {
-		return nil, errors.Wrapf(err, "cannot get %s", rawUrl)
-	}
-	data, err = io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot read response body")
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.Errorf("cannot get %s: %s", rawUrl, resp.Status)
+	if spdxDocument == nil {
+		return nil, errors.Errorf("cannot find %v", files)
 	}
 	var infoPID = map[string]int64{}
 	var infoLicense = map[string]int64{}
 	var pidCounter int64
 	var withPID = []string{}
-	spdxDocument, err := spdxjson.Read(bytes.NewReader(data))
-	if err != nil {
-		return nil, errors.Wrapf(err, "cannot read spdx.json")
-	}
 	for _, pkg := range spdxDocument.Packages {
 		var hasPID bool
 		if pkg.PackageLicenseDeclared != "" {
@@ -299,6 +337,16 @@ func (g *Plugin) Handle(_fair *fair.Fair, pid string, item *fair.ItemData) (*fai
 				Type: fair.ARKPluginData,
 				Data: buf.Bytes(),
 				Mime: "application/json",
+			}, nil
+		case "?spdx.spdx":
+			var buf = &bytes.Buffer{}
+			if err := spdxspdx.Write(spdxDocument, buf); err != nil {
+				return nil, errors.Wrap(err, "cannot write spdx.json")
+			}
+			return &fair.PluginResult{
+				Type: fair.ARKPluginData,
+				Data: buf.Bytes(),
+				Mime: "text/plain",
 			}, nil
 		case "?spdx.gv":
 			str := `digraph mygraph {
