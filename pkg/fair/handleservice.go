@@ -126,7 +126,7 @@ func (srv *HandleService) mint() (string, error) {
 	counter2 := bits.RotateLeft64(uint64(counter), -32)
 	b := srv.encode(counter2)
 
-	return fmt.Sprintf("handle:%s/%s", srv.config.Prefix, b), nil
+	return fmt.Sprintf("handle:%s/%s/%s", srv.config.ID, srv.config.Prefix, insertHyphens(b)), nil
 }
 
 var _ Resolver = (*HandleService)(nil)

@@ -32,7 +32,7 @@
                     {{.Message}}
                 </div>
             {{end}}
-            <h2 class="display-7 fw-bold">{{.Part.OAIRepositoryName}}</h2>
+            <h2 class="display-7 fw-bold">{{.Part.OAI.RepositoryName}}</h2>
             {{range $title := .Data.Metadata.Title}}
                 <h1 class="display-5 fw-bold">{{if (ne $title.Type "")}}{{$title.Type}}: {{end}}{{$title.Data}}</h1>
             {{end}}
@@ -87,9 +87,18 @@
                 </tr>
                 {{$hasDOI := false}}
                 {{range $identifier := .Data.Metadata.Identifier}}
-                    <tr>{{if (eq $identifier.IdentifierType "DOI")}}{{$hasDOI = true}}{{end}}
+                    <tr>
+                        {{- $url := "" }}
+                        {{- if (eq $identifier.IdentifierType "DOI")}}
+                            {{- $url = printf "https://doi.org/%s" $identifier.Value}}
+                            {{- $hasDOI = true}}
+                        {{- else if (eq $identifier.IdentifierType "ARK")}}
+                            {{- $url = printf "https://n2t.net/%s" $identifier.Value}}
+                        {{- else if (eq $identifier.IdentifierType "Handle")}}
+                            {{- $url = printf "https://hdl.handle.net/%s" $identifier.Value}}
+                        {{- end}}
                         <td>{{$identifier.IdentifierType}}</td>
-                        <td>{{$identifier.Value}}</td>
+                        <td>{{ if (ne $url "" )}}<a href="{{ $url }}">{{ end }}{{$identifier.Value}}{{ if (ne $url "") }}</a>{{ end }}</td>
                     </tr>
                 {{end}}
                 {{if and (not $hasDOI) (eq .Data.Status "active")}}

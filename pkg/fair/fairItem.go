@@ -105,10 +105,13 @@ func itemDataFromRow(row interface{}, lastCols ...interface{}) (*ItemData, error
 		idStr := strings.TrimPrefix(strs[1], "/")
 		found := false
 		for _, di := range data.Metadata.Identifier {
-			if di.IdentifierType == idType && di.Value == idStr {
+			if di.IdentifierType == idType && (di.Value == idStr || di.Value == id) {
 				found = true
 				break
 			}
+		}
+		if idType == myfair.RelatedIdentifierTypeARK {
+			idStr = ARKBeautifier(id)
 		}
 		if !found {
 			data.Metadata.Identifier = append(data.Metadata.Identifier, myfair.Identifier{
@@ -409,6 +412,9 @@ func (f *Fair) CreateItem(partition *Partition, data *ItemData) (*ItemData, erro
 				continue
 			}
 			idStr := strs[1]
+			if idType == myfair.RelatedIdentifierTypeARK {
+				idStr = id
+			}
 			found := false
 			for _, di := range data.Metadata.Identifier {
 				if di.IdentifierType == idType && di.Value == idStr {
