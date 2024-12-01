@@ -16,6 +16,7 @@ import (
 	spdxyaml "github.com/spdx/tools-golang/yaml"
 	"io"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -52,9 +53,9 @@ func (g *Plugin) Handle(_fair *fair.Fair, pid string, item *fair.ItemData) (*fai
 		return nil, errors.Wrapf(err, "cannot get partition %s", item.Partition)
 	}
 
-	url := item.URL
-	if url == "" {
-		url = strings.ReplaceAll(source.DetailURL, "{signature}", item.Signature)
+	u := item.URL
+	if u == "" {
+		u = strings.ReplaceAll(source.DetailURL, "{signature}", item.Signature)
 	}
 	suffix := components
 	if variants != "" {
@@ -63,7 +64,7 @@ func (g *Plugin) Handle(_fair *fair.Fair, pid string, item *fair.ItemData) (*fai
 	if suffix == "" {
 		return &fair.PluginResult{
 			Type: fair.ARKPluginRedirect,
-			Data: []byte(url),
+			Data: []byte(u),
 		}, nil
 	}
 	componentParts := strings.SplitN(suffix, "/", 2)
@@ -75,10 +76,21 @@ func (g *Plugin) Handle(_fair *fair.Fair, pid string, item *fair.ItemData) (*fai
 	if len(componentParts) >= 2 {
 		file = componentParts[1]
 	}
-
+	if strings.Contains(version, "%") {
+		_version, err := url.QueryUnescape(version)
+		if err == nil {
+			version = _version
+		}
+	}
+	if strings.Contains(file, "%") {
+		_file, err := url.QueryUnescape(file)
+		if err == nil {
+			file = _file
+		}
+	}
 	rem := git.NewRemote(memory.NewStorage(), &config.RemoteConfig{
 		Name: "origin",
-		URLs: []string{url},
+		URLs: []string{u},
 	})
 
 	refs, err := rem.List(&git.ListOptions{
@@ -111,15 +123,15 @@ func (g *Plugin) Handle(_fair *fair.Fair, pid string, item *fair.ItemData) (*fai
 	case "":
 		return &fair.PluginResult{
 			Type: fair.ARKPluginRedirect,
-			Data: []byte(fmt.Sprintf("%s/blob/%s/%s", url, hash, file)),
+			Data: []byte(fmt.Sprintf("%s/blob/%s/%s", u, hash, file)),
 		}, nil
 	case "?raw":
 		var rawUrl string
 		switch {
-		case strings.Contains(url, "github.com"):
-			rawUrl = fmt.Sprintf("%s/%s/%s", strings.ReplaceAll(url, "github.com", "raw.githubusercontent.com"), hash, file)
+		case strings.Contains(u, "github.com"):
+			rawUrl = fmt.Sprintf("%s/%s/%s", strings.ReplaceAll(u, "github.com", "raw.githubusercontent.com"), hash, file)
 		default:
-			rawUrl = fmt.Sprintf("%s/-/raw/%s/%s", url, foundTag, file)
+			rawUrl = fmt.Sprintf("%s/-/raw/%s/%s", u, foundTag, file)
 		}
 		return &fair.PluginResult{
 			Type: fair.ARKPluginRedirect,
@@ -133,10 +145,10 @@ func (g *Plugin) Handle(_fair *fair.Fair, pid string, item *fair.ItemData) (*fai
 	for _, file := range files {
 		var rawUrl string
 		switch {
-		case strings.Contains(url, "github.com"):
-			rawUrl = fmt.Sprintf("%s/%s/%s", strings.ReplaceAll(url, "github.com", "raw.githubusercontent.com"), hash, file)
+		case strings.Contains(u, "github.com"):
+			rawUrl = fmt.Sprintf("%s/%s/%s", strings.ReplaceAll(u, "github.com", "raw.githubusercontent.com"), hash, file)
 		default:
-			rawUrl = fmt.Sprintf("%s/-/raw/%s/%s", url, foundTag, file)
+			rawUrl = fmt.Sprintf("%s/-/raw/%s/%s", u, foundTag, file)
 		}
 		resp, err := http.Get(rawUrl)
 		if err != nil {
