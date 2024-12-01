@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"emperror.dev/errors"
 	"fmt"
+	"github.com/bluele/gcache"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/storage/memory"
@@ -21,14 +22,19 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 )
 
 func NewPlugin(logger zLogger.ZLogger) *Plugin {
-	return &Plugin{logger: logger}
+	return &Plugin{
+		cache:  gcache.New(100).LRU().Expiration(time.Minute * 15).Build(),
+		logger: logger,
+	}
 }
 
 type Plugin struct {
 	logger zLogger.ZLogger
+	cache  gcache.Cache
 }
 
 var purlPKGRegexpWithVersion = regexp.MustCompile(`(?i)^(?P<base>pkg:golang.+)(?P<goversion>\/v[\d]+)(?P<version>@.*)?$`)
@@ -88,35 +94,41 @@ func (g *Plugin) Handle(_fair *fair.Fair, pid string, item *fair.ItemData) (*fai
 			file = _file
 		}
 	}
-	rem := git.NewRemote(memory.NewStorage(), &config.RemoteConfig{
-		Name: "origin",
-		URLs: []string{u},
-	})
 
-	refs, err := rem.List(&git.ListOptions{
-		// Returns all references, including peeled references.
-		PeelingOption: git.AppendPeeled,
-	})
-	if err != nil {
-		return nil, errors.Wrapf(err, "cannot list refs")
-	}
-	// Filters the references list and only keeps tags
-	var foundTag string
 	var hash string
-	var tags []string
-	for _, ref := range refs {
-		if ref.Name().IsTag() {
-			tag := ref.Name().Short()
-			tags = append(tags, tag)
-			tag = strings.ToLower(tag)
-			if tag == version || tag == "v"+version {
-				foundTag = tag
-				hash = ref.Hash().String()
+	if h, ok := g.cache.Get(version); ok == nil {
+		hash = h.(string)
+	} else {
+		rem := git.NewRemote(memory.NewStorage(), &config.RemoteConfig{
+			Name: "origin",
+			URLs: []string{u},
+		})
+
+		refs, err := rem.List(&git.ListOptions{
+			// Returns all references, including peeled references.
+			PeelingOption: git.AppendPeeled,
+		})
+		if err != nil {
+			return nil, errors.Wrapf(err, "cannot list refs")
+		}
+		// Filters the references list and only keeps tags
+		var foundTag string
+		var tags []string
+		for _, ref := range refs {
+			if ref.Name().IsTag() {
+				tag := ref.Name().Short()
+				tags = append(tags, tag)
+				tag = strings.ToLower(tag)
+				if tag == version /* || tag == "v"+version */ {
+					foundTag = tag
+					hash = ref.Hash().String()
+				}
 			}
 		}
-	}
-	if foundTag == "" {
-		return nil, errors.Errorf("cannot find tag %s in %v", version, tags)
+		if foundTag == "" {
+			return nil, errors.Errorf("cannot find tag %s in %v", version, tags)
+		}
+		g.cache.Set(version, hash)
 	}
 	//	if !slices.Contains([]string{"?spdx", "?spdx.yaml", "?spdx.json", "?spdx.gv"}, inflection) {
 	switch inflection {
@@ -131,64 +143,163 @@ func (g *Plugin) Handle(_fair *fair.Fair, pid string, item *fair.ItemData) (*fai
 		case strings.Contains(u, "github.com"):
 			rawUrl = fmt.Sprintf("%s/%s/%s", strings.ReplaceAll(u, "github.com", "raw.githubusercontent.com"), hash, file)
 		default:
-			rawUrl = fmt.Sprintf("%s/-/raw/%s/%s", u, foundTag, file)
+			rawUrl = fmt.Sprintf("%s/-/raw/%s/%s", u, version, file)
 		}
 		return &fair.PluginResult{
 			Type: fair.ARKPluginRedirect,
 			Data: []byte(rawUrl),
 		}, nil
 	}
-
-	files := []string{"spdx.json", "spdx.spdx", "spdx.yaml"}
 	var spdxDocument *spdxv23.Document
-	var data []byte
-	for _, file := range files {
-		var rawUrl string
-		switch {
-		case strings.Contains(u, "github.com"):
-			rawUrl = fmt.Sprintf("%s/%s/%s", strings.ReplaceAll(u, "github.com", "raw.githubusercontent.com"), hash, file)
-		default:
-			rawUrl = fmt.Sprintf("%s/-/raw/%s/%s", u, foundTag, file)
-		}
-		resp, err := http.Get(rawUrl)
-		if err != nil {
-			return nil, errors.Wrapf(err, "cannot get %s", rawUrl)
-		}
-		data, err = io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			continue
-		}
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot read response body")
-		}
-		if resp.StatusCode != http.StatusOK {
-			return nil, errors.Errorf("cannot get %s: %s", rawUrl, resp.Status)
-		}
-		switch filepath.Ext(file) {
-		case ".spdx":
-			spdxDocument, err = spdxspdx.Read(bytes.NewReader(data))
-			if err != nil {
-				return nil, errors.Wrapf(err, "cannot read spdx.spdx")
-			}
-		case ".json":
-			spdxDocument, err = spdxjson.Read(bytes.NewReader(data))
-			if err != nil {
-				return nil, errors.Wrapf(err, "cannot read spdx.json")
-			}
-		case ".yaml":
-			spdxDocument, err = spdxyaml.Read(bytes.NewReader(data))
-			if err != nil {
-				return nil, errors.Wrapf(err, "cannot read spdx.yaml")
-			}
-		}
-		if spdxDocument != nil {
-			break
+
+	if s, ok := g.cache.Get(version + "/spdx"); ok == nil {
+		if sd, ok := s.(*spdxv23.Document); ok {
+			spdxDocument = sd
 		}
 	}
 	if spdxDocument == nil {
-		return nil, errors.Errorf("cannot find %v", files)
+		files := []string{"spdx.json", "spdx.spdx", "spdx.yaml"}
+		var data []byte
+		for _, file := range files {
+			var rawUrl string
+			switch {
+			case strings.Contains(u, "github.com"):
+				rawUrl = fmt.Sprintf("%s/%s/%s", strings.ReplaceAll(u, "github.com", "raw.githubusercontent.com"), hash, file)
+			default:
+				rawUrl = fmt.Sprintf("%s/-/raw/%s/%s", u, version, file)
+			}
+			resp, err := http.Get(rawUrl)
+			if err != nil {
+				return nil, errors.Wrapf(err, "cannot get %s", rawUrl)
+			}
+			data, err = io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				continue
+			}
+			if err != nil {
+				return nil, errors.Wrap(err, "cannot read response body")
+			}
+			if resp.StatusCode != http.StatusOK {
+				return nil, errors.Errorf("cannot get %s: %s", rawUrl, resp.Status)
+			}
+			switch filepath.Ext(file) {
+			case ".spdx":
+				spdxDocument, err = spdxspdx.Read(bytes.NewReader(data))
+				if err != nil {
+					return nil, errors.Wrapf(err, "cannot read spdx.spdx")
+				}
+			case ".json":
+				spdxDocument, err = spdxjson.Read(bytes.NewReader(data))
+				if err != nil {
+					return nil, errors.Wrapf(err, "cannot read spdx.json")
+				}
+			case ".yaml":
+				spdxDocument, err = spdxyaml.Read(bytes.NewReader(data))
+				if err != nil {
+					return nil, errors.Wrapf(err, "cannot read spdx.yaml")
+				}
+			}
+			if spdxDocument != nil {
+				break
+			}
+		}
+		if spdxDocument == nil {
+			return nil, errors.Errorf("cannot find %v", files)
+		}
+		for _, pkg := range spdxDocument.Packages {
+			for _, extRefs := range pkg.PackageExternalReferences {
+				switch extRefs.Category {
+				case "PERSISTENT-ID":
+					continue
+				case "PACKAGE-MANAGER":
+					if extRefs.RefType == "purl" {
+						// get rid of golang versions
+						if matches := purlPKGRegexpWithVersion.FindStringSubmatch(extRefs.Locator); matches != nil {
+							extRefs.Locator = matches[1] + matches[3]
+						}
+						packageURL, err := packageurl.FromString(extRefs.Locator)
+						if err != nil {
+							g.logger.Error().Err(err).Msgf("cannot parse packageurl %s", extRefs.Locator)
+							continue
+						}
+						var signature string
+						if packageURL.Type == "golang" {
+							nsParts := strings.SplitN(packageURL.Namespace, "/", 2)
+							if len(nsParts) < 2 {
+								g.logger.Error().Msgf("invalid namespace %s", packageURL.Namespace)
+								continue
+							}
+							signature = nsParts[1] + "/" + packageURL.Name
+						} else if packageURL.Type == "github" {
+							signature = packageURL.Namespace + "/" + packageURL.Name
+						}
+						if signature != "" {
+							i, err := _fair.GetItemSource(part, source.ID, signature)
+							if err != nil {
+								g.logger.Info().Err(err).Msgf("cannot get item %s", signature)
+								continue
+							}
+							if i == nil {
+								g.logger.Debug().Msgf("cannot find item %s", signature)
+								continue
+							}
+							for _, identifier := range i.Identifier {
+								parts := strings.SplitN(identifier, ":", 2)
+								if len(parts) < 2 {
+									g.logger.Error().Msgf("invalid identifier %s", identifier)
+									continue
+								}
+								pkg.PackageExternalReferences = append(pkg.PackageExternalReferences, &spdxv23.PackageExternalReference{
+									Category: "PERSISTENT-ID",
+									RefType:  parts[0],
+									Locator:  identifier,
+								})
+							}
+						}
+
+					}
+				}
+			}
+			if pkg.PackageDownloadLocation != "" {
+				if matches := gitDownloadLocation1.FindStringSubmatch(pkg.PackageDownloadLocation); matches != nil {
+					pkg.PackageDownloadLocation = matches[1]
+					if matches := gitDownloadLocation1.FindStringSubmatch(pkg.PackageDownloadLocation); matches != nil {
+						pkg.PackageDownloadLocation = matches[1]
+					}
+				}
+				if matches := gitDownloadLocation2.FindStringSubmatch(pkg.PackageDownloadLocation); matches != nil {
+					pkg.PackageDownloadLocation = matches[2] + matches[3] + "/" + matches[4]
+					signature := strings.ToLower(matches[3] + "/" + matches[4])
+					i, err := _fair.GetItemSource(part, source.ID, signature)
+					if err != nil {
+						g.logger.Debug().Err(err).Msgf("cannot get item %s", signature)
+						continue
+					}
+					if i == nil {
+						g.logger.Debug().Msgf("cannot find item %s", signature)
+						continue
+					}
+					for _, identifier := range i.Identifier {
+						parts := strings.SplitN(identifier, ":", 2)
+						if len(parts) < 2 {
+							g.logger.Error().Msgf("invalid identifier %s", identifier)
+							continue
+						}
+						pkg.PackageExternalReferences = append(pkg.PackageExternalReferences, &spdxv23.PackageExternalReference{
+							Category: "PERSISTENT-ID",
+							RefType:  parts[0],
+							Locator:  identifier,
+						})
+					}
+				}
+			}
+		}
+		if err := g.cache.Set(version+"/spdx", spdxDocument); err != nil {
+			return nil, errors.Wrap(err, "cannot cache spdx")
+		}
 	}
+
 	var infoPID = map[string]int64{}
 	var infoLicense = map[string]int64{}
 	var pidCounter int64
@@ -213,106 +324,15 @@ func (g *Plugin) Handle(_fair *fair.Fair, pid string, item *fair.ItemData) (*fai
 					infoPID[extRefs.RefType] = 0
 				}
 				infoPID[extRefs.RefType]++
+				hasPID = true
 				continue
-			case "PACKAGE-MANAGER":
-				if extRefs.RefType == "purl" {
-					// get rid of golang versions
-					if matches := purlPKGRegexpWithVersion.FindStringSubmatch(extRefs.Locator); matches != nil {
-						extRefs.Locator = matches[1] + matches[3]
-					}
-					packageURL, err := packageurl.FromString(extRefs.Locator)
-					if err != nil {
-						g.logger.Error().Err(err).Msgf("cannot parse packageurl %s", extRefs.Locator)
-						continue
-					}
-					var signature string
-					if packageURL.Type == "golang" {
-						nsParts := strings.SplitN(packageURL.Namespace, "/", 2)
-						if len(nsParts) < 2 {
-							g.logger.Error().Msgf("invalid namespace %s", packageURL.Namespace)
-							continue
-						}
-						signature = nsParts[1] + "/" + packageURL.Name
-					} else if packageURL.Type == "github" {
-						signature = packageURL.Namespace + "/" + packageURL.Name
-					}
-					if signature != "" {
-						i, err := _fair.GetItemSource(part, source.ID, signature)
-						if err != nil {
-							g.logger.Info().Err(err).Msgf("cannot get item %s", signature)
-							continue
-						}
-						if i == nil {
-							g.logger.Debug().Msgf("cannot find item %s", signature)
-							continue
-						}
-						for _, identifier := range i.Identifier {
-							parts := strings.SplitN(identifier, ":", 2)
-							if len(parts) < 2 {
-								g.logger.Error().Msgf("invalid identifier %s", identifier)
-								continue
-							}
-							if _, ok := infoPID[parts[0]]; !ok {
-								infoPID[parts[0]] = 0
-							}
-							infoPID[parts[0]]++
-							pkg.PackageExternalReferences = append(pkg.PackageExternalReferences, &spdxv23.PackageExternalReference{
-								Category: "PERSISTENT-ID",
-								RefType:  parts[0],
-								Locator:  identifier,
-							})
-							hasPID = true
-						}
-					}
-
-				}
-			}
-		}
-		if pkg.PackageDownloadLocation != "" {
-			if matches := gitDownloadLocation1.FindStringSubmatch(pkg.PackageDownloadLocation); matches != nil {
-				pkg.PackageDownloadLocation = matches[1]
-				if matches := gitDownloadLocation1.FindStringSubmatch(pkg.PackageDownloadLocation); matches != nil {
-					pkg.PackageDownloadLocation = matches[1]
-				}
-			}
-			if matches := gitDownloadLocation2.FindStringSubmatch(pkg.PackageDownloadLocation); matches != nil {
-				pkg.PackageDownloadLocation = matches[2] + matches[3] + "/" + matches[4]
-				signature := strings.ToLower(matches[3] + "/" + matches[4])
-				i, err := _fair.GetItemSource(part, source.ID, signature)
-				if err != nil {
-					g.logger.Debug().Err(err).Msgf("cannot get item %s", signature)
-					continue
-				}
-				if i == nil {
-					g.logger.Debug().Msgf("cannot find item %s", signature)
-					continue
-				}
-				for _, identifier := range i.Identifier {
-					parts := strings.SplitN(identifier, ":", 2)
-					if len(parts) < 2 {
-						g.logger.Error().Msgf("invalid identifier %s", identifier)
-						continue
-					}
-					if _, ok := infoPID[parts[0]]; !ok {
-						infoPID[parts[0]] = 0
-					}
-					infoPID[parts[0]]++
-					pkg.PackageExternalReferences = append(pkg.PackageExternalReferences, &spdxv23.PackageExternalReference{
-						Category: "PERSISTENT-ID",
-						RefType:  parts[0],
-						Locator:  identifier,
-					})
-					hasPID = true
-				}
 			}
 		}
 		if hasPID {
 			withPID = append(withPID, pkg.PackageName)
 			pidCounter++
 		}
-
 	}
-
 	if inflection != "" {
 		switch inflection {
 		case "?spdx":
