@@ -27,7 +27,7 @@ import (
 
 func NewPlugin(logger zLogger.ZLogger) *Plugin {
 	return &Plugin{
-		cache:  gcache.New(100).LRU().Expiration(time.Minute * 15).Build(),
+		cache:  gcache.New(100).LRU().Expiration(time.Minute * 60).Build(),
 		logger: logger,
 	}
 }
