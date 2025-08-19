@@ -8,5 +8,5 @@ include:
   - component: $CI_SERVER_FQDN/ub-unibas/ci/go-components/build@main
     inputs:
       internal_libs: false
-      project_main: cmd/fdp
+      project_main: ./cmd/fdp
   - component: $CI_SERVER_FQDN/ub-unibas/ci/docker-components/publish-image@main
