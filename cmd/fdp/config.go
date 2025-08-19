@@ -1,12 +1,13 @@
 package main
 
 import (
+	"log"
+	"strings"
+
 	"github.com/BurntSushi/toml"
 	"github.com/je4/utils/v2/pkg/config"
 	"github.com/je4/utils/v2/pkg/stashconfig"
 	"go.ub.unibas.ch/cloud/certloader/v2/pkg/loader"
-	"log"
-	"strings"
 )
 
 type CfgDatabase struct {
@@ -50,8 +51,8 @@ type Partition struct {
 	Domain      string           `toml:"domain"`
 	OAI         OAI              `toml:"oai"`
 	ARK         PartitionARK     `toml:"ark"`
-	Handle      Handle           `toml:"handle"`
-	Datacite    Datacite         `toml:"datacite"`
+	Handle      *Handle          `toml:"handle"`
+	Datacite    *Datacite        `toml:"datacite"`
 	JWTKey      config.EnvString `toml:"jwtkey"`
 	JWTAlg      []string         `toml:"jwtalg"`
 }

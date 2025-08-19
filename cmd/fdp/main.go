@@ -4,6 +4,15 @@ import (
 	"context"
 	"crypto/tls"
 	"flag"
+	"io"
+	"log"
+	"os"
+	"os/signal"
+	"regexp"
+	"strings"
+	"syscall"
+	"time"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -14,14 +23,6 @@ import (
 	"github.com/je4/utils/v2/pkg/zLogger"
 	ublogger "gitlab.switch.ch/ub-unibas/go-ublogger/v2"
 	"go.ub.unibas.ch/cloud/certloader/v2/pkg/loader"
-	"io"
-	"log"
-	"os"
-	"os/signal"
-	"regexp"
-	"strings"
-	"syscall"
-	"time"
 )
 
 type queryTracer struct {
@@ -178,16 +179,18 @@ func main() {
 		arkGitPlugin := arkgit.NewPlugin(logger)
 		arkService.AddPlugin("git", arkGitPlugin)
 
-		if _, err := fair.NewHandleService(mr, &fair.HandleConfig{
-			ServiceName:    pconf.Handle.ServiceName,
-			Addr:           pconf.Handle.Addr,
-			JWTKey:         pconf.Handle.JWTKey.String(),
-			JWTAlg:         pconf.Handle.JWTAlg,
-			SkipCertVerify: pconf.Handle.SkipCertVerify,
-			ID:             pconf.Handle.ID,
-			Prefix:         pconf.Handle.Prefix,
-		}, logger); err != nil {
-			logger.Fatal().Msgf("cannot create handle service: %v", err)
+		if pconf.Handle != nil {
+			if _, err := fair.NewHandleService(mr, &fair.HandleConfig{
+				ServiceName:    pconf.Handle.ServiceName,
+				Addr:           pconf.Handle.Addr,
+				JWTKey:         pconf.Handle.JWTKey.String(),
+				JWTAlg:         pconf.Handle.JWTAlg,
+				SkipCertVerify: pconf.Handle.SkipCertVerify,
+				ID:             pconf.Handle.ID,
+				Prefix:         pconf.Handle.Prefix,
+			}, logger); err != nil {
+				logger.Fatal().Msgf("cannot create handle service: %v", err)
+			}
 		}
 
 		//		mr.InitPIDTable()
@@ -195,13 +198,15 @@ func main() {
 		mr.CreateAll(partition, dataciteModel.RelatedIdentifierTypeHandle)
 		//mr.CreateAll(partition, dataciteModel.RelatedIdentifierTypeDOI)
 
-		if _, err := fair.NewDataciteService(mr, fair.DataciteConfig{
-			Api:      pconf.Datacite.Api,
-			User:     pconf.Datacite.User.String(),
-			Password: pconf.Datacite.Password.String(),
-			Prefix:   pconf.Datacite.Prefix,
-		}, logger); err != nil {
-			logger.Fatal().Msgf("cannot create datacite service: %v", err)
+		if pconf.Datacite != nil {
+			if _, err := fair.NewDataciteService(mr, fair.DataciteConfig{
+				Api:      pconf.Datacite.Api,
+				User:     pconf.Datacite.User.String(),
+				Password: pconf.Datacite.Password.String(),
+				Prefix:   pconf.Datacite.Prefix,
+			}, logger); err != nil {
+				logger.Fatal().Msgf("cannot create datacite service: %v", err)
+			}
 		}
 		partition.AddResolver(mr)
 		fairService.AddPartition(partition)
